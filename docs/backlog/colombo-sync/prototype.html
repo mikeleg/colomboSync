@@ -1,0 +1,803 @@
+<title>ColomboSync</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,400..800&display=swap">
+<style>
+:root{
+  --bg:#dde8e4;
+  --surface:#f4f8f6;
+  --surface-container-lowest:#ffffff;
+  --surface-container-low:#ecf2ef;
+  --surface-container:#e5ede9;
+  --surface-container-high:#dfe7e3;
+  --surface-container-highest:#d9e1dd;
+  --on-surface:#171d1b;
+  --on-surface-variant:#3f4945;
+  --outline:#6f7975;
+  --primary:#2f6f62;
+  --on-primary:#ffffff;
+  --primary-container:#bfe8dc;
+  --on-primary-container:#00201a;
+  --secondary-container:#d2e4dd;
+  --on-secondary-container:#0d1f19;
+  --success:#2e7a3a;
+  --on-success:#ffffff;
+  --success-container:#cdeccd;
+  --on-success-container:#002106;
+  --error:#b3402f;
+  --on-error:#ffffff;
+  --error-container:#ffdad3;
+  --on-error-container:#410a02;
+  --warning:#7a5200;
+  --warning-container:#fbe7b5;
+  --on-warning-container:#2e2000;
+  --focus:#1f5fa8;
+  --knob:#ffffff;
+  --scrim:rgb(12 24 20 / .5);
+  --shadow-1:0 1px 3px 1px rgb(12 24 20 / .15),0 1px 2px rgb(12 24 20 / .3);
+  --shadow-2:0 2px 6px 2px rgb(12 24 20 / .15),0 1px 2px rgb(12 24 20 / .3);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0a100e;
+    --surface:#0f1513;
+    --surface-container-lowest:#0a0f0e;
+    --surface-container-low:#171d1b;
+    --surface-container:#1b211f;
+    --surface-container-high:#252b29;
+    --surface-container-highest:#303634;
+    --on-surface:#dee4e0;
+    --on-surface-variant:#bfc9c4;
+    --outline:#89938e;
+    --primary:#94d3c1;
+    --on-primary:#00382f;
+    --primary-container:#1a5247;
+    --on-primary-container:#b0efdc;
+    --secondary-container:#334b44;
+    --on-secondary-container:#d0e8df;
+    --success:#8fd694;
+    --on-success:#00390f;
+    --success-container:#1d5128;
+    --on-success-container:#c9efcb;
+    --error:#ffb4a6;
+    --on-error:#5f1306;
+    --error-container:#8c2a1a;
+    --on-error-container:#ffdad3;
+    --warning:#f2c264;
+    --warning-container:#5a4100;
+    --on-warning-container:#ffe3a8;
+    --focus:#9ecaff;
+    --knob:#ffffff;
+    --scrim:rgb(0 6 4 / .6);
+    --shadow-1:0 1px 3px 1px rgb(0 6 4 / .35),0 1px 2px rgb(0 6 4 / .5);
+    --shadow-2:0 2px 6px 2px rgb(0 6 4 / .35),0 1px 2px rgb(0 6 4 / .5);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0a100e;
+  --surface:#0f1513;
+  --surface-container-lowest:#0a0f0e;
+  --surface-container-low:#171d1b;
+  --surface-container:#1b211f;
+  --surface-container-high:#252b29;
+  --surface-container-highest:#303634;
+  --on-surface:#dee4e0;
+  --on-surface-variant:#bfc9c4;
+  --outline:#89938e;
+  --primary:#94d3c1;
+  --on-primary:#00382f;
+  --primary-container:#1a5247;
+  --on-primary-container:#b0efdc;
+  --secondary-container:#334b44;
+  --on-secondary-container:#d0e8df;
+  --success:#8fd694;
+  --on-success:#00390f;
+  --success-container:#1d5128;
+  --on-success-container:#c9efcb;
+  --error:#ffb4a6;
+  --on-error:#5f1306;
+  --error-container:#8c2a1a;
+  --on-error-container:#ffdad3;
+  --warning:#f2c264;
+  --warning-container:#5a4100;
+  --on-warning-container:#ffe3a8;
+  --focus:#9ecaff;
+  --knob:#ffffff;
+  --scrim:rgb(0 6 4 / .6);
+  --shadow-1:0 1px 3px 1px rgb(0 6 4 / .35),0 1px 2px rgb(0 6 4 / .5);
+  --shadow-2:0 2px 6px 2px rgb(0 6 4 / .35),0 1px 2px rgb(0 6 4 / .5);
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--on-surface);font:17px/1.5 "Roboto Flex","Roboto","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;overflow-x:hidden}
+button,input,select{font:inherit;color:inherit}
+h1,h2,h3,p{margin:0}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+#h:focus{outline:none}
+
+.page{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.proto{max-width:960px;margin:0 auto 10px;display:flex;justify-content:flex-end}
+.pill{display:inline-block;padding:2px 14px;border-radius:0;font-size:14px;font-weight:500;color:var(--on-secondary-container);background:var(--secondary-container)}
+
+.win{max-width:960px;margin:0 auto;background:var(--surface);border-radius:0;box-shadow:var(--shadow-2);overflow:hidden}
+.titlebar{display:flex;align-items:center;gap:10px;min-height:48px;padding:0 0 0 18px;background:var(--surface-container);color:var(--on-surface)}
+.titlebar svg{width:22px;height:22px;color:var(--primary)}
+.titlebar .t{flex:1;font-size:16px;font-weight:600;min-width:0}
+.titlebar .ctl{display:flex;align-self:stretch}
+.titlebar .ctl span{width:46px;display:grid;place-items:center;font-size:16px;color:var(--on-surface-variant)}
+.body{display:grid;grid-template-columns:minmax(0,1fr) 356px;min-height:620px}
+.screen{padding:28px 32px 32px;min-width:0}
+.schema{background:var(--surface-container);border-radius:0;margin:16px 16px 16px 0;padding:20px;min-width:0}
+.statusbar{padding:10px 20px;font-size:14px;color:var(--on-surface-variant);background:var(--surface-container-low)}
+
+/* buttons, chips */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:8px 24px;border:0;border-radius:0;background:var(--secondary-container);color:var(--on-secondary-container);font-size:17px;font-weight:600;cursor:pointer}
+.btn:not(:disabled):hover{background:color-mix(in srgb,var(--on-secondary-container) 8%,var(--secondary-container))}
+.btn.primary{background:var(--primary);color:var(--on-primary)}
+.btn.primary:not(:disabled):hover{background:color-mix(in srgb,var(--on-primary) 10%,var(--primary))}
+.btn.danger{background:var(--error);color:var(--on-error)}
+.btn.danger:not(:disabled):hover{background:color-mix(in srgb,var(--on-error) 10%,var(--error))}
+.btn.big{min-height:56px;font-size:19px;padding-inline:32px}
+.btn.small{min-height:40px;font-size:15px;padding:4px 16px;background:var(--surface-container-lowest);color:var(--primary)}
+.btn.small:not(:disabled):hover{background:color-mix(in srgb,var(--primary) 10%,var(--surface-container-lowest))}
+.btn:disabled{background:color-mix(in srgb,var(--on-surface) 12%,transparent);color:color-mix(in srgb,var(--on-surface) 40%,transparent);cursor:not-allowed}
+.btn svg{width:20px;height:20px}
+.link{background:none;border:0;border-radius:0;padding:6px 16px;min-height:44px;color:var(--primary);font-weight:600;cursor:pointer}
+.link:hover{background:color-mix(in srgb,var(--primary) 10%,transparent)}
+.chip{display:inline-block;padding:2px 12px;border-radius:0;font-size:15px;font-weight:700;white-space:nowrap}
+.chip.ok{background:var(--success-container);color:var(--on-success-container)}
+.chip.err,.chip.mirror{background:var(--error-container);color:var(--on-error-container)}
+.chip.copy{background:var(--primary-container);color:var(--on-primary-container)}
+.chip.ann{background:var(--warning-container);color:var(--on-warning-container)}
+.chip.ok::before,.chip.err::before{content:"\2713\00a0";content:"\2713\00a0" / ""}
+.chip.err::before{content:"\2715\00a0";content:"\2715\00a0" / ""}
+
+/* text */
+.kicker{font-size:15px;color:var(--on-surface-variant);font-weight:600;letter-spacing:.02em}
+h1{font-size:28px;line-height:1.25;font-weight:500;margin:2px 0 8px}
+h2{font-size:21px;line-height:1.3;font-weight:500}
+.lead{font-size:18px;margin-bottom:18px;color:var(--on-surface-variant)}
+.muted{color:var(--on-surface-variant)}
+.err-msg{background:var(--error-container);color:var(--on-error-container);font-weight:700;margin-top:10px;padding:10px 16px;border-radius:0;min-height:0}
+.err-msg:empty{display:none}
+.err-msg::before{content:"Attenzione: ";}
+
+/* tabs */
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px}
+.tabs button{background:none;border:0;border-radius:0;padding:10px 20px;min-height:48px;font-weight:600;color:var(--on-surface-variant);cursor:pointer}
+.tabs button:hover{background:color-mix(in srgb,var(--on-surface) 8%,transparent)}
+.tabs button[aria-current="page"]{background:var(--secondary-container);color:var(--on-secondary-container)}
+
+/* cards */
+.list{display:grid;gap:12px;margin-bottom:22px;padding:0;list-style:none}
+.card{border-radius:0;padding:18px 20px;background:var(--surface-container-low);color:var(--on-surface);cursor:pointer;min-width:0}
+.card:hover{background:color-mix(in srgb,var(--on-surface) 6%,var(--surface-container-low))}
+.card.sel{background:var(--primary-container);color:var(--on-primary-container)}
+.card.sel:hover{background:color-mix(in srgb,var(--on-primary-container) 6%,var(--primary-container))}
+.card.sel .chip.copy{background:var(--surface-container-lowest)}
+.card .head{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:6px}
+.card .head h2{min-width:0;overflow-wrap:anywhere}
+.card .route{color:var(--on-surface-variant);overflow-wrap:anywhere;margin-bottom:12px}
+.card.sel .route{color:var(--on-primary-container)}
+.card .foot{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.card .last{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;min-width:0;font-size:16px}
+
+/* stepper */
+.steps{display:flex;gap:6px;list-style:none;padding:0;margin:0 0 22px;flex-wrap:wrap}
+.steps li{display:flex;align-items:center;gap:8px;padding:4px 14px 4px 4px;border-radius:0;color:var(--on-surface-variant);font-weight:600;font-size:15px}
+.steps .n{width:30px;height:30px;border-radius:0;display:grid;place-items:center;background:var(--surface-container-highest);color:var(--on-surface-variant);font-size:15px}
+.steps .n svg{width:16px;height:16px}
+.steps li.done .n{background:var(--success-container);color:var(--on-success-container)}
+.steps li.cur{background:var(--primary-container);color:var(--on-primary-container)}
+.steps li.cur .n{background:var(--primary);color:var(--on-primary)}
+
+/* forms / picker */
+label.f{display:block;font-weight:600;margin-bottom:6px}
+input[type=text]{width:100%;min-height:56px;padding:8px 16px;border:0;border-radius:0;background:var(--surface-container-highest);color:var(--on-surface);box-shadow:inset 0 -1px 0 var(--on-surface-variant);font-size:18px}
+input[type=text]:hover{background:color-mix(in srgb,var(--on-surface) 6%,var(--surface-container-highest))}
+input[type=text]:focus{box-shadow:inset 0 -3px 0 var(--primary)}
+input[aria-invalid="true"],input[aria-invalid="true"]:focus{box-shadow:inset 0 -3px 0 var(--error)}
+.help{color:var(--on-surface-variant);font-size:15px;margin-top:6px}
+.pick{margin-top:18px;border-radius:0;overflow:hidden;background:var(--surface-container)}
+.pickhead{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--surface-container-high);overflow-wrap:anywhere}
+.pickhead>span{min-width:0}
+.rows{display:grid;gap:4px;padding:8px;max-height:288px;overflow:auto}
+.row{display:flex;align-items:center;gap:12px;min-height:52px;padding:6px 14px;border:0;border-radius:0;background:var(--surface-container-lowest);text-align:left;cursor:pointer;font-size:17px}
+.row:hover{background:color-mix(in srgb,var(--primary) 12%,var(--surface-container-lowest))}
+.row svg{width:26px;height:26px;flex:none;color:var(--primary)}
+.row span{min-width:0;overflow-wrap:anywhere}
+.rows p{padding:14px}
+.nav{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;margin-top:28px}
+
+/* options */
+.callout{display:flex;gap:12px;align-items:center;padding:16px 18px;border-radius:0;background:var(--success-container);color:var(--on-success-container);font-weight:500;margin-bottom:18px;font-size:18px}
+.callout::before{content:"\2713";content:"\2713" / "";flex:none;width:32px;height:32px;border-radius:0;display:grid;place-items:center;background:var(--success);color:var(--on-success);font-weight:700}
+details.adv{border-radius:0;background:var(--surface-container-low)}
+details.adv>summary{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;min-height:56px;padding:8px 20px;font-weight:600;cursor:pointer;border-radius:0}
+details.adv>summary:hover{background:color-mix(in srgb,var(--on-surface) 6%,transparent)}
+details.adv .advbody{padding:6px 20px 20px}
+.sw{display:flex;align-items:center;gap:14px;min-height:52px;cursor:pointer;font-weight:600}
+.sw input{appearance:none;-webkit-appearance:none;flex:none;width:58px;height:34px;border-radius:0;background:var(--outline);position:relative;margin:0;cursor:pointer}
+.sw input::after{content:"";position:absolute;top:4px;left:4px;width:26px;height:26px;border-radius:0;background:var(--knob)}
+.sw input:checked{background:var(--error)}
+.sw input:checked::after{left:28px;background:var(--on-error)}
+.warnbox{display:flex;gap:16px;margin-top:16px;padding:20px;border-radius:0;background:var(--error-container);color:var(--on-error-container);box-shadow:var(--shadow-1)}
+.warnbox svg{width:52px;height:52px;padding:11px;border-radius:0;background:var(--error);color:var(--on-error);flex:none}
+.warnbox h3{font-size:21px;font-weight:700;margin-bottom:6px}
+.warnbox p+p{margin-top:8px}
+.warnbox>div{min-width:0}
+
+/* preview */
+.scan{display:flex;gap:14px;align-items:center;padding:22px;border-radius:0;background:var(--surface-container-low);font-size:18px}
+.spin{width:28px;height:28px;border:4px solid var(--surface-container-highest);border-top-color:var(--primary);border-radius:50%;flex:none}
+@media (prefers-reduced-motion:no-preference){.spin{animation:rot 1s linear infinite}}
+@keyframes rot{to{transform:rotate(360deg)}}
+.sum{font-size:18px;margin-bottom:14px}
+.grp{border-radius:0;margin-bottom:12px;background:var(--surface-container-low)}
+.grp>summary{display:flex;gap:12px;align-items:center;justify-content:space-between;min-height:56px;padding:8px 20px;font-weight:700;cursor:pointer;border-radius:0}
+.grp>summary:hover{background:color-mix(in srgb,var(--on-surface) 6%,transparent)}
+.grp>summary b{font-size:20px}
+.grp.del{background:var(--error-container);color:var(--on-error-container)}
+.grp.del>summary:hover{background:color-mix(in srgb,var(--on-error-container) 8%,transparent)}
+.grp .why{padding:0 20px;color:var(--on-surface-variant);font-size:15px}
+.grp.del .why{color:var(--on-error-container)}
+.files{margin:8px 0 0;padding:0 20px 14px 40px;font-family:Consolas,"Cascadia Mono",monospace;font-size:14.5px;overflow-wrap:anywhere}
+.more{padding:0 20px 14px;color:var(--on-surface-variant);font-size:15px}
+.grp.del .more{color:var(--on-error-container)}
+.empty{text-align:center;padding:32px 16px;background:var(--success-container);color:var(--on-success-container);border-radius:0;margin-bottom:12px}
+.empty svg{width:56px;height:56px;color:var(--success)}
+.empty h2{font-size:24px;margin:6px 0}
+.ack{display:flex;gap:14px;align-items:flex-start;padding:16px 20px;border-radius:0;background:var(--error-container);color:var(--on-error-container);margin:14px 0;cursor:pointer;font-weight:700}
+.ack:hover{background:color-mix(in srgb,var(--on-error-container) 8%,var(--error-container))}
+.ack input{width:28px;height:28px;flex:none;accent-color:var(--error);margin:0}
+.tech{margin-top:14px;color:var(--on-surface-variant)}
+.tech summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-size:15px}
+.tech code{display:block;padding:14px;border-radius:0;background:var(--surface-container-high);color:var(--on-surface);font:14px/1.5 Consolas,"Cascadia Mono",monospace;overflow-wrap:anywhere}
+.final{margin-top:22px;padding:20px;border-radius:0;background:var(--surface-container-low)}
+.final h2{font-size:24px;margin-bottom:12px}
+.btns{display:flex;flex-wrap:wrap;gap:12px}
+
+/* run / result */
+.curfile{font-family:Consolas,"Cascadia Mono",monospace;font-size:15px;color:var(--on-surface-variant);overflow-wrap:anywhere;margin:14px 0 22px;min-height:24px}
+.res{display:flex;gap:16px;align-items:flex-start;padding:22px;border-radius:0;background:var(--success-container);color:var(--on-success-container);margin-bottom:22px}
+.res.err{background:var(--error-container);color:var(--on-error-container)}
+.res.ann{background:var(--warning-container);color:var(--on-warning-container)}
+.res svg{width:52px;height:52px;flex:none;color:var(--success)}
+.res.err svg{color:var(--error)}
+.res.ann svg{color:var(--warning)}
+.res>div{min-width:0}
+.res h1{font-size:26px}
+.confirm{padding:18px 20px;background:var(--warning-container);color:var(--on-warning-container);border-radius:0}
+.confirm p{font-weight:700;margin-bottom:12px}
+
+/* history */
+.runs{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.run{background:var(--surface-container-low);border-radius:0;padding:16px 20px;min-width:0}
+.run .top{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin-bottom:8px}
+.run .top strong{min-width:0;overflow-wrap:anywhere}
+.run .when{color:var(--on-surface-variant);font-size:15px}
+.run .chips{display:flex;gap:8px;margin-left:auto}
+.stats{display:flex;flex-wrap:wrap;gap:6px 22px;margin:0;align-items:center}
+.stats div{min-width:0}
+.stats dt{display:inline;color:var(--on-surface-variant);font-size:15px}
+.stats dt::after{content:" "}
+.stats dd{display:inline;margin:0;font-weight:700}
+.stats .d{color:var(--error)}
+.stats .lg{margin-left:auto}
+
+/* schema */
+.schema h2{font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--on-surface-variant);margin-bottom:12px}
+.node{border-radius:0;background:var(--surface-container-lowest);color:var(--on-surface);padding:14px 16px}
+.node .tag{font-weight:700;font-size:16px;margin-bottom:8px}
+.node .nb{display:flex;gap:12px;align-items:center}
+.node .nb>svg{width:48px;height:48px;padding:10px;border-radius:0;flex:none;background:var(--primary-container);color:var(--on-primary-container)}
+.node .nb>div{min-width:0}
+.node .dl{font-size:15px;color:var(--on-surface-variant)}
+.node .pth{font-weight:600;overflow-wrap:anywhere;line-height:1.3}
+.node.empty-n{background:var(--surface-container-high)}
+.node.empty-n .pth{color:var(--on-surface-variant);font-weight:500;font-style:italic}
+.node.empty-n .nb>svg{background:var(--surface-container-highest);color:var(--on-surface-variant)}
+.node.mir{background:var(--error-container);color:var(--on-error-container)}
+.node.mir .dl{color:var(--on-error-container)}
+.node.mir .nb>svg{background:var(--error);color:var(--on-error)}
+.mid{display:flex;flex-direction:column;align-items:center;padding:6px 0}
+.arr{display:flex;align-items:center;gap:12px;color:var(--primary)}
+.arr svg{width:44px;height:64px}
+.mid.mir .arr{color:var(--error)}
+.mid.mir .chip{background:var(--error);color:var(--on-error)}
+.flow{stroke-dasharray:7 7}
+@media (prefers-reduced-motion:no-preference){.mid.run .flow{animation:flow .7s linear infinite}}
+@keyframes flow{to{stroke-dashoffset:-14}}
+.counts{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:8px;width:100%;margin-top:6px}
+.cnt{text-align:center;padding:10px 4px;border-radius:0;background:var(--surface-container-lowest);color:var(--on-surface);min-width:0}
+.cnt b{display:block;font-size:26px;line-height:1.1;font-weight:600}
+.cnt span{font-size:14px;color:var(--on-surface-variant);display:block;line-height:1.2}
+.cnt.d{background:var(--error-container)}
+.cnt.d b,.cnt.d span{color:var(--on-error-container)}
+.bar{height:16px;border-radius:0;background:var(--surface-container-highest);overflow:hidden;margin-top:16px}
+.bar i{display:block;height:100%;border-radius:0;background:var(--primary)}
+.mid.mir~.prog .bar i{background:var(--error)}
+.prog small{display:block;margin-top:4px;color:var(--on-surface-variant);font-size:15px}
+.safe{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:12px;padding:10px 14px;border-radius:0;background:var(--success-container);color:var(--on-success-container);font-size:16px;font-weight:600;text-align:left}
+.safe svg{width:20px;height:20px;flex:none}
+.cap{margin-top:14px;font-size:16px;text-align:center;color:var(--on-surface-variant)}
+.cap.mir{background:var(--error-container);color:var(--on-error-container);font-weight:700;text-align:left;padding:12px 16px;border-radius:0}
+
+/* modal */
+.overlay{position:fixed;inset:0;background:var(--scrim);display:grid;place-items:center;padding:16px;z-index:10}
+.dialog{width:min(760px,100%);max-height:90vh;display:flex;flex-direction:column;background:var(--surface-container-high);color:var(--on-surface);border-radius:0;box-shadow:var(--shadow-2);overflow:hidden}
+.dialog header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:16px 20px}
+.dialog header h2{min-width:0;overflow-wrap:anywhere}
+.dialog pre{margin:0 16px 16px;padding:14px 16px;overflow:auto;border-radius:0;font:13.5px/1.45 Consolas,"Cascadia Mono",monospace;background:var(--surface-container-lowest);color:var(--on-surface);flex:1;tab-size:4}
+
+/* demo corner */
+.demo{max-width:960px;margin:16px auto 0;font-size:15px;color:var(--on-surface-variant)}
+.demo summary{cursor:pointer;min-height:44px;display:flex;align-items:center}
+.demo .in{display:grid;gap:4px;padding:8px 16px;border-radius:0;background:var(--surface-container-low);color:var(--on-surface)}
+.demo label{display:flex;gap:10px;align-items:center;min-height:40px}
+.demo input[type=checkbox]{width:22px;height:22px;margin:0}
+.demo select{min-height:40px;border:0;border-radius:0;background:var(--surface-container-highest);color:var(--on-surface);box-shadow:inset 0 -1px 0 var(--on-surface-variant);padding:0 8px}
+
+@media (max-width:860px){
+  .body{grid-template-columns:minmax(0,1fr)}
+  .schema{order:-1;margin:12px 12px 0;padding:16px}
+  .screen{padding:20px 16px 24px}
+}
+@media (max-width:520px){
+  .win{border-radius:0}
+  .steps li:not(.cur) .lbl{display:none}
+  .steps li:not(.cur){padding-right:4px}
+  h1{font-size:24px}
+  .btn{padding-inline:16px}
+  .nav .btn,.btns .btn{flex:1 1 100%}
+  .run .chips{margin-left:0}
+  .stats .lg{margin-left:0}
+}
+@media (prefers-reduced-motion:no-preference){
+  .btn,.link,.card,.row,.tabs button,.ack,input[type=text]{transition:background-color .15s ease,box-shadow .15s ease}
+}
+</style>
+
+<div class="page">
+  <div class="proto"><span class="pill">Prototipo – dati di esempio</span></div>
+  <div class="win" id="app">
+    <div class="titlebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h12l-3-3M20 16H8l3 3"/></svg>
+      <span class="t">ColomboSync</span>
+      <span class="ctl" aria-hidden="true"><span>&#8211;</span><span>&#9633;</span><span>&#215;</span></span>
+    </div>
+    <div class="body">
+      <main class="screen" id="screen"></main>
+      <aside class="schema" id="schema" aria-label="Schema di cosa succede"></aside>
+    </div>
+    <div class="statusbar">Prototipo – dati di esempio · nessun file viene copiato davvero</div>
+  </div>
+  <details class="demo">
+    <summary>Angolo demo (solo per il test)</summary>
+    <div class="in">
+      <label for="demoNet"><input type="checkbox" id="demoNet"> Simula rete scollegata durante la copia</label>
+      <label for="demoUp"><input type="checkbox" id="demoUp"> Simula anteprima "B già aggiornato"</label>
+      <label for="themeSel">Tema <select id="themeSel"><option value="auto">Automatico</option><option value="light">Chiaro</option><option value="dark">Scuro</option></select></label>
+    </div>
+  </details>
+  <div id="modal"></div>
+</div>
+
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtN=n=>Number(n).toLocaleString('it-IT');
+const fmtSize=b=>b>=1e9?(b/1e9).toFixed(1).replace('.',',')+' GB':Math.max(1,Math.round(b/1e6))+' MB';
+const pad=n=>String(n).padStart(2,'0');
+const nowStr=()=>{const d=new Date();return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear()+' '+pad(d.getHours())+':'+pad(d.getMinutes());};
+
+/* ---------- icons ---------- */
+const svg=(inner,cls)=>'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"'+(cls?' class="'+cls+'"':'')+'>'+inner+'</svg>';
+const ICON={
+  disk:svg('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 12h6M17 12h.01"/>'),
+  usb:svg('<path d="M12 3v13M8 8l4-4 4 4"/><circle cx="12" cy="19" r="2.5"/>'),
+  net:svg('<rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/>'),
+  folder:svg('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  up:svg('<path d="M12 19V5M5 12l7-7 7 7"/>'),
+  check:svg('<circle cx="12" cy="12" r="10"/><path d="M7.5 12.5l3 3 6-6.5"/>'),
+  tick:svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
+  cross:svg('<circle cx="12" cy="12" r="10"/><path d="M8 8l8 8M16 8l-8 8"/>'),
+  stop:svg('<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/>'),
+  warn:svg('<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>')
+};
+
+/* ---------- fake file system ---------- */
+const DRIVES=[['C:\\','C:','Disco locale'],['D:\\','D:','Dati'],['E:\\','E:','USB'],['Z:\\','Z:','Rete (\\\\NAS\\Condivisa)']];
+const FS={
+  'C:\\':['Users','Documenti','Programmi'],
+  'C:\\Users':['Anna','Pubblico'],
+  'C:\\Users\\Anna':['Documenti','Immagini','Desktop','Download'],
+  'D:\\':['Foto','Musica','Video','Lavori'],
+  'D:\\Foto':['2023','2024','Vacanze'],
+  'E:\\':['Backup','Documenti vecchi'],
+  'Z:\\':['Backup','Famiglia','Progetti'],
+  '\\\\NAS\\Condivisa':['Backup','Famiglia','Progetti'],
+  '\\\\NAS\\Backup':['Foto','Documenti']
+};
+const isPath=p=>/^([A-Za-z]:(\\|$)|\\\\[^\\]+)/.test(p.trim());
+const key=p=>{p=p.trim().replace(/\//g,'\\');if(/^[A-Za-z]:\\?$/.test(p))return p[0].toUpperCase()+':\\';return p.replace(/\\+$/,'');};
+const norm=p=>key(p).toLowerCase().replace(/\\+$/,'');
+const join=(p,n)=>p.endsWith('\\')?p+n:p+'\\'+n;
+const parent=p=>{const k=key(p);if(/^[A-Za-z]:\\$/.test(k)||/^\\\\[^\\]+\\[^\\]+$/.test(k))return '';const i=k.lastIndexOf('\\');const r=k.substring(0,i);return /^[A-Za-z]:$/.test(r)?r+'\\':r;};
+const kids=p=>FS[key(p)]||[];
+const last=p=>{const k=key(p);return /^[A-Za-z]:\\$/.test(k)?'disco '+k[0]+':':k.substring(k.lastIndexOf('\\')+1);};
+const isNet=p=>/^\\\\/.test(p)||/^z:/i.test(p);
+const kind=p=>isNet(p)?'net':/^e:/i.test(p)?'usb':'disk';
+const dLabel=p=>{if(/^\\\\/.test(p))return 'Rete · '+(p.match(/^\\\\([^\\]+)/)||[,''])[1];const d=DRIVES.find(x=>x[1].toLowerCase()===p.slice(0,2).toLowerCase());return d?d[1]+' '+(d[2].startsWith('Rete')?'Rete':d[2]):'Disco';};
+const netTag=p=>/^\\\\/.test(p)?'\\\\'+(p.match(/^\\\\([^\\]+)/)||[,''])[1]:p.slice(0,2).toUpperCase();
+
+/* ---------- state ---------- */
+const newWiz=o=>Object.assign({step:1,a:'',b:'',name:'',nameTouched:false,mirror:false,advOpen:false,ack:false,preview:null,scanning:false,savedId:null,seed:null},o||{});
+const S={
+  view:'home',homeSel:1,wiz:newWiz(),run:null,result:null,scanTok:0,
+  demo:{netFail:false,upToDate:false},
+  syncs:[
+    {id:1,name:'Foto su NAS',a:'D:\\Foto',b:'\\\\NAS\\Backup\\Foto',mirror:false,seed:{n:148,u:3,d:12},last:{when:'02/11/2026 21:30',esito:'ok'}},
+    {id:2,name:'Documenti ufficio',a:'C:\\Users\\Anna\\Documenti',b:'E:\\Backup',mirror:false,seed:{n:37,u:5,d:4},last:{when:'01/11/2026 18:05',esito:'err'}}
+  ],
+  history:[
+    {id:101,when:'02/11/2026 21:30',name:'Foto su NAS',mirror:false,a:'D:\\Foto',b:'\\\\NAS\\Backup\\Foto',n:12,u:1,d:0,dur:'1 min',esito:'ok'},
+    {id:102,when:'01/11/2026 18:05',name:'Documenti ufficio',mirror:false,a:'C:\\Users\\Anna\\Documenti',b:'E:\\Backup',n:0,u:0,d:0,dur:'< 1 min',esito:'err'},
+    {id:103,when:'28/10/2026 20:12',name:'Foto su NAS',mirror:true,a:'D:\\Foto',b:'\\\\NAS\\Backup\\Foto',n:210,u:0,d:4,dur:'3 min',esito:'ok'},
+    {id:104,when:'25/10/2026 09:02',name:'Documenti ufficio',mirror:false,a:'C:\\Users\\Anna\\Documenti',b:'E:\\Backup',n:37,u:5,d:0,dur:'1 min',esito:'ok'},
+    {id:105,when:'20/10/2026 21:44',name:'Foto su NAS',mirror:false,a:'D:\\Foto',b:'\\\\NAS\\Backup\\Foto',n:58,u:0,d:0,dur:'< 1 min',esito:'ann'}
+  ]
+};
+const sync=id=>S.syncs.find(s=>s.id===id);
+
+/* ---------- fake data ---------- */
+const FOLD=['2024\\Vacanze','2024\\Compleanno','Lavori','Documenti scansionati'];
+const EXT=['jpg','pdf','docx'];
+const genName=(k,i)=>k==='del'?['Da buttare','Vecchie'][i%2]+'\\'+['scansione_2019','bozza_vecchia','copia_di_prova','prova'][i%4]+'_'+(i+1)+['.tmp','.bak','.pdf'][i%3]:FOLD[i%4]+'\\'+(k==='upd'?'Documento':'IMG')+'_'+(1000+i*7)+'.'+EXT[(i+(k==='upd'?1:0))%3];
+const names=(k,count,limit)=>Array.from({length:Math.min(count,limit)},(_,i)=>genName(k,i));
+function makePreview(w){
+  const seed=w.seed||{n:148,u:3,d:12};
+  const z=S.demo.upToDate;
+  const n=z?0:seed.n,u=z?0:seed.u,d=z?0:(w.mirror?seed.d:0);
+  return{n,u,d,bytes:n*8.7e6+u*14e6,newList:names('new',n,6),updList:names('upd',u,6),delList:names('del',d,12)};
+}
+function logFor(e){
+  const dash='-'.repeat(79),L=[];
+  L.push(dash,'   ROBOCOPY     ::     Copia file robusta per Windows',dash,'','  Avvio : '+e.when,'  Origine : '+e.a+'\\','  Destinazione : '+e.b+'\\','','  File : *.*','','  Opzioni : *.* '+(e.mirror?'/MIR':'/E')+' /DCOPY:DA /COPY:DAT /R:1 /W:1','',dash,'');
+  names('new',e.n,6).forEach((f,i)=>L.push('\t    Nuovo file\t\t   '+(8.7+i*.3).toFixed(1).replace('.',',')+' m\t'+f));
+  if(e.n>6)L.push('\t    ... altri '+(e.n-6)+' file nuovi');
+  names('upd',e.u,3).forEach(f=>L.push('\t    Più recente\t\t   14,0 m\t'+f));
+  names('del',e.d,3).forEach(f=>L.push('\t  *File EXTRA\t\t    0,3 m\t'+f));
+  if(e.d>3)L.push('\t    ... altri '+(e.d-3)+' file extra');
+  if(e.esito==='err')L.push('',(nowStr().slice(11))+' ERRORE 53 (0x00000035) Accesso alla cartella di destinazione '+e.b+'\\','Impossibile trovare il percorso di rete.','Attesa di 1 secondi... Nuovo tentativo...','Interrotto: destinazione non raggiungibile.');
+  if(e.esito==='ann')L.push('','Operazione interrotta dall\'utente.');
+  const tot=e.n+e.u,row=(a,b)=>'  '+a.padEnd(10)+String(b[0]).padStart(8)+String(b[1]).padStart(10)+String(b[2]).padStart(10)+String(b[3]).padStart(10)+String(b[4]).padStart(10);
+  L.push('',dash,'','  '+''.padEnd(10)+'  Totali   Copiati  Ignorati    Errori     Extra',row('File :',[tot,e.n+e.u,0,e.esito==='err'?1:0,e.d]),'','  Durata : '+e.dur,'  Codice di uscita robocopy : '+(e.esito==='err'?16:((e.n+e.u>0?1:0)|(e.d>0?2:0))),'');
+  return L.join('\n');
+}
+
+/* ---------- schema ---------- */
+function schemaModel(){
+  const v=S.view,w=S.wiz;
+  let m={a:'',b:'',mirror:false,counts:null,running:false,prog:null,cap:'',tone:''};
+  if(v==='home'||v==='history'){
+    const s=sync(S.homeSel)||S.syncs[0];
+    if(s){m.a=s.a;m.b=s.b;m.mirror=s.mirror;m.cap='Premi "Avvia" per vedere cosa verrà copiato.';}else m.cap='Crea una sincronizzazione per vedere lo schema.';
+  }else if(v==='wizard'){
+    m.a=w.a.trim();m.b=w.b.trim();m.mirror=w.mirror;
+    const p=w.step===5&&!w.scanning?w.preview:null;
+    if(p){m.counts=p;m.cap=p.n+p.u+p.d===0?'B è già aggiornato.':'Da fare: copiare '+fmtN(p.n)+' file nuovi, aggiornarne '+fmtN(p.u)+(w.mirror?', cancellarne '+fmtN(p.d)+' da B':'')+'.';}
+    else if(w.step===5&&w.scanning)m.cap='Sto controllando le due cartelle…';
+    else if(!m.a)m.cap='Scegli la cartella da copiare.';
+    else if(!m.b)m.cap='Ora scegli dove mettere la copia.';
+    else m.cap=w.mirror?'SPECCHIO: B diventerà identico ad A. I file che ci sono solo in B verranno cancellati.':'I file nuovi e modificati di A verranno copiati in B. In B non cancello niente.';
+    if(w.mirror&&m.a&&m.b&&!p)m.tone='mir';
+  }else if(v==='running'){
+    const r=S.run,f=r.done/r.total;
+    m.a=r.sync.a;m.b=r.sync.b;m.mirror=r.sync.mirror;m.running=true;
+    m.counts={n:Math.round(r.p.n*f),u:Math.round(r.p.u*f),d:Math.round(r.p.d*f)};
+    m.prog={done:Math.floor(r.done),total:r.total};
+    m.cap='Sto copiando… '+fmtN(m.prog.done)+' di '+fmtN(r.total)+' file';
+  }else if(v==='result'){
+    const e=S.result.entry;
+    m.a=e.a;m.b=e.b;m.mirror=e.mirror;m.counts=e;
+    m.cap=e.esito==='ok'?'Fatto.':e.esito==='err'?'Non completato.':'Annullato.';
+  }
+  if(m.mirror&&!m.tone&&(v==='wizard'||v==='running'))m.tone='mir';
+  return m;
+}
+function node(tag,p,mir){
+  if(!p)return '<div class="node empty-n"><div class="tag">'+tag+'</div><div class="nb">'+ICON.folder+'<div><div class="pth">Scegli la cartella</div></div></div></div>';
+  return '<div class="node'+(mir?' mir':'')+'"><div class="tag">'+tag+'</div><div class="nb">'+ICON[kind(p)]+'<div><div class="dl">'+esc(dLabel(p))+'</div><div class="pth">'+esc(p)+'</div></div></div></div>';
+}
+function renderSchema(){
+  const m=schemaModel(),c=m.counts,val=k=>c?fmtN(c[k]):'—';
+  const arrow='<svg viewBox="0 0 44 64" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="flow" d="M22 4v44"/><path d="M10 40l12 16 12-16"/></svg>';
+  $('#schema').innerHTML='<h2>Cosa succede</h2>'+node('A · Da copiare',m.a,false)+
+    '<div class="mid'+(m.mirror?' mir':'')+(m.running?' run':'')+'"><div class="arr">'+arrow+'<span class="chip '+(m.mirror?'mirror':'copy')+'">'+(m.mirror?'Specchio':'Copia')+'</span></div>'+
+    '<div class="counts"><div class="cnt"><b>'+val('n')+'</b><span>Nuovi</span></div><div class="cnt"><b>'+val('u')+'</b><span>Aggiornati</span></div>'+(m.mirror?'<div class="cnt d"><b>'+val('d')+'</b><span>Eliminati da B</span></div>':'')+'</div></div>'+
+    node('B · Copia',m.b,m.mirror)+
+    (!m.mirror&&m.a&&m.b?'<p class="safe">'+ICON.tick+'Nessun file viene cancellato in B</p>':'')+
+    (m.prog?'<div class="prog"><div class="bar" role="progressbar" aria-label="File copiati" aria-valuemin="0" aria-valuemax="'+m.prog.total+'" aria-valuenow="'+m.prog.done+'"><i style="width:'+(m.prog.done/m.prog.total*100).toFixed(1)+'%"></i></div><small>'+fmtN(m.prog.done)+' di '+fmtN(m.prog.total)+' file</small></div>':'')+
+    '<p class="cap'+(m.tone==='mir'?' mir':'')+'">'+esc(m.cap)+'</p>';
+}
+
+/* ---------- views ---------- */
+const chipMode=m=>'<span class="chip '+(m?'mirror':'copy')+'">'+(m?'Specchio':'Copia')+'</span>';
+const chipOut=e=>'<span class="chip '+e+'">'+({ok:'OK',err:'Errore',ann:'Annullato'}[e])+'</span>';
+const tabs=cur=>'<nav class="tabs" aria-label="Sezioni"><button type="button" data-act="tab" data-v="home"'+(cur==='home'?' aria-current="page"':'')+'>Sincronizzazioni</button><button type="button" data-act="tab" data-v="history"'+(cur==='history'?' aria-current="page"':'')+'>Storico</button></nav>';
+
+function viewHome(){
+  return tabs('home')+'<h1 id="h" tabindex="-1">Le tue sincronizzazioni</h1><p class="lead">Una sincronizzazione copia i file da una cartella (A) in un’altra (B).</p>'+
+  '<ul class="list">'+S.syncs.map(s=>{
+    const l=s.last;
+    return '<li class="card'+(s.id===S.homeSel?' sel':'')+'" data-id="'+s.id+'"><div class="head"><h2>'+esc(s.name)+'</h2>'+chipMode(s.mirror)+'</div>'+
+    '<p class="route">'+esc(s.a)+' &rarr; '+esc(s.b)+'</p><div class="foot"><div class="last">'+(l?'<span>Ultima volta: <span class="num">'+l.when+'</span></span>'+chipOut(l.esito):'<span>Mai avviata</span>')+'</div>'+
+    '<button type="button" class="btn primary" data-act="start" data-id="'+s.id+'" aria-label="Avvia '+esc(s.name)+'">Avvia</button></div></li>';
+  }).join('')+'</ul><button type="button" class="btn primary big" data-act="new">+ Nuova sincronizzazione</button>';
+}
+
+function viewHistory(){
+  return tabs('history')+'<h1 id="h" tabindex="-1">Storico</h1><p class="lead">Tutte le copie fatte, dalla più recente.</p><ul class="runs">'+S.history.map(e=>
+    '<li class="run"><div class="top"><strong>'+esc(e.name)+'</strong><span class="when num">'+e.when+'</span><span class="chips">'+chipMode(e.mirror)+chipOut(e.esito)+'</span></div>'+
+    '<dl class="stats"><div><dt>Nuovi</dt><dd>'+fmtN(e.n)+'</dd></div><div><dt>Aggiornati</dt><dd>'+fmtN(e.u)+'</dd></div><div class="'+(e.d>0?'d':'')+'"><dt>Cancellati</dt><dd>'+fmtN(e.d)+'</dd></div><div><dt>Durata</dt><dd>'+e.dur+'</dd></div>'+
+    '<div class="lg"><button type="button" class="link" data-act="log" data-id="'+e.id+'">Registro</button></div></dl></li>').join('')+'</ul>';
+}
+
+const STEPS=['Da dove','Dove','Nome','Opzioni','Anteprima'];
+const TITLES=['Da dove copio?','Dove copio?','Come la chiamo?','Opzioni','Anteprima'];
+function stepper(step){
+  return '<ol class="steps" aria-label="Passi">'+STEPS.map((s,i)=>{const n=i+1,c=n<step?'done':n===step?'cur':'';
+    return '<li class="'+c+'"'+(n===step?' aria-current="step"':'')+'><span class="n">'+(n<step?ICON.tick:n)+'</span><span class="lbl">'+s+'</span></li>';}).join('')+'</ol>';
+}
+function listHTML(path){
+  const loc=isPath(path)?key(path):'';
+  const row=(p,ic,t)=>'<button type="button" class="row" data-act="pick" data-path="'+esc(p)+'">'+ic+'<span>'+esc(t)+'</span></button>';
+  const items=loc===''?DRIVES.map(d=>row(d[0],ICON[kind(d[0])],d[1]+'  '+d[2])):kids(loc).map(n=>row(join(loc,n),ICON.folder,n));
+  return '<div class="pickhead" id="pickHead" tabindex="-1"><span>'+(loc===''?'Dischi del computer':'Ti trovi in: <b>'+esc(loc)+'</b>')+'</span>'+(loc?'<button type="button" class="btn small" data-act="pick" data-path="'+esc(parent(loc))+'">'+ICON.up+' Livello superiore</button>':'')+'</div><div class="rows">'+(items.join('')||'<p class="muted">Qui dentro non ci sono altre cartelle.</p>')+'</div>';
+}
+function picker(which){
+  const w=S.wiz,v=w[which],isA=which==='a';
+  return '<label class="f" for="path-'+which+'">'+(isA?'Cartella da copiare (A)':'Cartella dove metto la copia (B)')+'</label>'+
+  '<input type="text" id="path-'+which+'" value="'+esc(v)+'" placeholder="Per esempio: '+(isA?'D:\\Foto':'E:\\Backup')+'" autocomplete="off" spellcheck="false">'+
+  '<p class="help">Scrivi il percorso, oppure scegli cliccando qui sotto.</p><div class="err-msg" id="err" role="alert"></div>'+
+  '<div class="pick" id="pickList">'+listHTML(v)+'</div>';
+}
+function wizFooter(){
+  const w=S.wiz;
+  return '<div class="nav"><button type="button" class="btn" data-act="back">'+(w.step===1||w.savedId?'Annulla':'Indietro')+'</button>'+(w.step<5?'<button type="button" class="btn primary" data-act="next">Avanti</button>':'')+'</div>';
+}
+function warnHTML(on){
+  return on?'<div class="warnbox" role="alert">'+ICON.warn+'<div><h3>Attenzione: questa opzione cancella dei file</h3><p>Ogni file che c’è in B ma non in A verrà <b>CANCELLATO</b> da B. Non finisce nel Cestino.</p><p>Usalo solo se B serve esclusivamente come copia di A.</p><p>Prima di partire vedrai l’elenco dei file che verranno cancellati.</p></div></div>':'';
+}
+function viewWizard(){
+  const w=S.wiz,head='<div class="kicker">Passo '+w.step+' di 5</div><h1 id="h" tabindex="-1">'+(w.savedId&&w.step===5?'Anteprima: '+esc(w.name):TITLES[w.step-1])+'</h1>';
+  let b='';
+  if(w.step===1)b=picker('a');
+  else if(w.step===2)b=picker('b');
+  else if(w.step===3)b='<label class="f" for="name">Nome della sincronizzazione</label><input type="text" id="name" value="'+esc(w.name)+'" autocomplete="off"><p class="help">Serve solo a riconoscerla nell’elenco. Puoi tenere questo nome o cambiarlo.</p><div class="err-msg" id="err" role="alert"></div>';
+  else if(w.step===4)b='<p class="callout">I file nuovi e modificati vengono copiati in B. Non cancello mai niente in B.</p>'+
+    '<details class="adv" id="adv"'+(w.advOpen?' open':'')+'><summary>Opzioni avanzate <span id="advChip">'+(w.mirror?'<span class="chip mirror">Specchio attivo</span>':'')+'</span></summary><div class="advbody"><label class="sw" for="mirror"><input type="checkbox" role="switch" id="mirror"'+(w.mirror?' checked':'')+'><span>Rendi B identico ad A (specchio)</span></label><div id="mirrorWarn">'+warnHTML(w.mirror)+'</div></div></details>';
+  else b=viewPreview();
+  return stepper(w.step)+head+(w.step===5?'':'<div style="height:12px"></div>')+b+wizFooter();
+}
+function viewPreview(){
+  const w=S.wiz,p=w.preview;
+  if(w.scanning)return '<div class="scan" role="status"><span class="spin"></span><span>Sto controllando le due cartelle… Non copio ancora niente.</span></div>';
+  const total=p.n+p.u+p.d,need=w.mirror&&p.d>0;
+  const grp=(t,why,cls,cnt,list)=>cnt>0?'<details class="grp '+cls+'" open><summary><span>'+t+'</span><b class="num">'+fmtN(cnt)+'</b></summary><p class="why">'+why+'</p><ul class="files">'+list.map(f=>'<li>'+esc(f)+'</li>').join('')+'</ul>'+(cnt>list.length?'<p class="more">… e altri '+fmtN(cnt-list.length)+' file</p>':'')+'</details>':'';
+  const cmd='robocopy "'+esc(w.a.trim())+'" "'+esc(w.b.trim())+'" '+(w.mirror?'/MIR':'/E')+' /R:1 /W:1 /L /NJH /NJS /NDL /NC /BYTES /FP /NP /UNILOG:"%TEMP%\\colombosync-anteprima.log"';
+  const tech='<details class="tech"><summary>Dettagli tecnici</summary><code>'+cmd+'</code><p class="help">Per la copia vera si toglie /L.</p></details>';
+  if(total===0)return '<div class="empty">'+ICON.check+'<h2>B è già aggiornato</h2><p>Non c’è niente da copiare: B ha già tutto quello che c’è in A.</p></div>'+tech+
+    '<div class="final"><div class="btns"><button type="button" class="btn primary" data-act="saveEmpty">'+(w.savedId?'Torna all’elenco':'Salva e chiudi')+'</button></div></div>';
+  return '<p class="sum">'+(w.mirror?'Ecco cosa succederà in B':'Ecco cosa verrà fatto')+': <b>'+fmtN(p.n)+'</b> file nuovi, <b>'+fmtN(p.u)+'</b> da aggiornare'+(w.mirror?', <b>'+fmtN(p.d)+'</b> da cancellare':'')+'. Peso totale da copiare: <b>'+fmtSize(p.bytes)+'</b>.</p>'+
+    grp('Da copiare (nuovi)','File che ci sono in A e non ci sono ancora in B.','',p.n,p.newList)+
+    grp('Da aggiornare','File che in B sono più vecchi di quelli in A.','',p.u,p.updList)+
+    (w.mirror?(p.d>0?grp('Da cancellare in B','File che ci sono solo in B. Verranno cancellati e non finiscono nel Cestino.','del',p.d,p.delList):'<p class="sum">In B non ci sono file in più: non verrà cancellato niente.</p>'):'')+
+    (need?'<label class="ack" for="ack"><input type="checkbox" id="ack"'+(w.ack?' checked':'')+'><span>Ho capito: '+fmtN(p.d)+' file verranno cancellati da B</span></label>':'')+
+    tech+
+    '<section class="final" aria-labelledby="fq"><h2 id="fq">Avviare adesso?</h2><div class="btns"><button type="button" class="btn primary big" id="yes" data-act="yes"'+(need&&!w.ack?' disabled':'')+'>Sì, avvia</button><button type="button" class="btn big" data-act="no">'+(w.savedId?'No, torna all’elenco':'No, salva e basta')+'</button></div></section>';
+}
+
+function viewRunning(){
+  const r=S.run;
+  return '<div class="kicker">In corso</div><h1 id="h" tabindex="-1">Sto copiando…</h1><p class="lead">Non spegnere il computer e non scollegare i dischi finché non ho finito.</p><div class="curfile" id="curFile" aria-hidden="true"></div>'+
+  (r.confirm?'<div class="confirm" role="alertdialog" aria-labelledby="cq"><p id="cq">Vuoi fermare la copia? I file già copiati restano in B.</p><div class="btns"><button type="button" class="btn danger" data-act="cancelYes">Sì, ferma</button><button type="button" class="btn" id="cancelNo" data-act="cancelNo">No, continua</button></div></div>'
+  :'<button type="button" class="btn" id="cancelBtn" data-act="cancelAsk">Annulla</button>');
+}
+
+function viewResult(){
+  const e=S.result.entry;
+  let cls='',ic=ICON.check,h='',p='';
+  if(e.esito==='ok'){
+    h='Fatto: '+fmtN(e.n)+' '+(e.n===1?'file copiato':'file copiati')+', '+fmtN(e.u)+' '+(e.u===1?'aggiornato':'aggiornati')+(e.mirror&&e.d>0?', '+fmtN(e.d)+' '+(e.d===1?'cancellato':'cancellati')+' da B':'')+' in '+e.dur;
+    p='B ora è aggiornato.';
+  }else if(e.esito==='err'){
+    cls=' err';ic=ICON.cross;
+    const t=isNet(e.b)?e.b:isNet(e.a)?e.a:e.b;
+    h='Non completato: '+(isNet(t)?'la cartella di rete ':'il disco ')+netTag(t)+' non è raggiungibile.';
+    p='Controlla la connessione e riprova.'+(e.n+e.u>0?' I '+fmtN(e.n+e.u)+' file già copiati restano in B.':'');
+  }else{
+    cls=' ann';ic=ICON.stop;
+    h='Annullato: ho fermato la copia.';
+    p='I '+fmtN(e.n+e.u)+' file già copiati restano in B.';
+  }
+  return '<div class="kicker">Risultato</div><div class="res'+cls+'" role="status">'+ic+'<div><h1 id="h" tabindex="-1">'+h+'</h1><p>'+p+'</p></div></div>'+
+  '<div class="btns">'+(e.esito==='ok'?'<button type="button" class="btn primary big" data-act="home">Torna all’elenco</button>':'<button type="button" class="btn primary big" data-act="retry">Riprova</button><button type="button" class="btn big" data-act="home">Torna all’elenco</button>')+
+  '<button type="button" class="link" data-act="log" data-id="'+e.id+'">Apri il registro</button><button type="button" class="link" data-act="tab" data-v="history">Vai allo storico</button></div>';
+}
+
+const VIEWS={home:viewHome,history:viewHistory,wizard:viewWizard,running:viewRunning,result:viewResult};
+function render(focus){
+  $('#screen').innerHTML=VIEWS[S.view]();
+  renderSchema();
+  if(S.view==='running')updCur();
+  if(focus!==false){const el=$(focus||'#h');if(el)el.focus();}
+}
+
+/* ---------- wizard logic ---------- */
+function pathErr(which){
+  const w=S.wiz,p=w[which].trim();
+  if(!p)return which==='a'?'Scegli prima la cartella da copiare.':'Scegli prima dove mettere la copia.';
+  if(!isPath(p))return 'Questo non sembra un percorso. Scrivilo così: D:\\Foto oppure \\\\NAS\\Condivisa, oppure sceglilo dall’elenco.';
+  if(which==='b'){const A=norm(w.a),B=norm(p);
+    if(A===B)return 'La destinazione è la stessa cartella da copiare. Scegline un’altra.';
+    if(B.startsWith(A+'\\'))return 'La destinazione non può stare dentro la cartella da copiare.';}
+  return '';
+}
+function showErr(msg,focusSel){
+  const el=$('#err'),inp=$(focusSel);
+  if(el)el.textContent=msg;
+  if(inp){inp.setAttribute('aria-invalid',msg?'true':'false');if(msg)inp.focus();}
+}
+function liveErr(which){
+  const w=S.wiz;let m='';
+  if(which==='b'&&w.b.trim()&&isPath(w.b)){const e=pathErr('b');if(/stare dentro|stessa cartella/.test(e))m=e;}
+  const el=$('#err');if(el)el.textContent=m;
+  const inp=$('#path-'+which);if(inp)inp.setAttribute('aria-invalid',m?'true':'false');
+}
+function setPath(p){
+  const w=S.wiz,which=w.step===1?'a':'b';
+  w[which]=p;
+  $('#path-'+which).value=p;
+  $('#pickList').innerHTML=listHTML(p);
+  liveErr(which);renderSchema();
+  const h=$('#pickHead');if(h)h.focus();
+}
+function next(){
+  const w=S.wiz;
+  if(w.step===1||w.step===2){
+    const which=w.step===1?'a':'b',e=pathErr(which);
+    if(e)return showErr(e,'#path-'+which);
+    if(w.step===2&&!w.nameTouched)w.name='Copia di '+last(w.a);
+  }else if(w.step===3){
+    if(!w.name.trim())return showErr('Scrivi un nome per riconoscere questa sincronizzazione.','#name');
+  }
+  if(w.step===4)return startScan();
+  w.step++;render();
+}
+function back(){
+  const w=S.wiz;
+  if(w.step===1||w.savedId){S.scanTok++;S.view='home';return render();}
+  S.scanTok++;w.step--;w.scanning=false;render();
+}
+function startScan(){
+  const w=S.wiz,tok=++S.scanTok;
+  w.step=5;w.preview=null;w.scanning=true;w.ack=false;render();
+  setTimeout(()=>{if(tok!==S.scanTok)return;w.scanning=false;w.preview=makePreview(w);render('#h');},1600);
+}
+function openSaved(id){
+  const s=sync(id);
+  S.homeSel=id;
+  S.wiz=newWiz({savedId:id,a:s.a,b:s.b,name:s.name,nameTouched:true,mirror:s.mirror,seed:s.seed});
+  S.view='wizard';startScan();
+}
+function saveSync(){
+  const w=S.wiz;
+  if(w.savedId)return sync(w.savedId);
+  const s={id:Date.now(),name:w.name.trim(),a:w.a.trim(),b:w.b.trim(),mirror:w.mirror,seed:w.seed,last:null};
+  S.syncs.unshift(s);w.savedId=s.id;S.homeSel=s.id;return s;
+}
+
+/* ---------- run ---------- */
+function updCur(){
+  const el=$('#curFile'),r=S.run;
+  if(el&&r)el.textContent='Sto copiando: '+genName('new',Math.floor(r.done));
+}
+function startRun(){
+  const w=S.wiz,s=saveSync(),p=w.preview;
+  S.run={sync:s,p,total:p.n+p.u+p.d,done:0,confirm:false,fail:S.demo.netFail,timer:null};
+  S.view='running';render();
+  S.run.timer=setInterval(tick,100);
+}
+function tick(){
+  const r=S.run;if(!r)return;
+  r.done=Math.min(r.total,r.done+r.total/55*(.7+Math.random()*.6));
+  if(r.fail&&r.done/r.total>=.45)return finish('err');
+  if(r.done>=r.total)return finish('ok');
+  renderSchema();updCur();
+}
+function finish(esito){
+  const r=S.run;clearInterval(r.timer);
+  const f=esito==='ok'?1:r.done/r.total,c=esito==='ok'?r.p:{n:Math.round(r.p.n*f),u:Math.round(r.p.u*f),d:Math.round(r.p.d*f)};
+  const m=Math.round(r.total*f/75),dur=esito==='ok'?Math.max(1,m)+' min':(m<1?'< 1 min':m+' min');
+  const e={id:Date.now(),when:nowStr(),name:r.sync.name,mirror:r.sync.mirror,a:r.sync.a,b:r.sync.b,n:c.n,u:c.u,d:c.d,dur,esito};
+  S.history.unshift(e);r.sync.last={when:e.when,esito};
+  S.result={entry:e};S.run=null;S.view='result';render();
+}
+
+/* ---------- modal ---------- */
+let lastFocus=null;
+function openLog(id){
+  const e=S.history.find(x=>String(x.id)===String(id));if(!e)return;
+  lastFocus=document.activeElement;
+  $('#modal').innerHTML='<div class="overlay" data-act="overlay"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="mt"><header><h2 id="mt">Registro – '+esc(e.name)+' ('+e.when+')</h2><button type="button" class="btn" id="mclose" data-act="closeLog">Chiudi</button></header><pre tabindex="0">'+esc(logFor(e))+'</pre></div></div>';
+  $('#app').inert=true;$('#mclose').focus();
+}
+function closeLog(){
+  $('#modal').innerHTML='';$('#app').inert=false;
+  if(lastFocus&&document.contains(lastFocus))lastFocus.focus();
+}
+
+/* ---------- events ---------- */
+const ACT={
+  new(){S.wiz=newWiz();S.view='wizard';render();},
+  start(el){openSaved(+el.dataset.id);},
+  tab(el){S.view=el.dataset.v;render();},
+  pick(el){setPath(el.dataset.path);},
+  next,back,
+  yes(){startRun();},
+  no(){if(!S.wiz.savedId)saveSync();S.view='home';render();},
+  saveEmpty(){if(!S.wiz.savedId)saveSync();S.view='home';render();},
+  home(){S.view='home';render();},
+  retry(){openSaved(sync(S.homeSel)?S.homeSel:S.syncs[0].id);},
+  cancelAsk(){S.run.confirm=true;render('#cancelNo');},
+  cancelNo(){S.run.confirm=false;render('#cancelBtn');},
+  cancelYes(){finish('ann');},
+  log(el){openLog(el.dataset.id);},
+  closeLog,
+  overlay(el,e){if(e.target===el)closeLog();}
+};
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]');
+  if(el){ACT[el.dataset.act]&&ACT[el.dataset.act](el,e);return;}
+  const c=e.target.closest('.card');if(c)selCard(+c.dataset.id);
+});
+document.addEventListener('focusin',e=>{const c=e.target.closest&&e.target.closest('.card');if(c)selCard(+c.dataset.id);});
+function selCard(id){
+  if(S.view!=='home'||S.homeSel===id)return;
+  S.homeSel=id;
+  document.querySelectorAll('.card').forEach(c=>c.classList.toggle('sel',+c.dataset.id===id));
+  renderSchema();
+}
+document.addEventListener('input',e=>{
+  const t=e.target,w=S.wiz;
+  if(t.id==='path-a'||t.id==='path-b'){w[t.id.slice(-1)]=t.value;const el=$('#err');if(el)el.textContent='';t.setAttribute('aria-invalid','false');renderSchema();}
+  else if(t.id==='name'){w.name=t.value;w.nameTouched=true;const el=$('#err');if(el)el.textContent='';t.setAttribute('aria-invalid','false');}
+});
+document.addEventListener('change',e=>{
+  const t=e.target,w=S.wiz;
+  if(t.id==='path-a'||t.id==='path-b'){const which=t.id.slice(-1);$('#pickList').innerHTML=listHTML(w[which]);liveErr(which);}
+  else if(t.id==='mirror'){
+    w.mirror=t.checked;$('#mirrorWarn').innerHTML=warnHTML(w.mirror);
+    $('#advChip').innerHTML=w.mirror?'<span class="chip mirror">Specchio attivo</span>':'';renderSchema();
+  }
+  else if(t.id==='ack'){w.ack=t.checked;$('#yes').disabled=!w.ack;}
+  else if(t.id==='demoNet')S.demo.netFail=t.checked;
+  else if(t.id==='demoUp')S.demo.upToDate=t.checked;
+  else if(t.id==='themeSel'){if(t.value==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',t.value);}
+});
+document.addEventListener('toggle',e=>{if(e.target.id==='adv')S.wiz.advOpen=e.target.open;},true);
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&$('#modal').firstChild){closeLog();return;}
+  if(e.key==='Enter'&&/^(path-a|path-b|name)$/.test(e.target.id||'')){e.preventDefault();next();}
+});
+
+render(false);
+})();
+</script>

@@ -1,0 +1,140 @@
+//! Robocopy engine: argument builder, exit-code rules, hidden process spawn, `/UNILOG` decoding.
+
+use serde::{Deserialize, Serialize};
+use std::io;
+use std::os::windows::process::CommandExt;
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
+
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SyncMode {
+    Copy,
+    Mirror,
+}
+
+/// Arguments of the `/L` dry run. `log` receives the UTF-16LE `/UNILOG`.
+pub fn preview_args(mode: SyncMode, source: &str, destination: &str, log: &str) -> Vec<String> {
+    let mut args = base_args(mode, source, destination);
+    if mode == SyncMode::Copy {
+        // Keep extras in B out of the output: Copy never touches them.
+        args.push("/XX".into());
+    }
+    args.push("/L".into());
+    args.extend(output_args(log));
+    args
+}
+
+/// Arguments of the real run. `log` is the per-run log kept in `logs\`.
+pub fn run_args(mode: SyncMode, source: &str, destination: &str, log: &str) -> Vec<String> {
+    let mut args = base_args(mode, source, destination);
+    args.extend(output_args(log));
+    args
+}
+
+fn base_args(mode: SyncMode, source: &str, destination: &str) -> Vec<String> {
+    let mode_flag = match mode {
+        SyncMode::Copy => "/E",
+        SyncMode::Mirror => "/MIR",
+    };
+    vec![
+        source.into(),
+        destination.into(),
+        mode_flag.into(),
+        "/R:1".into(),
+        "/W:1".into(),
+    ]
+}
+
+fn output_args(log: &str) -> Vec<String> {
+    ["/NJH", "/NJS", "/NDL", "/NC", "/BYTES", "/FP", "/NP"]
+        .iter()
+        .map(|a| a.to_string())
+        .chain([format!("/UNILOG:{log}")])
+        .collect()
+}
+
+/// Exit codes are a bitmask: 0-7 mean the job worked, 8 and above mean failure.
+pub fn is_success(exit_code: i32) -> bool {
+    (0..8).contains(&exit_code)
+}
+
+fn robocopy_exe() -> PathBuf {
+    let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
+    PathBuf::from(root).join("System32").join("robocopy.exe")
+}
+
+/// Runs robocopy hidden and blocks until it exits; returns its exit code.
+pub fn execute(args: &[String]) -> io::Result<i32> {
+    let status = Command::new(robocopy_exe())
+        .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()?;
+    status
+        .code()
+        .ok_or_else(|| io::Error::other("robocopy terminated without an exit code"))
+}
+
+/// `/UNILOG` is UTF-16LE with BOM: never read it as UTF-8.
+pub fn decode_unilog(bytes: &[u8]) -> String {
+    let bytes = bytes.strip_prefix(&[0xFF, 0xFE]).unwrap_or(bytes);
+    let units: Vec<u16> = bytes
+        .chunks_exact(2)
+        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+        .collect();
+    String::from_utf16_lossy(&units)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exit_codes_0_to_7_are_success() {
+        for code in 0..=7 {
+            assert!(is_success(code), "exit {code} must be success");
+        }
+        for code in [8, 9, 16] {
+            assert!(!is_success(code), "exit {code} must be failure");
+        }
+    }
+
+    #[test]
+    fn copy_mode_never_uses_mir() {
+        let preview = preview_args(SyncMode::Copy, r"D:\Foto", r"E:\Backup", r"C:\t\p.log");
+        let run = run_args(SyncMode::Copy, r"D:\Foto", r"E:\Backup", r"C:\t\r.log");
+        for args in [&preview, &run] {
+            assert!(args.contains(&"/E".to_string()));
+            assert!(!args.contains(&"/MIR".to_string()));
+            assert!(!args.contains(&"/PURGE".to_string()));
+            assert!(args.contains(&"/R:1".to_string()));
+            assert!(args.contains(&"/W:1".to_string()));
+        }
+    }
+
+    #[test]
+    fn preview_is_a_dry_run_that_hides_extras_and_run_is_not() {
+        let preview = preview_args(SyncMode::Copy, "A", "B", "p.log");
+        assert!(preview.contains(&"/L".to_string()));
+        assert!(preview.contains(&"/XX".to_string()));
+        assert_eq!(preview[..2], ["A", "B"]);
+        assert_eq!(preview.last().unwrap(), "/UNILOG:p.log");
+
+        let run = run_args(SyncMode::Copy, "A", "B", "r.log");
+        assert!(!run.contains(&"/L".to_string()));
+        assert_eq!(run.last().unwrap(), "/UNILOG:r.log");
+    }
+
+    #[test]
+    fn unilog_is_decoded_as_utf16le_with_bom() {
+        let mut bytes = vec![0xFF, 0xFE];
+        for unit in "è già\r\n".encode_utf16() {
+            bytes.extend(unit.to_le_bytes());
+        }
+        assert_eq!(decode_unilog(&bytes), "è già\r\n");
+    }
+}

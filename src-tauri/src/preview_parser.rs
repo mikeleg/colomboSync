@@ -131,7 +131,12 @@ mod tests {
 
         assert_eq!(
             preview.new.files,
-            ["new.txt", "è già qui.txt", r"sub\deep.txt", r"sub\con etichetta.txt"]
+            [
+                "new.txt",
+                "è già qui.txt",
+                r"sub\deep.txt",
+                r"sub\con etichetta.txt"
+            ]
         );
         assert_eq!(preview.updated.files, ["updated.txt"]);
         assert_eq!(

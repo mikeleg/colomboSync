@@ -38,7 +38,7 @@ Technical spike on robocopy output: **done** (see Decisions).
 - Multilanguage – Italian only.
 
 ## Constraints
-- **Stack: C# WinForms on .NET Framework 4.8** – preinstalled on Windows 10/11, single exe under 1 MB, no runtime to ship. Builds with the installed `dotnet` SDK (net48 targeting pack present). Schema drawn with GDI+ in a custom control.
+- **Stack: Tauri 2 + Svelte 5 (TypeScript)** – single portable `.exe`, no installer; WebView2 (preinstalled on Windows 10/11). Schema drawn as inline SVG.
 - Engine: `robocopy.exe` from `%SystemRoot%\System32`, launched as a child process.
 - Storage: one JSON file for saved syncs, one JSON-lines file for history, one robocopy log per run – all in `%LOCALAPPDATA%\ColomboSync\`.
 - App must **not** require elevation (mapped drives disappear under an elevated token).
@@ -49,9 +49,9 @@ Technical spike on robocopy output: **done** (see Decisions).
   - Exit codes 0–7 = success (bitmask 1 copied, 2 extras, 4 mismatch), ≥ 8 = failure. A preview returning 3 is **not** an error.
   - Always pass `/R:1 /W:1` – the default retry (`/R:1000000 /W:30`) hangs for days on one locked file.
   - Stdout is OEM codepage (Italian dates come out garbled) and class labels (`New File`, `*EXTRA File`) may be localized → **never parse labels**. Use `/L /NJH /NJS /NDL /NC /BYTES /FP /NP /UNILOG:<tmp>` and classify by path: path under B → will be deleted; path under A whose relative path exists in B → updated; otherwise → new.
-- Stack WinForms/net48 over Tauri/Electron: smallest footprint, nothing to install (proposed, user may veto).
+- ~~Stack WinForms/net48 over Tauri/Electron~~ → **Tauri 2 + Svelte 5** (user veto, 2026-11-03). Portable: the release `.exe` (`tauri build --no-bundle`), no installer; WebView2 assumed preinstalled (Windows 10/11). Size goal relaxed from < 1 MB to "as small as Tauri allows". JSON via `serde_json`; schema as inline SVG.
 - Look (user, 2026-11-03, via prototype): Material-style **tonal surfaces, no borders, square corners**, calm sage/green-teal palette; Copy mode shown as safe (green "Nessun file viene cancellato in B"), Mirror in brick red. Light theme only in MVP. Square corners keep WinForms painting simple.
-- JSON via `DataContractJsonSerializer` (built into net48) so the app stays a single exe with no DLLs.
+- JSON via `serde_json` (Rust side); the app stays a single exe with no DLLs.
 
 ## Open risks
 - Readability of the schema and the mirror warning for a non-technical user – carried into S1/S2 (or answered by the prototype).

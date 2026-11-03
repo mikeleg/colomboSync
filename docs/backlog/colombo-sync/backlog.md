@@ -13,12 +13,24 @@ S1 ──┬── S2 (mirror)
 
 ## Shared conventions (apply to every slice)
 
-- **Solution layout**: `src/ColomboSync/ColomboSync.csproj` (WinForms, `net48`, `OutputType=WinExe`, no NuGet runtime deps) and `tests/ColomboSync.Tests/` (xUnit, `net48`). Build with `dotnet build`, test with `dotnet test`.
-- **Domain terms** (use them in code): `Sync` (saved A→B pair: name, Source, Destination, Mode), `SyncMode` (`Copy` | `Mirror`), `Preview` (lists New / Updated / Deleted), `Run` (one execution, recorded in `History`).
-- **Engine**: one class `Robocopy` that builds arguments, runs `%SystemRoot%\System32\robocopy.exe` hidden, and maps exit codes (0–7 success, ≥ 8 failure). Always `/R:1 /W:1`. Never parse localized labels (see scope.md, Decisions).
-- **Storage** in `%LOCALAPPDATA%\ColomboSync\`: `syncs.json`, `history.jsonl`, `logs\<yyyyMMdd-HHmmss>-<sync>.log`. Serialization via `DataContractJsonSerializer`.
-- **Look**: copy tokens (light theme) and texts from `prototype.html`; tonal fills, no borders, square corners, Segoe UI (Roboto not shipped). One `Theme` static class holds the colors. Schema = one custom `SchemaView` control painted with GDI+, docked right, visible on every screen.
+> **Stack changed 2026-11-03 (user):** Tauri 2 + Svelte 5 replaces WinForms/net48. Where a slice's notes still name C#/WinForms things, translate with the table below. Agent guide: `/CLAUDE.md` and `docs/agents/`.
+
+- **Layout**: Svelte 5 + Vite + TypeScript at repo root (`src/`), Rust in `src-tauri/`. Test with `npm test` (vitest) and `cargo test` (in `src-tauri/`). Portable build: `npm run portable` → single `.exe` in `src-tauri\target\release\`, no installer (WebView2 assumed present).
+- **Domain terms** (use them in code, Rust and TS): `Sync` (saved A→B pair: name, source, destination, mode), `SyncMode` (`Copy` | `Mirror`), `Preview` (lists New / Updated / Deleted), `Run` (one execution, recorded in `History`).
+- **Engine (Rust)**: module `robocopy` builds arguments, runs `%SystemRoot%\System32\robocopy.exe` hidden (`CREATE_NO_WINDOW`), maps exit codes (0–7 success, ≥ 8 failure). Always `/R:1 /W:1`. Never parse localized labels (see scope.md, Decisions). `/UNILOG` is UTF-16LE with BOM.
+- **Storage (Rust)** in `%LOCALAPPDATA%\ColomboSync\` (read the `LOCALAPPDATA` env var, not Tauri's app dir): `syncs.json`, `history.jsonl`, `logs\<yyyyMMdd-HHmmss>-<sync>.log`. Serialization via `serde_json`.
+- **Look**: copy tokens (light theme) and texts from `prototype.html`; tonal fills, no borders, square corners, Segoe UI. Colors as CSS custom properties in one place (`src/theme.css`). Schema = one Svelte component `SchemaView.svelte` (inline SVG), docked right, visible on every screen.
 - **UI language**: Italian, exactly the wording of the prototype unless a slice says otherwise.
+
+| Backlog says (C#) | Means (Tauri) |
+|---|---|
+| class `Robocopy`, `PreviewParser`, `History`, `SyncStore`, `ErrorMessages`, `PathRules`, `MirrorGuard` | Rust module `robocopy`, `preview_parser`, `history`, `sync_store`, `error_messages`, `path_rules`, `mirror_guard` in `src-tauri/src/` |
+| `XxxTests.Some_case` (xUnit) | `#[test] fn some_case()` in that module's `tests` (integration with temp dirs: `src-tauri/tests/`) |
+| Form / step / `SchemaView` control | Svelte component in `src/lib/` (one per wizard step) |
+| `FolderBrowserDialog` | `@tauri-apps/plugin-dialog` `open({ directory: true })` + editable path input |
+| background thread | async Tauri command (`tauri::async_runtime::spawn_blocking`), events to UI |
+| `DataContractJsonSerializer` | `serde` / `serde_json` |
+| "exe < 1 MB" | dropped: the release exe is what ships, no installer |
 
 ---
 

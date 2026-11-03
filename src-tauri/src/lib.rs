@@ -1,3 +1,4 @@
+pub mod preview_parser;
 pub mod robocopy;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

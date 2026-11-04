@@ -1,5 +1,6 @@
 //! Thin `#[tauri::command]` wrappers: robocopy runs on a blocking thread so the UI never freezes.
 
+use crate::folder_browser::{self, FolderListing};
 use crate::history::Run;
 use crate::preview_parser::{Counts, Preview};
 use crate::robocopy::SyncMode;
@@ -29,4 +30,13 @@ pub async fn run_sync(
     spawn_blocking(move || runner::run(&storage, &source, &destination, mode, counts))
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// Drives (empty `path`) or the subfolders of `path`. On a blocking thread: a disconnected
+/// mapped drive can take seconds to answer and must not freeze the UI.
+#[tauri::command]
+pub async fn browse_folders(path: String) -> Result<FolderListing, String> {
+    spawn_blocking(move || folder_browser::browse(&path))
+        .await
+        .map_err(|e| e.to_string())
 }

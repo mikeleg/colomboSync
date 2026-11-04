@@ -2,11 +2,18 @@
 
 use crate::folder_browser::{self, FolderListing};
 use crate::history::Run;
+use crate::path_rules;
 use crate::preview_parser::{Counts, Preview};
 use crate::robocopy::SyncMode;
 use crate::runner;
 use crate::storage::Storage;
 use tauri::async_runtime::spawn_blocking;
+
+/// Rejects a destination that is A itself or inside A, with the message to show on step "Dove".
+#[tauri::command]
+pub fn check_destination(source: String, destination: String) -> Result<(), String> {
+    path_rules::check_destination(&source, &destination).map_err(str::to_string)
+}
 
 #[tauri::command]
 pub async fn preview_sync(

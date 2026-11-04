@@ -1,6 +1,7 @@
 //! A Preview or a Run end to end: robocopy + parser + storage + history. No Tauri types.
 
 use crate::history::{self, Outcome, Run};
+use crate::mirror_guard;
 use crate::preview_parser::{self, Counts, Preview};
 use crate::robocopy::{self, SyncMode};
 use crate::storage::Storage;
@@ -20,6 +21,15 @@ pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Previe
     ));
     let log_arg = log.to_string_lossy();
 
+    // A missing or empty A would make robocopy fail or empty B: answer "blocked" without running it.
+    let is_mirror = mode == SyncMode::Mirror;
+    if is_mirror && mirror_guard::blocks(Path::new(source), Counts::default()) {
+        return Ok(Preview {
+            blocked: true,
+            ..Preview::default()
+        });
+    }
+
     let code = robocopy::execute(&robocopy::preview_args(mode, source, destination, &log_arg))
         .map_err(|e| e.to_string())?;
     let text = read_log(&log);
@@ -28,9 +38,9 @@ pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Previe
     if !robocopy::is_success(code) {
         return Err(failure_message(code, &text));
     }
-    Ok(preview_parser::parse(&text, source, destination, |p| {
-        p.exists()
-    }))
+    let mut preview = preview_parser::parse(&text, source, destination, |p| p.exists());
+    preview.blocked = is_mirror && mirror_guard::blocks(Path::new(source), preview.counts());
+    Ok(preview)
 }
 
 /// Real run. Always returns the recorded `Run` (outcome `Ok` or `Error`); `Err` only when
@@ -43,6 +53,9 @@ pub fn run(
     mode: SyncMode,
     counts: Counts,
 ) -> Result<Run, String> {
+    if mode == SyncMode::Mirror && mirror_guard::blocks(Path::new(source), counts) {
+        return Err(mirror_guard::WARNING.to_string());
+    }
     let started = Local::now();
     let sync_name = default_sync_name(source);
     let log = storage.log_file(&sync_name, started.naive_local());

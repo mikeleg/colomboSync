@@ -104,3 +104,114 @@ fn robocopy_failure_is_recorded_as_error() {
         1
     );
 }
+
+#[test]
+fn extra_files_count_as_deleted_only_in_mirror() {
+    let temp = tempfile::tempdir().unwrap();
+    let (a, b) = (temp.path().join("A"), temp.path().join("B"));
+    write(&a.join("new.txt"), "nuovo");
+    write(&b.join("only-in-b.txt"), "extra");
+    write(&b.join("old-dir").join("inside.txt"), "extra");
+
+    let copy = runner::preview(path_str(&a), path_str(&b), SyncMode::Copy).unwrap();
+    let mirror = runner::preview(path_str(&a), path_str(&b), SyncMode::Mirror).unwrap();
+
+    assert_eq!(copy.deleted.count, 0);
+    assert!(!copy.blocked);
+    assert_eq!(mirror.new.files, ["new.txt"]);
+    assert_eq!(mirror.deleted.count, 2);
+    assert!(mirror.deleted.files.contains(&"only-in-b.txt".to_string()));
+    assert!(
+        mirror
+            .deleted
+            .files
+            .contains(&r"old-dir\inside.txt".to_string())
+    );
+    assert!(mirror.blocked, "2 deleted > 1 new");
+    assert!(
+        b.join("only-in-b.txt").exists(),
+        "a preview touches nothing"
+    );
+}
+
+#[test]
+fn mirror_deletes_extra_files_in_destination() {
+    let temp = tempfile::tempdir().unwrap();
+    let (a, b) = (temp.path().join("A"), temp.path().join("B"));
+    write(&a.join("new.txt"), "nuovo");
+    write(&a.join("sub").join("deep.txt"), "x");
+    write(&a.join("keep.txt"), "uguale");
+    fs::create_dir_all(&b).unwrap();
+    fs::copy(a.join("keep.txt"), b.join("keep.txt")).unwrap();
+    write(&b.join("only-in-b.txt"), "extra");
+    write(&b.join("old-dir").join("inside.txt"), "extra");
+    let storage = Storage::at(temp.path().join("ColomboSync"));
+
+    let preview = runner::preview(path_str(&a), path_str(&b), SyncMode::Mirror).unwrap();
+    assert_eq!(preview.deleted.count, 2);
+    assert!(!preview.blocked);
+
+    let run = runner::run(
+        &storage,
+        path_str(&a),
+        path_str(&b),
+        SyncMode::Mirror,
+        preview.counts(),
+    )
+    .unwrap();
+
+    assert_eq!(run.outcome, Outcome::Ok);
+    assert_eq!(run.mode, SyncMode::Mirror);
+    assert_eq!((run.new, run.updated, run.deleted), (2, 0, 2));
+    assert!(!b.join("only-in-b.txt").exists());
+    assert!(!b.join("old-dir").exists());
+    assert!(b.join("keep.txt").exists());
+    assert_eq!(
+        fs::read_to_string(b.join("sub").join("deep.txt")).unwrap(),
+        "x"
+    );
+    let history = fs::read_to_string(storage.history_file()).unwrap();
+    let recorded = serde_json::from_str::<Run>(history.trim()).unwrap();
+    assert_eq!((recorded.mode, recorded.deleted), (SyncMode::Mirror, 2));
+}
+
+#[test]
+fn mirror_with_a_missing_or_empty_source_is_blocked_and_never_run() {
+    let temp = tempfile::tempdir().unwrap();
+    let (empty, b) = (temp.path().join("A"), temp.path().join("B"));
+    fs::create_dir_all(&empty).unwrap();
+    write(&b.join("precious.txt"), "do not delete");
+    let missing = temp.path().join("scollegato");
+    let storage = Storage::at(temp.path().join("ColomboSync"));
+
+    for source in [&empty, &missing] {
+        let preview = runner::preview(path_str(source), path_str(&b), SyncMode::Mirror).unwrap();
+        assert!(preview.blocked, "{source:?}");
+
+        let run = runner::run(
+            &storage,
+            path_str(source),
+            path_str(&b),
+            SyncMode::Mirror,
+            preview.counts(),
+        );
+        assert!(run.is_err());
+    }
+    assert!(b.join("precious.txt").exists());
+    assert!(!storage.history_file().exists(), "nothing was recorded");
+}
+
+#[test]
+fn mirror_with_more_deleted_than_new_plus_updated_is_blocked() {
+    let temp = tempfile::tempdir().unwrap();
+    let (a, b) = (temp.path().join("A"), temp.path().join("B"));
+    write(&a.join("a.txt"), "x");
+    fs::create_dir_all(&b).unwrap();
+    fs::copy(a.join("a.txt"), b.join("a.txt")).unwrap();
+    write(&b.join("extra1.txt"), "x");
+
+    let preview = runner::preview(path_str(&a), path_str(&b), SyncMode::Mirror).unwrap();
+
+    assert_eq!(preview.counts().deleted, 1);
+    assert!(preview.blocked);
+}

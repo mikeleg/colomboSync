@@ -119,6 +119,21 @@ mod tests {
     }
 
     #[test]
+    fn mirror_mode_uses_mir() {
+        let preview = preview_args(SyncMode::Mirror, r"D:\Foto", r"E:\Backup", r"C:\t\p.log");
+        let run = run_args(SyncMode::Mirror, r"D:\Foto", r"E:\Backup", r"C:\t\r.log");
+        for args in [&preview, &run] {
+            assert!(args.contains(&"/MIR".to_string()));
+            assert!(!args.contains(&"/E".to_string()));
+            assert!(!args.contains(&"/XX".to_string()), "extras must show up");
+            assert!(args.contains(&"/R:1".to_string()));
+            assert!(args.contains(&"/W:1".to_string()));
+        }
+        assert!(preview.contains(&"/L".to_string()));
+        assert!(!run.contains(&"/L".to_string()));
+    }
+
+    #[test]
     fn preview_is_a_dry_run_that_hides_extras_and_run_is_not() {
         let preview = preview_args(SyncMode::Copy, "A", "B", "p.log");
         assert!(preview.contains(&"/L".to_string()));

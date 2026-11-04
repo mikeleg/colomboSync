@@ -1,6 +1,8 @@
 pub mod commands;
 pub mod folder_browser;
 pub mod history;
+pub mod mirror_guard;
+pub mod path_rules;
 pub mod preview_parser;
 pub mod robocopy;
 pub mod runner;
@@ -13,6 +15,7 @@ pub fn run() {
             commands::preview_sync,
             commands::run_sync,
             commands::browse_folders,
+            commands::check_destination,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

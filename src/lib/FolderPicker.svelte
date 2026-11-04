@@ -29,14 +29,14 @@
   const chosen = $derived(value.trim());
 
   async function load(path: string) {
-    const id = ++lastLoad;
+    const seq = ++lastLoad;
     let result: FolderListing;
     try {
       result = await browseFolders(path);
     } catch {
       result = { parent: "", folders: [] };
     }
-    if (id === lastLoad) listing = result;
+    if (seq === lastLoad) listing = result;
   }
 
   async function pick(path: string) {
@@ -58,7 +58,7 @@
 <p class="f">{label}</p>
 <p class="help intro">Ogni clic entra nella cartella e la sceglie. Quando sei in quella giusta, premi Avanti.</p>
 <div class="pick">
-  <div class="pickhead" class:chosen={chosen} bind:this={head} tabindex="-1">
+  <div class="pickhead" class:chosen bind:this={head} tabindex="-1">
     <span>
       {#if chosen}<Icon name="tick" />Cartella scelta: <b>{chosen}</b>{:else}Dischi del computer: scegline uno{/if}
     </span>

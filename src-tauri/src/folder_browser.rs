@@ -5,6 +5,7 @@ use serde::Serialize;
 use std::os::windows::fs::MetadataExt;
 use std::path::Path;
 
+const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
 const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
 const FILE_ATTRIBUTE_SYSTEM: u32 = 0x4;
 
@@ -60,13 +61,12 @@ fn subfolders(path: &Path) -> Vec<Folder> {
     };
     let mut folders: Vec<Folder> = entries
         .flatten()
+        // One stat-free read per entry: on Windows `DirEntry::metadata` comes with the directory listing.
+        // Junctions and directory symlinks carry the DIRECTORY attribute too.
         .filter(|entry| {
-            // `Path::is_dir` follows junctions and symlinks, `DirEntry::file_type` does not.
-            entry.path().is_dir()
-                && entry
-                    .metadata()
-                    .map(|m| is_visible(m.file_attributes()))
-                    .unwrap_or(true)
+            entry
+                .metadata()
+                .is_ok_and(|m| is_visible_folder(m.file_attributes()))
         })
         .map(|entry| Folder {
             name: entry.file_name().to_string_lossy().into_owned(),
@@ -77,8 +77,9 @@ fn subfolders(path: &Path) -> Vec<Folder> {
     folders
 }
 
-fn is_visible(attributes: u32) -> bool {
-    attributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM) == 0
+fn is_visible_folder(attributes: u32) -> bool {
+    attributes & FILE_ATTRIBUTE_DIRECTORY != 0
+        && attributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM) == 0
 }
 
 #[cfg(test)]
@@ -105,10 +106,15 @@ mod tests {
     }
 
     #[test]
-    fn hidden_and_system_folders_are_not_visible() {
-        assert!(is_visible(0x10)); // plain directory
-        assert!(!is_visible(0x10 | FILE_ATTRIBUTE_HIDDEN));
-        assert!(!is_visible(0x10 | FILE_ATTRIBUTE_SYSTEM));
+    fn only_visible_directories_pass() {
+        assert!(is_visible_folder(FILE_ATTRIBUTE_DIRECTORY));
+        assert!(!is_visible_folder(
+            FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN
+        ));
+        assert!(!is_visible_folder(
+            FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_SYSTEM
+        ));
+        assert!(!is_visible_folder(0x20)); // a file
     }
 
     #[test]
@@ -118,10 +124,12 @@ mod tests {
         let listing = browse("");
 
         assert_eq!(listing.parent, "");
-        assert!(listing
-            .folders
-            .iter()
-            .any(|d| d.path == format!("{system_drive}\\")));
+        assert!(
+            listing
+                .folders
+                .iter()
+                .any(|d| d.path == format!("{system_drive}\\"))
+        );
     }
 
     #[test]

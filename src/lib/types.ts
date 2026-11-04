@@ -38,7 +38,7 @@ export interface Run {
   error?: string;
 }
 
-export interface Folder {
+interface Folder {
   name: string;
   path: string;
 }

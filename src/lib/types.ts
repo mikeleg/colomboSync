@@ -37,10 +37,18 @@ export interface Run {
   outcome: Outcome;
   startedAt: string;
   logPath: string;
-  error?: string;
   /** Files copied before an Error or Cancelled run stopped. */
   partial?: number;
 }
+
+/** Why something failed, as Rust words it: what happened, and what to do about it. */
+export interface Explanation {
+  title: string;
+  advice: string;
+}
+
+/** What `run_sync` returns: the stored Run, plus the explanation when it ended in Errore. */
+export type RunReport = Run & { explanation: Explanation | null };
 
 /** The `run-progress` event while a Run is going. */
 export interface RunProgress {

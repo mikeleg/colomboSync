@@ -4,7 +4,7 @@
   import { checkDestination, defaultSyncName, onCloseRequested, previewSync, runSync, saveSync } from "../api";
   import { formatNumber } from "../format";
   import type { SchemaModel } from "../schema";
-  import type { Counts, Preview, Run, Sync, SyncMode } from "../types";
+  import type { Counts, Explanation, Preview, RunReport, Sync, SyncMode } from "../types";
   import StepDestination from "./StepDestination.svelte";
   import StepName from "./StepName.svelte";
   import StepOptions from "./StepOptions.svelte";
@@ -48,8 +48,8 @@
   let error = $state("");
   let preview = $state<Preview | null>(null);
   let scanning = $state(!!rerun);
-  let previewError = $state("");
-  let run = $state<Run | null>(null);
+  let previewError = $state<Explanation | null>(null);
+  let run = $state<RunReport | null>(null);
   let failure = $state("");
   let scanId = 0;
   let suggestionId = 0;
@@ -181,12 +181,12 @@
     const id = ++scanId;
     scanning = true;
     preview = null;
-    previewError = "";
+    previewError = null;
     try {
       const result = await previewSync(source.trim(), destination.trim(), mode);
       if (id === scanId) preview = result;
     } catch (e) {
-      if (id === scanId) previewError = String(e);
+      if (id === scanId) previewError = e as Explanation; // previewSync rejects with an Explanation
     } finally {
       if (id === scanId) scanning = false;
     }
@@ -226,7 +226,7 @@
       await saveIfNew();
       onexit();
     } catch (e) {
-      previewError = String(e);
+      previewError = { title: String(e), advice: "" };
       saving = false;
     }
   }
@@ -266,6 +266,7 @@
         onstart={start}
         onstop={stop}
         onback={back}
+        onretry={scan}
       />
     {/if}
   </div>

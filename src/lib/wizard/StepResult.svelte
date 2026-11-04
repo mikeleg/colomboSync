@@ -2,7 +2,7 @@
   import Icon from "../Icon.svelte";
   import LogViewer from "../LogViewer.svelte";
   import { formatDuration, formatNumber, partialText } from "../format";
-  import type { Run } from "../types";
+  import type { RunReport } from "../types";
 
   let {
     run,
@@ -10,7 +10,7 @@
     onhome,
     onretry,
     onhistory,
-  }: { run: Run | null; failure: string; onhome: () => void; onretry: () => void; onhistory: () => void } = $props();
+  }: { run: RunReport | null; failure: string; onhome: () => void; onretry: () => void; onhistory: () => void } = $props();
 
   let viewingLog = $state(false);
 
@@ -25,19 +25,14 @@
   const partialLine = $derived(
     run?.partial === undefined ? "" : run.partial === 0 ? "Nessun file è stato copiato." : partialText(run.partial),
   );
-  // A failure from Rust reads "Non completato: <what happened>. <what to do>": the first part is
-  // the title, the second the line under it. Anything else (older runs, a command that failed)
-  // goes under a plain "Non completato".
-  const failureText = $derived(run?.error ?? failure);
-  const failureCut = $derived(failureText.startsWith("Non completato: ") ? failureText.lastIndexOf(". ") : -1);
-  const failureTitle = $derived(failureCut < 0 ? "Non completato" : failureText.slice(0, failureCut + 1));
-  const failureAdvice = $derived(failureCut < 0 ? failureText : failureText.slice(failureCut + 2));
+  // What Rust says about the failure; a command that failed before any Run exists has only its message.
+  const why = $derived(run?.explanation ?? { title: "Non completato", advice: failure });
   const title = $derived(
     run && ok
       ? `Fatto: ${formatNumber(run.new)} ${run.new === 1 ? "file copiato" : "file copiati"}, ${formatNumber(run.updated)} ${run.updated === 1 ? "aggiornato" : "aggiornati"}${deletedText} in ${formatDuration(run.durationMs)}`
       : cancelled
         ? "Annullato: ho fermato la copia."
-        : failureTitle,
+        : why.title,
   );
 </script>
 
@@ -51,7 +46,7 @@
     {:else if cancelled}
       <p>{partialLine}{run?.partial ? ". I file già copiati restano in B." : ""}</p>
     {:else}
-      <p>{failureAdvice}</p>
+      {#if why.advice}<p>{why.advice}</p>{/if}
       {#if partialLine}<p>{partialLine}</p>{/if}
     {/if}
   </div>

@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
-import type { Run } from "../types";
+import type { RunReport } from "../types";
 import StepResult from "./StepResult.svelte";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -10,7 +10,7 @@ beforeEach(() => invokeMock.mockReset());
 
 const handlers = { onhome: () => {}, onretry: () => {}, onhistory: () => {} };
 
-const run = (over: Partial<Run> = {}): Run => ({
+const run = (over: Partial<RunReport> = {}): RunReport => ({
   syncName: "Copia di Foto",
   source: "D:\\Foto",
   destination: "E:\\Backup",
@@ -22,8 +22,15 @@ const run = (over: Partial<Run> = {}): Run => ({
   outcome: "Ok",
   startedAt: "2026-11-03T12:00:00+01:00",
   logPath: "C:\\L\\x.log",
+  explanation: null,
   ...over,
 });
+
+// What Rust sends for a failure it has no cause for.
+const generic = {
+  title: "Non completato: la copia si è fermata per un problema.",
+  advice: "Apri il registro per vedere i dettagli.",
+};
 
 test("success: Fatto with copied and updated counts and the duration", () => {
   render(StepResult, { run: run(), failure: "", ...handlers });
@@ -38,15 +45,15 @@ test("success uses the singular", () => {
   expect(screen.getByRole("heading").textContent).toBe("Fatto: 1 file copiato, 1 aggiornato in < 1 min");
 });
 
-test("error outcome: Non completato with the raw robocopy message", () => {
+test("error outcome without a known cause: the generic title and where to look", () => {
   render(StepResult, {
-    run: run({ outcome: "Error", error: "robocopy ha restituito il codice 16." }),
+    run: run({ outcome: "Error", explanation: generic }),
     failure: "",
     ...handlers,
   });
 
-  expect(screen.getByRole("heading").textContent).toBe("Non completato");
-  expect(screen.getByText("robocopy ha restituito il codice 16.")).toBeTruthy();
+  expect(screen.getByRole("heading").textContent).toBe(generic.title);
+  expect(screen.getByText(generic.advice)).toBeTruthy();
   expect(screen.queryByText(/^Fatto/)).toBeNull();
 });
 
@@ -94,19 +101,19 @@ test("cancelled before any file was copied", () => {
 });
 
 test("error before any file was copied", () => {
-  render(StepResult, { run: run({ outcome: "Error", error: "robocopy ha restituito il codice 16.", partial: 0 }), failure: "", ...handlers });
+  render(StepResult, { run: run({ outcome: "Error", explanation: generic, partial: 0 }), failure: "", ...handlers });
 
   expect(screen.getByText("Nessun file è stato copiato.")).toBeTruthy();
 });
 
 test("error after copying 40 files says 40 file copiati (parziale) next to the message", () => {
   render(StepResult, {
-    run: run({ outcome: "Error", error: "robocopy ha restituito il codice 16.", partial: 40 }),
+    run: run({ outcome: "Error", explanation: generic, partial: 40 }),
     failure: "",
     ...handlers,
   });
 
-  expect(screen.getByText("robocopy ha restituito il codice 16.")).toBeTruthy();
+  expect(screen.getByText(generic.advice)).toBeTruthy();
   expect(screen.getByText("40 file copiati (parziale)")).toBeTruthy();
 });
 
@@ -125,7 +132,7 @@ test("OK: Torna all’elenco is the only button, with the log and history links"
 });
 
 test("Errore and Annullato offer Riprova first, then Torna all’elenco", () => {
-  const { unmount } = render(StepResult, { run: run({ outcome: "Error", error: "x" }), failure: "", ...handlers });
+  const { unmount } = render(StepResult, { run: run({ outcome: "Error" }), failure: "", ...handlers });
   expect(buttons()).toEqual(["Riprova", "Torna all’elenco", "Apri il registro", "Vai allo storico"]);
   unmount();
 
@@ -134,17 +141,20 @@ test("Errore and Annullato offer Riprova first, then Torna all’elenco", () => 
 });
 
 test("an unreachable share: the reason in the title, what to do under it", () => {
-  const message = String.raw`Non completato: la cartella di rete \NAS non è raggiungibile. Controlla la connessione e riprova.`;
-  render(StepResult, { run: run({ outcome: "Error", error: message }), failure: "", ...handlers });
+  const explanation = {
+    title: String.raw`Non completato: la cartella di rete \\NAS non è raggiungibile.`,
+    advice: "Controlla la connessione e riprova.",
+  };
+  render(StepResult, { run: run({ outcome: "Error", explanation }), failure: "", ...handlers });
 
-  expect(screen.getByRole("heading").textContent).toBe(String.raw`Non completato: la cartella di rete \NAS non è raggiungibile.`);
-  expect(screen.getByText("Controlla la connessione e riprova.")).toBeTruthy();
+  expect(screen.getByRole("heading").textContent).toBe(explanation.title);
+  expect(screen.getByText(explanation.advice)).toBeTruthy();
 });
 
 test("Riprova, Torna all’elenco and Vai allo storico call back", async () => {
   const calls: string[] = [];
   render(StepResult, {
-    run: run({ outcome: "Error", error: "x" }),
+    run: run({ outcome: "Error" }),
     failure: "",
     onhome: () => calls.push("home"),
     onretry: () => calls.push("retry"),
@@ -160,7 +170,7 @@ test("Riprova, Torna all’elenco and Vai allo storico call back", async () => {
 
 test("Apri il registro opens the log viewer of the run, which Chiudi closes", async () => {
   invokeMock.mockResolvedValue("ERROR 53 …");
-  render(StepResult, { run: run({ outcome: "Error", error: "x", logPath: String.raw`C:\L\logs\x.log` }), failure: "", ...handlers });
+  render(StepResult, { run: run({ outcome: "Error", logPath: String.raw`C:\L\logs\x.log` }), failure: "", ...handlers });
 
   await fireEvent.click(screen.getByRole("button", { name: "Apri il registro" }));
 
@@ -174,4 +184,10 @@ test("when no Run exists there is no log to open, but Riprova is still there", (
   render(StepResult, { run: null, failure: "spawn failed", ...handlers });
 
   expect(buttons()).toEqual(["Riprova", "Torna all’elenco", "Vai allo storico"]);
+});
+
+test("a failed run without an explanation (an older one) still says Non completato", () => {
+  render(StepResult, { run: run({ outcome: "Error" }), failure: "", ...handlers });
+
+  expect(screen.getByRole("heading").textContent).toBe("Non completato");
 });

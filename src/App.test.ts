@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { act, fireEvent, render, screen, within } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App.svelte";
-import type { Preview, Run, SyncSummary } from "./lib/types";
+import type { Preview, Run, RunReport, SyncSummary } from "./lib/types";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
@@ -156,10 +156,10 @@ test("while the copy runs the UI says Sto copiando…", async () => {
   expect(screen.getByRole("heading", { name: /^Sto copiando/ })).toBeTruthy();
 });
 
-test("a run from before the plain-language messages still says Non completato with its raw message", async () => {
+test("a failed run with no explanation still says Non completato", async () => {
   backend({
     preview_sync: () => preview(2, 1),
-    run_sync: () => ({ ...doneRun, outcome: "Error", error: "robocopy ha restituito il codice 16." }),
+    run_sync: () => ({ ...doneRun, outcome: "Error", explanation: null }),
   });
   render(App);
   await goToPreview();
@@ -167,7 +167,6 @@ test("a run from before the plain-language messages still says Non completato wi
   await click(await screen.findByRole("button", { name: "Sì, avvia" }));
 
   expect(await screen.findByRole("heading", { name: "Non completato" })).toBeTruthy();
-  expect(screen.getByText("robocopy ha restituito il codice 16.")).toBeTruthy();
 });
 
 test("nothing to do: B è già aggiornato, an Indietro link and no Sì, avvia", async () => {
@@ -762,8 +761,12 @@ test("Dove: if the paths change while they are being checked, the new ones are c
   expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();
 });
 
-const unreachable = String.raw`Non completato: la cartella di rete \NAS non è raggiungibile. Controlla la connessione e riprova.`;
-const failedRun: Run = { ...doneRun, outcome: "Error", error: unreachable, partial: 0 };
+// What Rust sends (error_messages): the sentence that says what happened, and what to do.
+const unreachable = {
+  title: String.raw`Non completato: la cartella di rete \\NAS non è raggiungibile.`,
+  advice: "Controlla la connessione e riprova.",
+};
+const failedRun: RunReport = { ...doneRun, outcome: "Error", explanation: unreachable, partial: 0 };
 
 test("a run that fails says why in plain Italian, with Riprova and the log link", async () => {
   backend({ preview_sync: () => preview(2, 1), run_sync: () => failedRun });
@@ -772,10 +775,8 @@ test("a run that fails says why in plain Italian, with Riprova and the log link"
 
   await click(await screen.findByRole("button", { name: "Sì, avvia" }));
 
-  expect(
-    await screen.findByRole("heading", { name: String.raw`Non completato: la cartella di rete \NAS non è raggiungibile.` }),
-  ).toBeTruthy();
-  expect(screen.getByText("Controlla la connessione e riprova.")).toBeTruthy();
+  expect(await screen.findByRole("heading", { name: unreachable.title })).toBeTruthy();
+  expect(screen.getByText(unreachable.advice)).toBeTruthy();
   expect(screen.getByRole("button", { name: "Riprova" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Apri il registro" })).toBeTruthy();
 });
@@ -855,4 +856,30 @@ test("a normal user, or an unknown answer, sees no banner", async () => {
   render(App);
   await screen.findByRole("button", { name: "Nuova sincronizzazione" });
   expect(screen.queryByText(/Esegui come amministratore/)).toBeNull();
+});
+
+test("a preview that fails says what happened and what to do, and Riprova checks again", async () => {
+  const failure = {
+    title: String.raw`Non riesco a controllare le cartelle: la cartella di rete \NAS non è raggiungibile.`,
+    advice: "Controlla la connessione e riprova.",
+  };
+  let attempts = 0;
+  backend({
+    preview_sync: () => {
+      if (++attempts === 1) throw failure;
+      return preview(2, 1);
+    },
+  });
+  render(App);
+  await goToPreview();
+
+  expect((await screen.findByRole("alert")).textContent).toContain(failure.title);
+  expect(screen.getByText(failure.advice)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Sì, avvia" })).toBeNull();
+
+  await click("Riprova");
+
+  expect(await screen.findByRole("button", { name: "Sì, avvia" })).toBeTruthy();
+  expect(calls("preview_sync")).toHaveLength(2);
+  expect(screen.queryByRole("alert")).toBeNull();
 });

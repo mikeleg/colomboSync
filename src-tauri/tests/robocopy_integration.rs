@@ -2,7 +2,7 @@
 
 use colombo_sync_lib::history::{Outcome, Run};
 use colombo_sync_lib::robocopy::SyncMode;
-use colombo_sync_lib::runner;
+use colombo_sync_lib::runner::{self, ActiveRun};
 use colombo_sync_lib::storage::Storage;
 use std::fs;
 use std::path::Path;
@@ -54,10 +54,13 @@ fn copy_keeps_extra_files_in_destination() {
         path_str(&b),
         SyncMode::Copy,
         preview.counts(),
+        &ActiveRun::default(),
+        |_| {},
     )
     .unwrap();
 
     assert_eq!(run.outcome, Outcome::Ok);
+    assert_eq!(run.partial, None, "an Ok run keeps the preview counts");
     assert_eq!((run.new, run.updated, run.deleted), (2, 1, 0));
     assert_eq!(run.sync_name, "Copia di A");
     assert_eq!(fs::read_to_string(b.join("new.txt")).unwrap(), "nuovo");
@@ -91,11 +94,14 @@ fn robocopy_failure_is_recorded_as_error() {
         path_str(&b),
         SyncMode::Copy,
         Default::default(),
+        &ActiveRun::default(),
+        |_| {},
     )
     .unwrap();
 
     assert_eq!(run.outcome, Outcome::Error);
     assert!(run.error.is_some());
+    assert_eq!(run.partial, Some(0), "an Error run keeps a partial count");
     assert_eq!(
         fs::read_to_string(storage.history_file())
             .unwrap()
@@ -103,6 +109,138 @@ fn robocopy_failure_is_recorded_as_error() {
             .count(),
         1
     );
+}
+
+#[test]
+fn run_reports_progress_with_the_current_file() {
+    let temp = tempfile::tempdir().unwrap();
+    let (a, b) = (temp.path().join("A"), temp.path().join("B"));
+    write(&a.join("due.txt"), "due");
+    write(&a.join("uno.txt"), "uno");
+    write(&a.join("è già.txt"), "tre");
+    write(&b.join("only-in-b.txt"), "extra");
+    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let counts = runner::preview(path_str(&a), path_str(&b), SyncMode::Copy)
+        .unwrap()
+        .counts();
+
+    let mut events = Vec::new();
+    let run = runner::run(
+        &storage,
+        path_str(&a),
+        path_str(&b),
+        SyncMode::Copy,
+        counts,
+        &ActiveRun::default(),
+        |progress| events.push(progress.clone()),
+    )
+    .unwrap();
+
+    assert_eq!(run.outcome, Outcome::Ok);
+    let last = events.last().expect("at least one progress event");
+    assert_eq!(
+        (last.done, last.total),
+        (3, 3),
+        "extras in B are not counted"
+    );
+    assert_eq!(last.sync_name, "Copia di A");
+    assert_eq!(
+        last.current_file, "è già.txt",
+        "the final state names the last file, readable"
+    );
+    assert!(events.windows(2).all(|w| w[0].done <= w[1].done));
+}
+
+#[test]
+fn cancel_kills_robocopy_and_records_a_cancelled_run() {
+    let temp = tempfile::tempdir().unwrap();
+    let (a, b) = (temp.path().join("A"), temp.path().join("B"));
+    for i in 0..20 {
+        write(&a.join(format!("a{i:02}.txt")), "piccolo");
+    }
+    // Sparse file: instant to create, long enough to copy for the cancel to land mid-copy.
+    fs::create_dir_all(&a).unwrap();
+    fs::File::create(a.join("z-grande.bin"))
+        .unwrap()
+        .set_len(3_000_000_000)
+        .unwrap();
+    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let counts = runner::preview(path_str(&a), path_str(&b), SyncMode::Copy)
+        .unwrap()
+        .counts();
+    let active = ActiveRun::default();
+
+    let run = runner::run(
+        &storage,
+        path_str(&a),
+        path_str(&b),
+        SyncMode::Copy,
+        counts,
+        &active,
+        |_| {
+            active.cancel(false);
+        },
+    )
+    .unwrap();
+
+    assert_eq!(
+        run.outcome,
+        Outcome::Cancelled,
+        "exit code 1 must not read as Ok"
+    );
+    assert_eq!((run.new, run.updated, run.deleted), (0, 0, 0));
+    assert!(run.error.is_none());
+    assert!(run.partial.is_some());
+    assert!(!active.is_running(), "the robocopy process is gone");
+    assert!(
+        !b.join("z-grande.bin").exists()
+            || fs::metadata(b.join("z-grande.bin")).unwrap().len() < 3_000_000_000,
+        "the big file was not copied completely"
+    );
+    let history = fs::read_to_string(storage.history_file()).unwrap();
+    let recorded: Run = serde_json::from_str(history.trim()).unwrap();
+    assert_eq!(recorded, run);
+    assert!(!active.cancel(false), "nothing left to cancel");
+}
+
+#[test]
+fn the_active_run_is_freed_when_the_history_cannot_be_written() {
+    let temp = tempfile::tempdir().unwrap();
+    let (a, b) = (temp.path().join("A"), temp.path().join("B"));
+    write(&a.join("uno.txt"), "uno");
+    let storage = Storage::at(temp.path().join("ColomboSync"));
+    fs::create_dir_all(storage.history_file()).unwrap(); // a folder where the file should be
+    let active = ActiveRun::default();
+
+    let result = runner::run(
+        &storage,
+        path_str(&a),
+        path_str(&b),
+        SyncMode::Copy,
+        Default::default(),
+        &active,
+        |_| {},
+    );
+
+    assert!(result.is_err());
+    assert!(!active.is_running());
+}
+
+fn run_mirror(
+    storage: &Storage,
+    a: &Path,
+    b: &Path,
+    counts: colombo_sync_lib::preview_parser::Counts,
+) -> Result<Run, String> {
+    runner::run(
+        storage,
+        path_str(a),
+        path_str(b),
+        SyncMode::Mirror,
+        counts,
+        &ActiveRun::default(),
+        |_| {},
+    )
 }
 
 #[test]
@@ -151,14 +289,7 @@ fn mirror_deletes_extra_files_in_destination() {
     assert_eq!(preview.deleted.count, 2);
     assert!(!preview.blocked);
 
-    let run = runner::run(
-        &storage,
-        path_str(&a),
-        path_str(&b),
-        SyncMode::Mirror,
-        preview.counts(),
-    )
-    .unwrap();
+    let run = run_mirror(&storage, &a, &b, preview.counts()).unwrap();
 
     assert_eq!(run.outcome, Outcome::Ok);
     assert_eq!(run.mode, SyncMode::Mirror);
@@ -188,14 +319,7 @@ fn mirror_with_a_missing_or_empty_source_is_blocked_and_never_run() {
         let preview = runner::preview(path_str(source), path_str(&b), SyncMode::Mirror).unwrap();
         assert!(preview.blocked, "{source:?}");
 
-        let run = runner::run(
-            &storage,
-            path_str(source),
-            path_str(&b),
-            SyncMode::Mirror,
-            preview.counts(),
-        );
-        assert!(run.is_err());
+        assert!(run_mirror(&storage, source, &b, preview.counts()).is_err());
     }
     assert!(b.join("precious.txt").exists());
     assert!(!storage.history_file().exists(), "nothing was recorded");

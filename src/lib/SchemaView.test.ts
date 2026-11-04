@@ -46,3 +46,15 @@ test("copy: no Eliminati counter", () => {
   expect(screen.getByText("Copia", { selector: ".chip" })).toBeTruthy();
   expect(screen.queryByText("Eliminati da B")).toBeNull();
 });
+
+test("while a run is going the arrow is animated", () => {
+  const { container } = render(SchemaView, { model: { ...picked, running: true } });
+
+  expect(container.querySelector(".mid.run")).toBeTruthy();
+});
+
+test("the arrow is still when nothing runs", () => {
+  const { container } = render(SchemaView, { model: picked });
+
+  expect(container.querySelector(".mid.run")).toBeNull();
+});

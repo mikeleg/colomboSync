@@ -1,13 +1,34 @@
 <script lang="ts">
+  import { listRuns } from "./lib/api";
   import History from "./lib/History.svelte";
+  import HistoryLegend from "./lib/HistoryLegend.svelte";
   import Home from "./lib/Home.svelte";
   import { emptySchema, type SchemaModel } from "./lib/schema";
   import SchemaView from "./lib/SchemaView.svelte";
   import ThemeSwitch from "./lib/ThemeSwitch.svelte";
+  import type { Run } from "./lib/types";
   import Wizard from "./lib/wizard/Wizard.svelte";
 
   let view = $state<"home" | "history" | "wizard">("home");
   let schema = $state<SchemaModel>(emptySchema);
+  let runs = $state<Run[]>([]);
+  let historyStatus = $state<"loading" | "ready" | "error">("ready");
+  let historyLoads = 0;
+
+  async function openHistory() {
+    const load = ++historyLoads;
+    view = "history";
+    runs = [];
+    historyStatus = "loading";
+    try {
+      const result = await listRuns();
+      if (load !== historyLoads) return; // a newer request owns the screen
+      runs = result;
+      historyStatus = "ready";
+    } catch {
+      if (load === historyLoads) historyStatus = "error";
+    }
+  }
 
   function leaveWizard() {
     view = "home";
@@ -34,7 +55,7 @@
           <button type="button" aria-current={view === "home" ? "page" : undefined} onclick={() => (view = "home")}>
             Sincronizzazioni
           </button>
-          <button type="button" aria-current={view === "history" ? "page" : undefined} onclick={() => (view = "history")}>
+          <button type="button" aria-current={view === "history" ? "page" : undefined} onclick={openHistory}>
             Storico
           </button>
         </nav>
@@ -42,13 +63,17 @@
       {#if view === "home"}
         <Home onnew={() => (view = "wizard")} />
       {:else if view === "history"}
-        <History />
+        <History {runs} status={historyStatus} />
       {:else}
         <Wizard onschema={(model) => (schema = model)} onexit={leaveWizard} />
       {/if}
     </main>
-    <aside class="schema" aria-label="Schema di cosa succede">
-      <SchemaView model={schema} />
+    <aside class="schema" aria-label={view === "history" ? "Come leggere lo storico" : "Schema di cosa succede"}>
+      {#if view === "history"}
+        <HistoryLegend {runs} />
+      {:else}
+        <SchemaView model={schema} />
+      {/if}
     </aside>
   </div>
 </div>

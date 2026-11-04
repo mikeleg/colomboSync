@@ -1,10 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import { fireEvent, render, screen } from "@testing-library/svelte";
+import { listen } from "@tauri-apps/api/event";
+import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App.svelte";
 import type { Preview, Run } from "./lib/types";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
 
 const invokeMock = vi.mocked(invoke);
 
@@ -35,6 +37,8 @@ function backend(handlers: {
   preview_sync?: () => unknown;
   run_sync?: () => unknown;
   check_destination?: () => unknown;
+  list_runs?: () => unknown;
+  read_run_log?: () => unknown;
 }) {
   invokeMock.mockImplementation(async (cmd) => {
     if (cmd === "browse_folders") return { parent: "", folders: [], error: null };
@@ -122,7 +126,7 @@ test("while the copy runs the UI says Sto copiando…", async () => {
 
   await click(await screen.findByRole("button", { name: "Sì, avvia" }));
 
-  expect(screen.getByRole("heading", { name: "Sto copiando…" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: /^Sto copiando/ })).toBeTruthy();
 });
 
 test("a run that ends in Error says Non completato with the raw message", async () => {
@@ -206,13 +210,70 @@ test("Indietro, cambio qualcosa goes back to Opzioni keeping what was typed; No,
   expect(screen.getByRole("button", { name: "+ Nuova sincronizzazione" })).toBeTruthy();
 });
 
-test("the Storico tab is there for S4 to fill", async () => {
-  backend({});
+test("Storico lists the runs from Rust and swaps the schema for the legend", async () => {
+  backend({
+    list_runs: () => [
+      { ...doneRun, syncName: "Seconda", outcome: "Error" },
+      { ...doneRun, syncName: "Prima" },
+    ],
+  });
   render(App);
 
   await click("Storico");
 
+  expect(invokeMock).toHaveBeenCalledWith("list_runs");
   expect(screen.getByRole("heading", { name: "Storico" })).toBeTruthy();
+  expect(await screen.findByText("Seconda")).toBeTruthy();
+  const aside = screen.getByRole("complementary", { name: "Come leggere lo storico" });
+  expect(aside.textContent).not.toContain("Cosa succede");
+  expect(within(aside).getByText("Copie fatte").previousElementSibling?.textContent).toBe("2");
+  expect(within(aside).getByText("Riuscite").previousElementSibling?.textContent).toBe("1");
+});
+
+test("a failed list_runs says so instead of showing an empty history", async () => {
+  backend({
+    list_runs: () => {
+      throw "boom";
+    },
+  });
+  render(App);
+
+  await click("Storico");
+
+  expect((await screen.findByRole("alert")).textContent).toContain("Non riesco a leggere lo storico.");
+  expect(screen.queryByRole("listitem")).toBeNull();
+});
+
+test("while the history loads there are no old rows, and a late older answer is ignored", async () => {
+  let answerFirst!: (runs: Run[]) => void;
+  const answers = [new Promise<Run[]>((resolve) => (answerFirst = resolve)), Promise.resolve([{ ...doneRun, syncName: "Aggiornata" }])];
+  backend({ list_runs: () => answers.shift() });
+  render(App);
+
+  await click("Storico");
+  expect(screen.getByText("Sto leggendo lo storico…")).toBeTruthy();
+  await click("Sincronizzazioni");
+  await click("Storico");
+  expect(await screen.findByText("Aggiornata")).toBeTruthy();
+
+  answerFirst([{ ...doneRun, syncName: "Vecchia" }]);
+  await Promise.resolve();
+
+  expect(screen.queryByText("Vecchia")).toBeNull();
+  expect(screen.getByText("Aggiornata")).toBeTruthy();
+});
+
+test("closing the window during a run asks to stop the copy", async () => {
+  backend({ preview_sync: () => preview(2, 1), run_sync: () => new Promise(() => {}) });
+  render(App);
+  await goToPreview();
+  await click(await screen.findByRole("button", { name: "Sì, avvia" }));
+
+  const closeRequested = vi.mocked(listen).mock.calls.find(([name]) => name === "close-requested")![1];
+  closeRequested({ event: "close-requested", id: 1, payload: null });
+
+  expect(await screen.findByRole("alertdialog")).toBeTruthy();
+  expect(screen.getByText("Vuoi fermare la copia? I file già copiati restano in B.")).toBeTruthy();
 });
 
 const toOpzioni = async () => {

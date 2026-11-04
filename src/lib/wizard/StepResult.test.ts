@@ -66,3 +66,45 @@ test("a mirror run that deleted nothing, or one file, reads naturally", () => {
   render(StepResult, { run: run({ mode: "Mirror", deleted: 1 }), failure: "", onhome: () => {} });
   expect(screen.getByRole("heading").textContent).toContain(", 1 cancellato da B in ");
 });
+
+test("cancelled: Annullato with what stays in B, and the partial count", () => {
+  render(StepResult, {
+    run: run({ outcome: "Cancelled", new: 0, updated: 0, partial: 40 }),
+    failure: "",
+    onhome: () => {},
+  });
+
+  expect(screen.getByRole("heading").textContent).toBe("Annullato: ho fermato la copia.");
+  expect(screen.getByText("40 file copiati (parziale). I file già copiati restano in B.")).toBeTruthy();
+  expect(screen.getAllByText(/40 file/)).toHaveLength(1);
+});
+
+test("cancelled before any file was copied", () => {
+  render(StepResult, { run: run({ outcome: "Cancelled", partial: 0 }), failure: "", onhome: () => {} });
+
+  expect(screen.getByText("Nessun file è stato copiato.")).toBeTruthy();
+  expect(screen.queryByText(/restano in B/)).toBeNull();
+});
+
+test("error before any file was copied", () => {
+  render(StepResult, { run: run({ outcome: "Error", error: "robocopy ha restituito il codice 16.", partial: 0 }), failure: "", onhome: () => {} });
+
+  expect(screen.getByText("Nessun file è stato copiato.")).toBeTruthy();
+});
+
+test("error after copying 40 files says 40 file copiati (parziale) next to the message", () => {
+  render(StepResult, {
+    run: run({ outcome: "Error", error: "robocopy ha restituito il codice 16.", partial: 40 }),
+    failure: "",
+    onhome: () => {},
+  });
+
+  expect(screen.getByText("robocopy ha restituito il codice 16.")).toBeTruthy();
+  expect(screen.getByText("40 file copiati (parziale)")).toBeTruthy();
+});
+
+test("a success has no partial line", () => {
+  render(StepResult, { run: run(), failure: "", onhome: () => {} });
+
+  expect(screen.queryByText(/parziale/)).toBeNull();
+});

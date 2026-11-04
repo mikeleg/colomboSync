@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from "../Icon.svelte";
-  import { formatDuration, formatNumber } from "../format";
+  import { formatDuration, formatNumber, partialText } from "../format";
   import type { Run } from "../types";
 
   let { run, failure, onhome }: { run: Run | null; failure: string; onhome: () => void } = $props();
@@ -11,22 +11,32 @@
       ? `, ${formatNumber(run.deleted)} ${run.deleted === 1 ? "cancellato" : "cancellati"} da B`
       : "",
   );
+  const cancelled = $derived(run?.outcome === "Cancelled");
+  // Shown once: next to the error message, or as the whole body of a stopped run.
+  const partialLine = $derived(
+    run?.partial === undefined ? "" : run.partial === 0 ? "Nessun file è stato copiato." : partialText(run.partial),
+  );
   const title = $derived(
     run && ok
       ? `Fatto: ${formatNumber(run.new)} ${run.new === 1 ? "file copiato" : "file copiati"}, ${formatNumber(run.updated)} ${run.updated === 1 ? "aggiornato" : "aggiornati"}${deletedText} in ${formatDuration(run.durationMs)}`
-      : "Non completato",
+      : cancelled
+        ? "Annullato: ho fermato la copia."
+        : "Non completato",
   );
 </script>
 
 <div class="kicker">Risultato</div>
-<div class="res" class:err={!ok} role="status">
-  <Icon name={ok ? "check" : "cross"} />
+<div class="res" class:err={!ok && !cancelled} class:ann={cancelled} role="status">
+  <Icon name={ok ? "check" : cancelled ? "stop" : "cross"} />
   <div>
     <h1 id="h">{title}</h1>
     {#if ok}
       <p>B ora è aggiornato.</p>
+    {:else if cancelled}
+      <p>{partialLine}{run?.partial ? ". I file già copiati restano in B." : ""}</p>
     {:else}
       <p>{run?.error ?? failure}</p>
+      {#if partialLine}<p>{partialLine}</p>{/if}
     {/if}
   </div>
 </div>
@@ -49,6 +59,10 @@
     background: var(--error-container);
     color: var(--on-error-container);
   }
+  .res.ann {
+    background: var(--warning-container);
+    color: var(--on-warning-container);
+  }
   .res :global(svg) {
     width: 52px;
     height: 52px;
@@ -57,6 +71,9 @@
   }
   .res.err :global(svg) {
     color: var(--error);
+  }
+  .res.ann :global(svg) {
+    color: var(--warning);
   }
   .res > div {
     min-width: 0;

@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import Icon from "../Icon.svelte";
-  import { checkDestination, previewSync, runSync } from "../api";
+  import { checkDestination, onCloseRequested, previewSync, runSync } from "../api";
   import { formatNumber } from "../format";
   import type { SchemaModel } from "../schema";
   import type { Counts, Preview, Run, SyncMode } from "../types";
@@ -32,6 +33,15 @@
   let run = $state<Run | null>(null);
   let failure = $state("");
   let scanId = 0;
+  // Listen from the start: an X click right after "Sì, avvia" must not slip by the running view.
+  let closeRequests = $state(0);
+
+  onMount(() => {
+    const unlisten = onCloseRequested(() => closeRequests++);
+    return () => {
+      unlisten.then((stop) => stop());
+    };
+  });
 
   const mode = $derived<SyncMode>(mirror ? "Mirror" : "Copy");
   const stepId = $derived(STEPS[step].id);
@@ -42,14 +52,19 @@
       : null,
   );
 
+  const runTotal = $derived(previewCounts ? previewCounts.new + previewCounts.updated + previewCounts.deleted : 0);
+
   const schema = $derived.by((): SchemaModel => {
     const places = { source: source.trim(), destination: destination.trim() };
     if (phase === "result") {
       const ok = run?.outcome === "Ok";
       const counts = run && ok ? { new: run.new, updated: run.updated, deleted: run.deleted } : null;
-      return { ...places, counts, caption: ok ? "Fatto." : "Non completato.", mirror, warnCaption: false };
+      const caption = ok ? "Fatto." : run?.outcome === "Cancelled" ? "Annullato." : "Non completato.";
+      return { ...places, counts, caption, mirror, warnCaption: false };
     }
-    if (phase === "running") return { ...places, counts: previewCounts, caption: "Sto copiando…", mirror, warnCaption: mirror };
+    if (phase === "running") {
+      return { ...places, counts: previewCounts, caption: "Sto copiando…", running: true, mirror, warnCaption: mirror };
+    }
     if (stepId === "preview" && scanning) {
       return { ...places, counts: null, caption: "Sto controllando le due cartelle…", mirror, warnCaption: mirror };
     }
@@ -122,6 +137,7 @@
 
   async function start() {
     if (!previewCounts) return;
+    closeRequests = 0;
     phase = "running";
     try {
       run = await runSync(source.trim(), destination.trim(), mode, previewCounts);
@@ -133,7 +149,7 @@
 </script>
 
 {#if phase === "running"}
-  <StepRunning />
+  <StepRunning total={runTotal} {closeRequests} />
 {:else if phase === "result"}
   <StepResult {run} {failure} onhome={onexit} />
 {:else}

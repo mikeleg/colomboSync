@@ -11,6 +11,8 @@ export interface SchemaModel {
   mirror: boolean;
   /** Draw the caption as a warning (red). */
   warnCaption: boolean;
+  /** A run is going: the arrow is animated. */
+  running?: boolean;
 }
 
 export const emptySchema: SchemaModel = {

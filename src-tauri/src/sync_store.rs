@@ -6,6 +6,7 @@ use crate::robocopy::SyncMode;
 use crate::storage::Storage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -97,24 +98,13 @@ pub fn list(storage: &Storage) -> io::Result<Vec<SyncSummary>> {
     // Newest first: the first run seen for a sync is its latest.
     for run in history::read(&storage.history_file()).unwrap_or_default() {
         if let Some(id) = run.sync_id
-            && !last_runs.contains_key(&id)
+            && let Entry::Vacant(slot) = last_runs.entry(id)
         {
-            let note = match run.outcome {
-                Outcome::Ok => None,
-                Outcome::Cancelled => Some(error_messages::STOPPED_NOTE.to_string()),
-                Outcome::Error => Some(
-                    run.error_note
-                        .unwrap_or_else(|| error_messages::GENERIC_NOTE.to_string()),
-                ),
-            };
-            last_runs.insert(
-                id,
-                LastRun {
-                    started_at: run.started_at,
-                    outcome: run.outcome,
-                    note,
-                },
-            );
+            slot.insert(LastRun {
+                note: error_messages::card_note(&run),
+                started_at: run.started_at,
+                outcome: run.outcome,
+            });
         }
     }
     Ok(load(&storage.syncs_file())?
@@ -129,6 +119,7 @@ pub fn list(storage: &Storage) -> io::Result<Vec<SyncSummary>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error_messages::{Cause, Folder};
     use crate::history::Run;
 
     fn sync(id: u64, name: &str) -> SavedSync {
@@ -261,9 +252,8 @@ mod tests {
             outcome,
             started_at: started_at.into(),
             log_path: String::new(),
-            error: None,
             partial: None,
-            error_note: None,
+            cause: None,
         }
     }
 
@@ -317,7 +307,10 @@ mod tests {
         let at = "2026-11-02T21:30:00+01:00";
         for r in [
             Run {
-                error_note: Some("Il disco D: non era raggiungibile.".into()),
+                cause: Some(Cause {
+                    code: 53,
+                    folder: Folder::B,
+                }),
                 ..run(&failed, Outcome::Error, at)
             },
             run(&stopped, Outcome::Cancelled, at),
@@ -336,7 +329,7 @@ mod tests {
         assert_eq!(
             notes,
             [
-                Some("Il disco D: non era raggiungibile.".to_string()),
+                Some(r"La cartella di rete \\NAS non era raggiungibile. Controlla che sia collegato e riprova.".to_string()),
                 Some(error_messages::STOPPED_NOTE.to_string()),
                 Some(error_messages::GENERIC_NOTE.to_string()),
                 None

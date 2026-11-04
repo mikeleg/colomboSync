@@ -1,6 +1,7 @@
 //! Thin `#[tauri::command]` wrappers: robocopy runs on a blocking thread so the UI never freezes.
 
 use crate::elevation;
+use crate::error_messages::{self, Explanation};
 use crate::folder_browser::{self, FolderListing};
 use crate::history::{self, Run};
 use crate::path_rules;
@@ -9,6 +10,7 @@ use crate::robocopy::SyncMode;
 use crate::runner::{self, ActiveRun, PreviewMemo};
 use crate::storage::Storage;
 use crate::sync_store::{self, SavedSync, SyncSummary};
+use serde::Serialize;
 use std::path::Path;
 use tauri::async_runtime::spawn_blocking;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -25,13 +27,13 @@ pub async fn preview_sync(
     source: String,
     destination: String,
     mode: SyncMode,
-) -> Result<Preview, String> {
+) -> Result<Preview, Explanation> {
     let preview = spawn_blocking({
         let (source, destination) = (source.clone(), destination.clone());
         move || runner::preview(&source, &destination, mode)
     })
     .await
-    .map_err(|e| e.to_string())??;
+    .map_err(|e| Explanation::from(e.to_string()))??;
     app.state::<PreviewMemo>()
         .remember(&source, &destination, mode, preview.counts());
     Ok(preview)
@@ -56,8 +58,21 @@ pub async fn read_run_log(path: String) -> Result<String, String> {
     .map_err(|e| e.to_string())?
 }
 
+/// A finished Run as the result screen gets it: what is stored, plus what to tell the user when
+/// it failed.
+#[derive(Serialize)]
+pub struct RunReport {
+    #[serde(flatten)]
+    run: Run,
+    explanation: Option<Explanation>,
+}
+
 #[tauri::command]
-pub async fn run_sync(app: AppHandle, sync: SavedSync, counts: Counts) -> Result<Run, String> {
+pub async fn run_sync(
+    app: AppHandle,
+    sync: SavedSync,
+    counts: Counts,
+) -> Result<RunReport, String> {
     let storage = Storage::from_env()?;
     // The counts of the preview Rust measured count, not the ones the UI sends back.
     let counts = app.state::<PreviewMemo>().take_counts(
@@ -86,7 +101,10 @@ pub async fn run_sync(app: AppHandle, sync: SavedSync, counts: Counts) -> Result
     if app.state::<ActiveRun>().exit_when_done() {
         app.exit(0);
     }
-    run
+    run.map(|run| RunReport {
+        explanation: error_messages::explain_run(&run),
+        run,
+    })
 }
 
 /// Stops the running copy; `exit_when_done` when the user confirmed closing the window. Returns

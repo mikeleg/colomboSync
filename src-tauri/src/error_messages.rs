@@ -1,78 +1,190 @@
 //! Why a copy failed, in plain Italian. The cause is read from the Windows error code in the log
-//! (`ERROR 53 (0x00000035)`), never from the labels around it: those are localized.
+//! (`ERROR 53 (0x00000035)`), never from the labels around it: those are localized. Only the
+//! cause (code + folder) is kept; the texts are made from it when they are needed.
 
-/// What the user reads about a failed Run.
-#[derive(Debug, Clone, PartialEq, Eq)]
+use crate::history::{Outcome, Run};
+use crate::path_rules;
+use serde::{Deserialize, Serialize};
+use std::io;
+
+/// A and B of a Sync.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Folder {
+    A,
+    B,
+}
+
+/// What went wrong: a mapped Windows error code, and the folder it is about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Cause {
+    pub code: u32,
+    pub folder: Folder,
+}
+
+/// What the user reads: the sentence that says what happened, and what to do about it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Explanation {
-    /// The result screen: "Non completato: <what happened>. <what to do>".
-    pub message: String,
-    /// The note on the home card of the sync.
-    pub note: String,
+    pub title: String,
+    pub advice: String,
+}
+
+impl From<&str> for Explanation {
+    fn from(message: &str) -> Self {
+        message.to_string().into()
+    }
+}
+
+impl From<String> for Explanation {
+    fn from(message: String) -> Self {
+        Explanation {
+            title: message,
+            advice: String::new(),
+        }
+    }
+}
+
+/// When it failed: the wording differs between a preview (nothing is copied yet) and a run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Moment {
+    Preview,
+    Run,
 }
 
 pub const STOPPED_NOTE: &str = "La copia era stata fermata a mano: puoi riprenderla quando vuoi.";
 pub const GENERIC_NOTE: &str =
     "L’ultima copia non è stata completata. Nel registro trovi i dettagli.";
-const GENERIC_MESSAGE: &str = "Non completato: la copia si è fermata per un problema. Apri il registro per vedere i dettagli.";
 
-/// Explains the first mapped error in a robocopy log. `source` (A) and `destination` (B) tell
-/// which folder the error is about.
-pub fn explain(log: &str, source: &str, destination: &str) -> Explanation {
-    let Some((code, line)) = first_mapped_error(log) else {
-        return Explanation {
-            message: GENERIC_MESSAGE.into(),
-            note: GENERIC_NOTE.into(),
+const MAPPED_CODES: [u32; 5] = [2, 3, 5, 53, 67];
+/// `ERROR_PATH_NOT_FOUND`: what a missing folder is, when Windows says only "not found".
+const PATH_NOT_FOUND: u32 = 3;
+
+/// The first mapped error in a robocopy log, and the folder it is about. `source` (A) and
+/// `destination` (B) tell which one that is. `None` when the log holds no mapped code.
+pub fn find_cause(log: &str, source: &str, destination: &str) -> Option<Cause> {
+    let (code, line) = first_mapped_error(log)?;
+    Some(Cause {
+        code,
+        folder: folder_of(line, source, destination),
+    })
+}
+
+/// Why A could not be read before robocopy even started.
+pub fn explain_source_error(error: &io::Error, source: &str, destination: &str) -> Explanation {
+    let code = error
+        .raw_os_error()
+        .and_then(|code| u32::try_from(code).ok())
+        .filter(|code| MAPPED_CODES.contains(code))
+        .or_else(|| (error.kind() == io::ErrorKind::NotFound).then_some(PATH_NOT_FOUND));
+    let cause = code.map(|code| Cause {
+        code,
+        folder: Folder::A,
+    });
+    describe(cause, source, destination, Moment::Preview)
+}
+
+/// The title and the advice for a failure; a generic one when the cause is unknown.
+pub fn describe(
+    cause: Option<Cause>,
+    source: &str,
+    destination: &str,
+    moment: Moment,
+) -> Explanation {
+    let known = cause.and_then(|c| reason(c, source, destination).map(|r| (c, r)));
+    let Some((cause, reason)) = known else {
+        return match moment {
+            Moment::Run => Explanation {
+                title: "Non completato: la copia si è fermata per un problema.".into(),
+                advice: "Apri il registro per vedere i dettagli.".into(),
+            },
+            Moment::Preview => Explanation {
+                title: "Non riesco a controllare le cartelle.".into(),
+                advice: "Controlla che A e B siano raggiungibili e riprova.".into(),
+            },
         };
     };
-    let folder = folder_of(line, source, destination);
-    match code {
+    let title = match moment {
+        // "Non trovo la cartella A (D:\Foto)." reads the same in both.
+        Moment::Preview if matches!(cause.code, 2 | 3) => format!("{}.", capitalized(&reason.what)),
+        Moment::Preview => format!("Non riesco a controllare le cartelle: {}.", reason.what),
+        Moment::Run => format!("Non completato: {}.", reason.what),
+    };
+    Explanation {
+        title,
+        advice: reason.advice,
+    }
+}
+
+/// The note under the sync's card on the home screen, from how its last Run ended.
+pub fn card_note(run: &Run) -> Option<String> {
+    match run.outcome {
+        Outcome::Ok => None,
+        Outcome::Cancelled => Some(STOPPED_NOTE.to_string()),
+        Outcome::Error => Some(
+            run.cause
+                .and_then(|cause| reason(cause, &run.source, &run.destination))
+                .map_or_else(|| GENERIC_NOTE.to_string(), |r| r.note),
+        ),
+    }
+}
+
+/// The result screen's text for a Run that ended in `Error`.
+pub fn explain_run(run: &Run) -> Option<Explanation> {
+    (run.outcome == Outcome::Error)
+        .then(|| describe(run.cause, &run.source, &run.destination, Moment::Run))
+}
+
+struct Reason {
+    /// A sentence that starts in lower case and has no full stop: "non trovo la cartella A (…)".
+    what: String,
+    advice: String,
+    /// The same thing for the home card, said about the last time.
+    note: String,
+}
+
+fn reason(cause: Cause, source: &str, destination: &str) -> Option<Reason> {
+    let (name, path) = match cause.folder {
+        Folder::A => ('A', source.trim()),
+        Folder::B => ('B', destination.trim()),
+    };
+    let (what, advice) = match cause.code {
         53 | 67 => {
-            let (lower, upper) = unreachable_name(folder.path);
-            Explanation {
-                message: format!(
-                    "Non completato: {lower} non è raggiungibile. Controlla la connessione e riprova."
-                ),
+            let (lower, upper) = unreachable_name(path);
+            return Some(Reason {
+                what: format!("{lower} non è raggiungibile"),
+                advice: "Controlla la connessione e riprova.".into(),
                 note: format!(
                     "{upper} non era raggiungibile. Controlla che sia collegato e riprova."
                 ),
-            }
+            });
         }
-        2 | 3 => from_sentence(missing_folder(folder.name, folder.path)),
-        _ => from_sentence(format!(
-            "Non ho il permesso di usare la cartella {} ({}). Controlla i permessi e riprova.",
-            folder.name, folder.path
-        )),
-    }
-}
-
-/// Preview of a sync whose A is not there (typically an unplugged disk).
-pub fn missing_source(source: &str) -> String {
-    missing_folder('A', source)
-}
-
-fn missing_folder(name: char, path: &str) -> String {
-    let question = if is_network(path) {
-        "La cartella di rete è raggiungibile?"
-    } else {
-        "Il disco è collegato?"
+        2 | 3 => (
+            format!("non trovo la cartella {name} ({path})"),
+            if is_network(path) {
+                "La cartella di rete è raggiungibile?"
+            } else {
+                "Il disco è collegato?"
+            },
+        ),
+        5 => (
+            format!("non ho il permesso di usare la cartella {name} ({path})"),
+            "Controlla i permessi e riprova.",
+        ),
+        _ => return None,
     };
-    format!("Non trovo la cartella {name} ({path}). {question}")
+    Some(Reason {
+        note: format!("{}. {advice}", capitalized(&what)),
+        what,
+        advice: advice.into(),
+    })
 }
 
-/// The sentence is the home note as it is, and the result message once it follows "Non completato:".
-fn from_sentence(sentence: String) -> Explanation {
-    let mut chars = sentence.chars();
-    let lowered: String = chars
+fn capitalized(text: &str) -> String {
+    let mut chars = text.chars();
+    chars
         .next()
-        .map(|c| c.to_lowercase().chain(chars).collect())
-        .unwrap_or_default();
-    Explanation {
-        message: format!("Non completato: {lowered}"),
-        note: sentence,
-    }
+        .map(|c| c.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
 }
-
-const MAPPED_CODES: [u32; 5] = [2, 3, 5, 53, 67];
 
 /// First log line holding `<n> (0x<hex>)` with a mapped `n`, and that `n`. Any label before
 /// the number (`ERROR`, `ERRORE`…) is ignored.
@@ -88,46 +200,30 @@ fn first_mapped_error(log: &str) -> Option<(u32, &str)> {
     })
 }
 
-struct Folder<'a> {
-    name: char,
-    path: &'a str,
-}
-
-/// The folder an error line talks about: the one whose path the line mentions. A line that
+/// The folder an error line talks about: the one whose path the line holds. A line that
 /// names neither (the path is cut, or relative) falls back to the folder most likely to be on
-/// the network: B if it is a share, else A if it is, else B.
-fn folder_of<'a>(line: &str, source: &'a str, destination: &'a str) -> Folder<'a> {
-    let (a, b) = (
-        Folder {
-            name: 'A',
-            path: source.trim(),
-        },
-        Folder {
-            name: 'B',
-            path: destination.trim(),
-        },
-    );
+/// the network: A if it is a share and B is not, else B.
+fn folder_of(line: &str, source: &str, destination: &str) -> Folder {
     let line = line.replace('/', "\\").to_lowercase();
-    match (mentions(&line, a.path), mentions(&line, b.path)) {
-        (true, false) => a,
-        (false, true) => b,
-        _ if is_network(a.path) && !is_network(b.path) => a,
-        _ => b,
+    match (mentions(&line, source), mentions(&line, destination)) {
+        (true, false) => Folder::A,
+        (false, true) => Folder::B,
+        _ if is_network(source.trim()) && !is_network(destination.trim()) => Folder::A,
+        _ => Folder::B,
     }
 }
 
-/// `line` (lower case, `\` separators) holds `path` as a whole folder name: not `D:\Foto2` for `D:\Foto`.
+/// `line` (lower case, `\` separators) holds `path` as a folder or something inside it: what
+/// follows is the end of the line or a `\`, never other characters (`D:\Foto 2` is not in
+/// `D:\Foto`), and what comes before is a space, as after a label.
 fn mentions(line: &str, path: &str) -> bool {
-    let path = path
-        .replace('/', "\\")
-        .trim_end_matches('\\')
-        .to_lowercase();
+    let path = path_rules::normalize(path);
+    let line = line.trim_end();
     !path.is_empty()
         && line.match_indices(&path).any(|(at, _)| {
-            line[at + path.len()..]
-                .chars()
-                .next()
-                .is_none_or(|c| c == '\\' || c.is_whitespace() || c == '"')
+            let before = line[..at].chars().next_back();
+            let after = line[at + path.len()..].chars().next();
+            before.is_none_or(|c| c.is_whitespace() || c == '"') && after.is_none_or(|c| c == '\\')
         })
 }
 
@@ -157,6 +253,7 @@ fn unreachable_name(path: &str) -> (String, String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::robocopy::SyncMode;
 
     const A: &str = r"D:\Foto";
     const NAS_B: &str = r"\\NAS\Backup";
@@ -181,45 +278,51 @@ mod tests {
         )
     }
 
+    fn cause(log: &str, a: &str, b: &str) -> Option<Cause> {
+        find_cause(log, a, b)
+    }
+
+    fn run_text(code: u32, folder: Folder, a: &str, b: &str) -> Explanation {
+        describe(Some(Cause { code, folder }), a, b, Moment::Run)
+    }
+
+    fn at(code: u32, folder: Folder) -> Option<Cause> {
+        Some(Cause { code, folder })
+    }
+
     #[test]
-    fn error_53_is_an_unreachable_share() {
+    fn error_53_is_found_by_code_in_any_language() {
         for text in [english(53, r"\\NAS\Backup\"), italian(53, r"\\NAS\Backup\")] {
-            let e = explain(&text, A, NAS_B);
-            assert_eq!(
-                e.message,
-                r"Non completato: la cartella di rete \\NAS non è raggiungibile. Controlla la connessione e riprova."
-            );
-            assert_eq!(
-                e.note,
-                r"La cartella di rete \\NAS non era raggiungibile. Controlla che sia collegato e riprova."
-            );
+            assert_eq!(cause(&text, A, NAS_B), at(53, Folder::B));
         }
+        let e = run_text(53, Folder::B, A, NAS_B);
+        assert_eq!(
+            e.title,
+            r"Non completato: la cartella di rete \\NAS non è raggiungibile."
+        );
+        assert_eq!(e.advice, "Controlla la connessione e riprova.");
     }
 
     #[test]
     fn error_67_is_an_unreachable_share_too() {
-        let e = explain(&italian(67, r"\\NAS\Backup\x\"), A, NAS_B);
         assert_eq!(
-            e.message,
-            r"Non completato: la cartella di rete \\NAS non è raggiungibile. Controlla la connessione e riprova."
+            cause(&italian(67, r"\\NAS\Backup\x\"), A, NAS_B),
+            at(67, Folder::B)
+        );
+        assert_eq!(
+            run_text(67, Folder::B, A, NAS_B).title,
+            r"Non completato: la cartella di rete \\NAS non è raggiungibile."
         );
     }
 
     #[test]
     fn an_unreachable_drive_letter_says_disco() {
-        let e = explain(&english(53, r"Z:\Backup\"), A, r"Z:\Backup");
-        assert_eq!(
-            e.message,
-            "Non completato: il disco Z: non è raggiungibile. Controlla la connessione e riprova."
-        );
-        assert_eq!(
-            e.note,
-            "Il disco Z: non era raggiungibile. Controlla che sia collegato e riprova."
-        );
+        let e = run_text(53, Folder::B, A, r"Z:\Backup");
+        assert_eq!(e.title, "Non completato: il disco Z: non è raggiungibile.");
     }
 
     #[test]
-    fn error_2_and_3_say_which_folder_cannot_be_found() {
+    fn error_2_and_3_name_the_folder_that_cannot_be_found() {
         for code in [2, 3] {
             for text in [
                 log(code, "ERROR", "Accessing Source Directory", r"D:\Foto\"),
@@ -230,26 +333,25 @@ mod tests {
                     r"D:\Foto\",
                 ),
             ] {
-                let e = explain(&text, A, r"E:\Backup");
-                assert_eq!(
-                    e.message,
-                    r"Non completato: non trovo la cartella A (D:\Foto). Il disco è collegato?"
-                );
-                assert_eq!(
-                    e.note,
-                    r"Non trovo la cartella A (D:\Foto). Il disco è collegato?"
-                );
+                assert_eq!(cause(&text, A, r"E:\Backup"), at(code, Folder::A));
             }
+            let e = run_text(code, Folder::A, A, r"E:\Backup");
+            assert_eq!(
+                e.title,
+                r"Non completato: non trovo la cartella A (D:\Foto)."
+            );
+            assert_eq!(e.advice, "Il disco è collegato?");
         }
     }
 
     #[test]
     fn error_3_on_a_network_folder_asks_about_the_network() {
-        let e = explain(&english(3, r"\\NAS\Backup\"), A, NAS_B);
+        let e = run_text(3, Folder::B, A, NAS_B);
         assert_eq!(
-            e.message,
-            r"Non completato: non trovo la cartella B (\\NAS\Backup). La cartella di rete è raggiungibile?"
+            e.title,
+            r"Non completato: non trovo la cartella B (\\NAS\Backup)."
         );
+        assert_eq!(e.advice, "La cartella di rete è raggiungibile?");
     }
 
     #[test]
@@ -258,75 +360,172 @@ mod tests {
             log(5, "ERROR", "Copying File", r"E:\Backup\2024\a.jpg"),
             log(5, "ERRORE", "Copia file", r"E:\Backup\2024\a.jpg"),
         ] {
-            let e = explain(&text, A, r"E:\Backup");
-            assert_eq!(
-                e.message,
-                r"Non completato: non ho il permesso di usare la cartella B (E:\Backup). Controlla i permessi e riprova."
-            );
-            assert_eq!(
-                e.note,
-                r"Non ho il permesso di usare la cartella B (E:\Backup). Controlla i permessi e riprova."
-            );
+            assert_eq!(cause(&text, A, r"E:\Backup"), at(5, Folder::B));
         }
+        let e = run_text(5, Folder::B, A, r"E:\Backup");
+        assert_eq!(
+            e.title,
+            r"Non completato: non ho il permesso di usare la cartella B (E:\Backup)."
+        );
+        assert_eq!(e.advice, "Controlla i permessi e riprova.");
     }
 
     #[test]
-    fn any_other_code_or_no_code_is_the_generic_message() {
+    fn any_other_code_or_no_code_has_no_cause_and_reads_generic() {
         for text in [
             english(32, r"E:\Backup\a.jpg"), // sharing violation: not mapped
             "robocopy ha detto qualcosa senza codice\r\n".to_string(),
             String::new(),
         ] {
-            let e = explain(&text, A, r"E:\Backup");
-            assert_eq!(e.message, GENERIC_MESSAGE);
-            assert_eq!(e.note, GENERIC_NOTE);
+            assert_eq!(cause(&text, A, r"E:\Backup"), None);
         }
+        let e = describe(None, A, r"E:\Backup", Moment::Run);
+        assert_eq!(
+            e.title,
+            "Non completato: la copia si è fermata per un problema."
+        );
+        assert_eq!(e.advice, "Apri il registro per vedere i dettagli.");
     }
 
     #[test]
-    fn the_folder_is_found_by_path_not_by_a_folder_with_the_same_start() {
-        // `D:\Foto2` is a different folder than A (`D:\Foto`): the error is about B.
-        let e = explain(&english(5, r"D:\Foto2\a.jpg"), A, r"D:\Foto2");
-        assert!(
-            e.message.contains(r"cartella B (D:\Foto2)"),
-            "{}",
-            e.message
+    fn a_failed_preview_uses_preview_wording() {
+        let e = describe(at(53, Folder::B), A, NAS_B, Moment::Preview);
+        assert_eq!(
+            e.title,
+            r"Non riesco a controllare le cartelle: la cartella di rete \\NAS non è raggiungibile."
         );
-        let e = explain(&english(5, r"d:/foto/a.jpg"), A, r"D:\Foto2");
-        assert!(e.message.contains(r"cartella A (D:\Foto)"), "{}", e.message);
+        assert_eq!(e.advice, "Controlla la connessione e riprova.");
+        let e = describe(at(5, Folder::A), A, NAS_B, Moment::Preview);
+        assert_eq!(
+            e.title,
+            r"Non riesco a controllare le cartelle: non ho il permesso di usare la cartella A (D:\Foto)."
+        );
+        let e = describe(None, A, NAS_B, Moment::Preview);
+        assert_eq!(e.title, "Non riesco a controllare le cartelle.");
+        assert!(!e.title.contains("Non completato"));
+    }
+
+    #[test]
+    fn a_folder_that_is_not_there_reads_the_same_in_a_preview() {
+        let e = describe(at(3, Folder::A), A, NAS_B, Moment::Preview);
+        assert_eq!(e.title, r"Non trovo la cartella A (D:\Foto).");
+        assert_eq!(e.advice, "Il disco è collegato?");
+    }
+
+    #[test]
+    fn a_source_that_cannot_be_read_is_explained_by_its_os_error() {
+        let explain = |error: io::Error| explain_source_error(&error, A, NAS_B);
+        assert_eq!(
+            explain(io::Error::from(io::ErrorKind::NotFound)).title,
+            r"Non trovo la cartella A (D:\Foto)."
+        );
+        assert_eq!(
+            explain(io::Error::from_raw_os_error(3)).advice,
+            "Il disco è collegato?"
+        );
+        assert_eq!(
+            explain(io::Error::from_raw_os_error(53)).title,
+            r"Non riesco a controllare le cartelle: il disco D: non è raggiungibile."
+        );
+        assert_eq!(
+            explain(io::Error::from_raw_os_error(5)).title,
+            r"Non riesco a controllare le cartelle: non ho il permesso di usare la cartella A (D:\Foto)."
+        );
+        assert_eq!(
+            explain(io::Error::from_raw_os_error(1117)).title,
+            "Non riesco a controllare le cartelle."
+        );
+    }
+
+    #[test]
+    fn the_folder_is_found_by_whole_path_not_by_a_name_that_starts_the_same() {
+        // `D:\Foto 2` is a folder of its own: the error is about A, not about B (`D:\Foto`).
+        let (a, b) = (r"D:\Foto 2", r"D:\Foto");
+        let line = english(5, r"D:\Foto 2\a.jpg");
+        assert_eq!(cause(&line, a, b), at(5, Folder::A));
+        assert_eq!(cause(&english(5, r"D:\Foto 2\"), a, b), at(5, Folder::A));
+        assert_eq!(cause(&english(5, r"d:/foto/a.jpg"), a, b), at(5, Folder::B));
+        // B is `D:\Foto2`: a sibling by name, not a parent.
+        let line = english(5, r"D:\Foto2\a.jpg");
+        assert_eq!(cause(&line, A, r"D:\Foto2"), at(5, Folder::B));
     }
 
     #[test]
     fn a_line_without_a_known_path_blames_the_share_then_b() {
         let line = english(53, r"\\ALTRO\x\");
-        assert!(explain(&line, A, NAS_B).message.contains(r"\\NAS"));
-        assert!(
-            explain(&line, NAS_B, r"E:\Backup")
-                .message
-                .contains(r"\\NAS")
-        );
-        assert!(
-            explain(&english(3, "x"), A, r"E:\Backup")
-                .message
-                .contains("cartella B")
-        );
+        assert_eq!(cause(&line, A, NAS_B), at(53, Folder::B));
+        assert_eq!(cause(&line, NAS_B, r"E:\Backup"), at(53, Folder::A));
+        assert_eq!(cause(&english(3, "x"), A, r"E:\Backup"), at(3, Folder::B));
     }
 
     #[test]
     fn the_first_mapped_error_wins() {
         let text = english(32, r"E:\a") + &english(5, r"E:\Backup\b") + &english(53, NAS_B);
-        assert!(explain(&text, A, r"E:\Backup").message.contains("permesso"));
+        assert_eq!(cause(&text, A, r"E:\Backup"), at(5, Folder::B));
+    }
+
+    fn run(outcome: Outcome, cause: Option<Cause>) -> Run {
+        Run {
+            sync_id: Some(1),
+            sync_name: "Foto".into(),
+            source: A.into(),
+            destination: NAS_B.into(),
+            mode: SyncMode::Copy,
+            new: 0,
+            updated: 0,
+            deleted: 0,
+            duration_ms: 1,
+            outcome,
+            started_at: "2026-11-02T21:30:00+01:00".into(),
+            log_path: String::new(),
+            partial: None,
+            cause,
+        }
     }
 
     #[test]
-    fn a_missing_source_asks_about_the_disk_or_the_network() {
+    fn the_card_note_is_made_from_the_cause() {
         assert_eq!(
-            missing_source(r"D:\Foto"),
+            card_note(&run(Outcome::Error, at(53, Folder::B))).unwrap(),
+            r"La cartella di rete \\NAS non era raggiungibile. Controlla che sia collegato e riprova."
+        );
+        assert_eq!(
+            card_note(&run(Outcome::Error, at(3, Folder::A))).unwrap(),
             r"Non trovo la cartella A (D:\Foto). Il disco è collegato?"
         );
         assert_eq!(
-            missing_source(r"\\NAS\Foto"),
-            r"Non trovo la cartella A (\\NAS\Foto). La cartella di rete è raggiungibile?"
+            card_note(&run(Outcome::Error, at(5, Folder::B))).unwrap(),
+            r"Non ho il permesso di usare la cartella B (\\NAS\Backup). Controlla i permessi e riprova."
         );
+    }
+
+    #[test]
+    fn the_card_note_without_a_cause_is_generic_and_a_stop_or_success_say_their_own() {
+        assert_eq!(
+            card_note(&run(Outcome::Error, None)).as_deref(),
+            Some(GENERIC_NOTE)
+        );
+        assert_eq!(
+            card_note(&run(Outcome::Cancelled, None)).as_deref(),
+            Some(STOPPED_NOTE)
+        );
+        assert_eq!(card_note(&run(Outcome::Ok, None)), None);
+    }
+
+    #[test]
+    fn only_a_failed_run_has_an_explanation() {
+        let failed = explain_run(&run(Outcome::Error, at(53, Folder::B))).unwrap();
+        assert_eq!(
+            failed.title,
+            r"Non completato: la cartella di rete \\NAS non è raggiungibile."
+        );
+        assert_eq!(explain_run(&run(Outcome::Cancelled, None)), None);
+        assert_eq!(explain_run(&run(Outcome::Ok, None)), None);
+    }
+
+    #[test]
+    fn a_message_without_advice_is_just_a_title() {
+        let e = Explanation::from("La destinazione non può stare dentro la cartella da copiare.");
+        assert_eq!(e.advice, "");
     }
 }

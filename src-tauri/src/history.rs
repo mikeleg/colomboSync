@@ -1,5 +1,6 @@
 //! `history.jsonl`: append-only, one `Run` per line.
 
+use crate::error_messages::Cause;
 use crate::robocopy::{SyncMode, decode_unilog};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
@@ -32,15 +33,13 @@ pub struct Run {
     /// Local start time, RFC 3339.
     pub started_at: String,
     pub log_path: String,
-    /// Why an `Error` run failed, in plain Italian (runs from before S6 hold the raw robocopy text).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
     /// Files copied before an `Error` or `Cancelled` run stopped (no new/updated split).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub partial: Option<usize>,
-    /// The reason of `error` as the short note under the sync's card on the home screen.
+    /// Why an `Error` run failed (a mapped Windows error code and the folder it is about). The
+    /// texts are made from it when they are shown; runs without it read as a generic failure.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error_note: Option<String>,
+    pub cause: Option<Cause>,
 }
 
 pub fn append(file: &Path, run: &Run) -> io::Result<()> {
@@ -127,9 +126,8 @@ mod tests {
             outcome,
             started_at: "2026-11-02T21:30:00+01:00".into(),
             log_path: r"C:\L\logs\x.log".into(),
-            error: None,
             partial: None,
-            error_note: None,
+            cause: None,
         }
     }
 
@@ -301,15 +299,22 @@ mod tests {
     }
 
     #[test]
-    fn error_note_is_stored_only_when_set() {
+    fn cause_is_stored_only_when_set_and_old_error_lines_still_load() {
         let failed = Run {
-            error_note: Some("Il disco D: non era raggiungibile.".into()),
+            cause: Some(Cause {
+                code: 53,
+                folder: crate::error_messages::Folder::B,
+            }),
             ..run("n", Outcome::Error)
         };
         let json = serde_json::to_string(&failed).unwrap();
-        assert!(json.ends_with(r#","errorNote":"Il disco D: non era raggiungibile."}"#));
+        assert!(json.ends_with(r#","cause":{"code":53,"folder":"B"}}"#));
         assert_eq!(serde_json::from_str::<Run>(&json).unwrap(), failed);
         let ok = serde_json::to_string(&run("n", Outcome::Ok)).unwrap();
-        assert!(!ok.contains("errorNote"));
+        assert!(!ok.contains("cause"));
+
+        // Before S6 a failed run kept robocopy's raw message in `error`: no cause, nothing breaks.
+        let old = r#"{"syncName":"n","source":"D:\\Foto","destination":"E:\\Backup","mode":"Copy","new":0,"updated":0,"deleted":0,"durationMs":1,"outcome":"Error","startedAt":"2026-11-02T21:30:00+01:00","logPath":"C:\\L\\logs\\x.log","error":"robocopy ha restituito il codice 16."}"#;
+        assert_eq!(serde_json::from_str::<Run>(old).unwrap().cause, None);
     }
 }

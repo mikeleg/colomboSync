@@ -1,5 +1,6 @@
 //! Runs the real `robocopy.exe` on temp folders.
 
+use colombo_sync_lib::error_messages::{self, Cause, Folder};
 use colombo_sync_lib::history::{Outcome, Run};
 use colombo_sync_lib::mirror_guard;
 use colombo_sync_lib::robocopy::SyncMode;
@@ -100,11 +101,9 @@ fn robocopy_failure_is_recorded_as_error() {
     let storage = Storage::at(temp.path().join("ColomboSync"));
 
     let a = path_str(&missing);
-    let preview = runner::preview(a, path_str(&b), SyncMode::Copy);
-    assert_eq!(
-        preview.unwrap_err(),
-        format!("Non trovo la cartella A ({a}). Il disco è collegato?")
-    );
+    let failure = runner::preview(a, path_str(&b), SyncMode::Copy).unwrap_err();
+    assert_eq!(failure.title, format!("Non trovo la cartella A ({a})."));
+    assert_eq!(failure.advice, "Il disco è collegato?");
 
     let run = runner::run(
         &storage,
@@ -118,16 +117,15 @@ fn robocopy_failure_is_recorded_as_error() {
     assert_eq!(run.outcome, Outcome::Error);
     // The real log of this robocopy (any Windows language) is read by error code.
     assert_eq!(
-        run.error,
-        Some(format!(
-            "Non completato: non trovo la cartella A ({a}). Il disco è collegato?"
-        ))
+        run.cause,
+        Some(Cause {
+            code: 2,
+            folder: Folder::A
+        })
     );
     assert_eq!(
-        run.error_note,
-        Some(format!(
-            "Non trovo la cartella A ({a}). Il disco è collegato?"
-        ))
+        error_messages::explain_run(&run).unwrap().title,
+        format!("Non completato: non trovo la cartella A ({a}).")
     );
     assert_eq!(run.partial, Some(0), "an Error run keeps a partial count");
     assert_eq!(
@@ -213,7 +211,7 @@ fn cancel_kills_robocopy_and_records_a_cancelled_run() {
         "exit code 1 must not read as Ok"
     );
     assert_eq!((run.new, run.updated, run.deleted), (0, 0, 0));
-    assert!(run.error.is_none());
+    assert!(run.cause.is_none());
     assert!(run.partial.is_some());
     assert!(!active.is_running(), "the robocopy process is gone");
     assert!(
@@ -341,16 +339,19 @@ fn mirror_with_a_missing_or_empty_source_is_blocked_and_never_run() {
     let missing = temp.path().join("scollegato");
     let storage = Storage::at(temp.path().join("ColomboSync"));
 
-    for source in [&empty, &missing] {
-        let preview = runner::preview(path_str(source), path_str(&b), SyncMode::Mirror).unwrap();
-        assert_eq!(
-            preview.blocked.as_deref(),
-            Some(mirror_guard::SOURCE_EMPTY),
-            "{source:?}"
-        );
+    // A that exists and is empty: the guard blocks the mirror.
+    let preview = runner::preview(path_str(&empty), path_str(&b), SyncMode::Mirror).unwrap();
+    assert_eq!(preview.blocked.as_deref(), Some(mirror_guard::SOURCE_EMPTY));
+    assert!(run_mirror(&storage, &empty, &b, preview.counts()).is_err());
 
-        assert!(run_mirror(&storage, source, &b, preview.counts()).is_err());
-    }
+    // A that is not there at all is said as such, in Mirror too (and nothing can be started).
+    let failure = runner::preview(path_str(&missing), path_str(&b), SyncMode::Mirror).unwrap_err();
+    assert_eq!(
+        failure.title,
+        format!("Non trovo la cartella A ({}).", path_str(&missing))
+    );
+    assert!(run_mirror(&storage, &missing, &b, Default::default()).is_err());
+
     assert!(b.join("precious.txt").exists());
     assert!(!storage.history_file().exists(), "nothing was recorded");
 }

@@ -150,7 +150,8 @@ pub fn run(
     let cancelled = active.cancelled.load(Ordering::SeqCst);
     let code = robocopy::exit_code(status).map_err(|e| e.to_string())?;
     let ok = !cancelled && robocopy::is_success(code);
-    let log_text = read_log(&log);
+    // Only a failed or stopped run needs its log: it can be huge.
+    let log_text = if ok { String::new() } else { read_log(&log) };
     let run = Run {
         sync_name,
         source: source.to_string(),

@@ -172,13 +172,24 @@ mod tests {
 mod unix_tests {
     use super::*;
 
-    // What an rsync run prints on its pipe: itemize lines, plus notices that are not files.
-    const STDOUT: &[u8] = "created directory /tmp/B\ncd+++++++++ ./\n>f+++++++++ due.txt\n>f+++++++++ uno.txt\nskipping non-regular file \"l\"\n>f+++++++++ sub/è già.txt\n*deleting   extra.txt\n*deleting   old-dir/\n".as_bytes();
+    const BEFORE_DELETIONS: &str = "created directory /tmp/B\ncd+++++++++ ./\n>f+++++++++ due.txt\n>f+++++++++ uno.txt\nskipping non-regular file \"l\"\n>f+++++++++ sub/è già.txt\n";
+
+    // What an rsync run prints on its pipe: itemize lines, plus notices that are not files. The
+    // padding of `*deleting` is the one of the rsync of this platform.
+    fn stdout() -> Vec<u8> {
+        let word = if cfg!(target_os = "macos") {
+            "*deleting "
+        } else {
+            "*deleting   "
+        };
+        format!("{BEFORE_DELETIONS}{word}extra.txt\n{word}old-dir/\n").into_bytes()
+    }
 
     #[test]
     fn counts_only_file_lines_and_names_the_last_one() {
+        let stdout = stdout();
         let mut follower = StdoutFollower::default();
-        follower.feed(STDOUT);
+        follower.feed(&stdout);
         assert_eq!(
             follower.done(),
             4,
@@ -186,8 +197,9 @@ mod unix_tests {
         );
         assert_eq!(follower.current_file(), "extra.txt");
 
+        // Cut inside the first deletion: only what is complete counts.
         let mut follower = StdoutFollower::default();
-        follower.feed(&STDOUT[..STDOUT.len() - 40]);
+        follower.feed(&stdout[..BEFORE_DELETIONS.len() + 3]);
         assert_eq!(follower.done(), 3);
         assert_eq!(follower.current_file(), "è già.txt");
     }
@@ -195,7 +207,7 @@ mod unix_tests {
     #[test]
     fn a_line_split_across_reads_counts_once() {
         let mut follower = StdoutFollower::default();
-        for chunk in STDOUT.chunks(5) {
+        for chunk in stdout().chunks(5) {
             follower.feed(chunk);
         }
         assert_eq!(follower.done(), 4);

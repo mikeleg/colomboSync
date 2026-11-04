@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod elevation;
 pub mod error_messages;
 pub mod folder_browser;
 pub mod history;
@@ -37,6 +38,7 @@ pub fn run() {
             commands::list_runs,
             commands::read_run_log,
             commands::check_destination,
+            commands::is_elevated,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -1,5 +1,6 @@
 //! Thin `#[tauri::command]` wrappers: robocopy runs on a blocking thread so the UI never freezes.
 
+use crate::elevation;
 use crate::folder_browser::{self, FolderListing};
 use crate::history::{self, Run};
 use crate::path_rules;
@@ -138,4 +139,10 @@ pub async fn browse_folders(path: String) -> Result<FolderListing, String> {
     spawn_blocking(move || folder_browser::browse(&path))
         .await
         .map_err(|e| e.to_string())
+}
+
+/// The app runs as administrator: mapped network drives are then not visible.
+#[tauri::command]
+pub fn is_elevated() -> bool {
+    elevation::is_elevated()
 }

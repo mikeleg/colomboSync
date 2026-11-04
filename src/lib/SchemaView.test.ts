@@ -8,6 +8,8 @@ const picked: SchemaModel = {
   destination: "E:\Backup",
   counts: { new: 148, updated: 3, deleted: 0 },
   caption: "Da fare: copiare 148 file nuovi, aggiornarne 3.",
+  mirror: false,
+  warnCaption: false,
 };
 
 test("shows A, B, the counts and that nothing is deleted in B", () => {
@@ -27,6 +29,22 @@ test("before the folders are chosen it asks for them and shows no numbers", () =
   expect(screen.getAllByText("Scegli la cartella")).toHaveLength(2);
   expect(screen.getAllByText("—")).toHaveLength(2);
   expect(screen.queryByText("Nessun file viene cancellato in B")).toBeNull();
+});
+
+test("mirror: red Specchio chip, an Eliminati da B counter and no 'nothing is deleted' reassurance", () => {
+  render(SchemaView, { model: { ...picked, mirror: true, counts: { new: 148, updated: 3, deleted: 12 } } });
+
+  expect(screen.getByText("Specchio").className).toContain("mirror");
+  expect(screen.getByText("12").nextElementSibling?.textContent).toBe("Eliminati da B");
+  expect(screen.queryByText("Nessun file viene cancellato in B")).toBeNull();
+  expect(screen.queryByText("Copia", { selector: ".chip" })).toBeNull();
+});
+
+test("copy: no Eliminati counter", () => {
+  render(SchemaView, { model: picked });
+
+  expect(screen.getByText("Copia", { selector: ".chip" })).toBeTruthy();
+  expect(screen.queryByText("Eliminati da B")).toBeNull();
 });
 
 test("while a run is going the arrow is animated", () => {

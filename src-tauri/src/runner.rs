@@ -1,6 +1,8 @@
 //! A Preview or a Run end to end: robocopy + parser + storage + history. No Tauri types.
 
 use crate::history::{self, Outcome, Run};
+use crate::mirror_guard;
+use crate::path_rules;
 use crate::preview_parser::{self, Counts, Preview};
 use crate::progress::{Progress, StdoutFollower};
 use crate::robocopy::{self, SyncMode};
@@ -17,6 +19,7 @@ use std::time::{Duration, Instant};
 
 /// Dry run (`/L`): lists what a Run would do, touches nothing. Blocks until robocopy exits.
 pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Preview, String> {
+    path_rules::check_destination(source, destination)?;
     static SEQ: AtomicU32 = AtomicU32::new(0);
     let log = std::env::temp_dir().join(format!(
         "colombosync-anteprima-{}-{}.log",
@@ -24,6 +27,16 @@ pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Previe
         SEQ.fetch_add(1, Ordering::Relaxed)
     ));
     let log_arg = log.to_string_lossy();
+
+    // A missing or empty A would make robocopy fail or empty B: answer "blocked" without running it.
+    if mode == SyncMode::Mirror
+        && let Some(reason) = mirror_guard::source_problem(Path::new(source))
+    {
+        return Ok(Preview {
+            blocked: Some(reason.to_string()),
+            ..Preview::default()
+        });
+    }
 
     let code = robocopy::execute(&robocopy::preview_args(mode, source, destination, &log_arg))
         .map_err(|e| e.to_string())?;
@@ -33,9 +46,46 @@ pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Previe
     if !robocopy::is_success(code) {
         return Err(failure_message(code, &text));
     }
-    Ok(preview_parser::parse(&text, source, destination, |p| {
-        p.exists()
-    }))
+    let mut preview = preview_parser::parse(&text, source, destination, |p| p.exists());
+    if mode == SyncMode::Mirror {
+        preview.blocked = mirror_guard::counts_problem(preview.counts()).map(str::to_string);
+    }
+    Ok(preview)
+}
+
+pub const NO_PREVIEW: &str = "Prima controlla le due cartelle con l’anteprima, poi avvia.";
+
+type LastPreview = Option<(String, String, SyncMode, Counts)>;
+
+/// The last preview shown to the user. A Mirror run takes its counts from here, never from what
+/// the UI sends back, and is refused when no preview of the same A, B and mode came first.
+#[derive(Default)]
+pub struct PreviewMemo(Mutex<LastPreview>);
+
+impl PreviewMemo {
+    pub fn remember(&self, source: &str, destination: &str, mode: SyncMode, counts: Counts) {
+        *self.slot() = Some((source.into(), destination.into(), mode, counts));
+    }
+
+    /// Counts of the preview this run confirms; each preview confirms one run. Copy never
+    /// deletes, so without a matching preview it falls back to the `sent` counts.
+    pub fn take_counts(
+        &self,
+        source: &str,
+        destination: &str,
+        mode: SyncMode,
+        sent: Counts,
+    ) -> Result<Counts, String> {
+        match self.slot().take() {
+            Some((s, d, m, counts)) if s == source && d == destination && m == mode => Ok(counts),
+            _ if mode == SyncMode::Copy => Ok(sent),
+            _ => Err(NO_PREVIEW.to_string()),
+        }
+    }
+
+    fn slot(&self) -> MutexGuard<'_, LastPreview> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
 }
 
 /// The robocopy process of the Run in progress, shared so another thread can stop it.
@@ -135,6 +185,12 @@ pub fn run(
     active: &ActiveRun,
     mut on_progress: impl FnMut(&Progress),
 ) -> Result<Run, String> {
+    path_rules::check_destination(source, destination)?;
+    if mode == SyncMode::Mirror
+        && let Some(reason) = mirror_guard::problem(Path::new(source), counts)
+    {
+        return Err(reason.to_string());
+    }
     let started = Local::now();
     let sync_name = default_sync_name(source);
     let log = storage.log_file(&sync_name, started.naive_local());
@@ -240,6 +296,85 @@ fn failure_message(code: i32, log: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn counts(new: usize, updated: usize, deleted: usize) -> Counts {
+        Counts {
+            new,
+            updated,
+            deleted,
+        }
+    }
+
+    #[test]
+    fn a_mirror_run_takes_its_counts_from_the_matching_preview_once() {
+        let memo = PreviewMemo::default();
+        let sent = counts(9, 9, 0);
+        let (a, b) = (r"D:\Foto", r"E:\Backup");
+
+        assert_eq!(
+            memo.take_counts(a, b, SyncMode::Mirror, sent),
+            Err(NO_PREVIEW.to_string()),
+            "no preview at all"
+        );
+
+        memo.remember(a, b, SyncMode::Mirror, counts(1, 0, 5));
+        assert_eq!(
+            memo.take_counts(a, b, SyncMode::Mirror, sent),
+            Ok(counts(1, 0, 5)),
+            "what the UI sends is ignored"
+        );
+        assert!(
+            memo.take_counts(a, b, SyncMode::Mirror, sent).is_err(),
+            "one preview confirms one run"
+        );
+
+        for (source, destination, mode) in [
+            (r"D:\Altro", b, SyncMode::Mirror),
+            (a, r"E:\Altro", SyncMode::Mirror),
+            (a, b, SyncMode::Copy),
+        ] {
+            memo.remember(a, b, SyncMode::Mirror, counts(1, 0, 0));
+            let taken = memo.take_counts(source, destination, mode, sent);
+            assert_eq!(
+                taken.is_err(),
+                mode == SyncMode::Mirror,
+                "{source} {destination}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_copy_run_without_a_matching_preview_uses_the_sent_counts() {
+        let memo = PreviewMemo::default();
+        assert_eq!(
+            memo.take_counts("A", "B", SyncMode::Copy, counts(2, 1, 0)),
+            Ok(counts(2, 1, 0))
+        );
+    }
+
+    #[test]
+    fn preview_and_run_enforce_the_path_rules_themselves() {
+        let temp = tempfile::tempdir().unwrap();
+        let storage = Storage::at(temp.path().join("ColomboSync"));
+        let cases = [
+            (r"D:\Foto", r"d:\foto\", path_rules::SAME_FOLDER),
+            (r"D:\Foto", r"D:\Foto\Backup", path_rules::INSIDE_SOURCE),
+            (
+                r"D:\Foto\2024",
+                r"D:\Foto",
+                path_rules::SOURCE_INSIDE_DESTINATION,
+            ),
+        ];
+        for (a, b, message) in cases {
+            for mode in [SyncMode::Copy, SyncMode::Mirror] {
+                assert_eq!(preview(a, b, mode).unwrap_err(), message);
+                let active = ActiveRun::default();
+                let result = run(&storage, a, b, mode, Counts::default(), &active, |_| {});
+                assert_eq!(result.unwrap_err(), message);
+            }
+        }
+        assert!(!storage.history_file().exists());
+    }
 
     #[test]
     fn default_name_is_copia_di_last_folder_of_a() {

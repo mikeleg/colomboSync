@@ -1,6 +1,8 @@
 pub mod commands;
 pub mod folder_browser;
 pub mod history;
+pub mod mirror_guard;
+pub mod path_rules;
 pub mod preview_parser;
 pub mod progress;
 pub mod robocopy;
@@ -12,6 +14,7 @@ pub fn run() {
     use tauri::{Emitter, Manager};
     tauri::Builder::default()
         .manage(runner::ActiveRun::default())
+        .manage(runner::PreviewMemo::default())
         .on_window_event(|window, event| {
             // Closing during a run: the UI asks first (same question as "Ferma la copia").
             if let tauri::WindowEvent::CloseRequested { api, .. } = event
@@ -28,6 +31,7 @@ pub fn run() {
             commands::browse_folders,
             commands::list_runs,
             commands::read_run_log,
+            commands::check_destination,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -7,6 +7,10 @@ export interface SchemaModel {
   /** null shows "—" instead of numbers. */
   counts: Counts | null;
   caption: string;
+  /** Mirror mode: B and the arrow turn red and an "Eliminati da B" counter appears. */
+  mirror: boolean;
+  /** Draw the caption as a warning (red). */
+  warnCaption: boolean;
   /** A run is going: the arrow is animated. */
   running?: boolean;
 }
@@ -16,4 +20,6 @@ export const emptySchema: SchemaModel = {
   destination: "",
   counts: null,
   caption: "Crea una sincronizzazione per vedere lo schema.",
+  mirror: false,
+  warnCaption: false,
 };

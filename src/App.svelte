@@ -4,10 +4,18 @@
   import { emptySchema, type SchemaModel } from "./lib/schema";
   import SchemaView from "./lib/SchemaView.svelte";
   import ThemeSwitch from "./lib/ThemeSwitch.svelte";
+  import type { Sync } from "./lib/types";
   import Wizard from "./lib/wizard/Wizard.svelte";
 
   let view = $state<"home" | "history" | "wizard">("home");
   let schema = $state<SchemaModel>(emptySchema);
+  /** The saved sync the wizard re-runs from its preview; undefined when it creates a new one. */
+  let rerun = $state<Sync>();
+
+  function openWizard(sync?: Sync) {
+    rerun = sync;
+    view = "wizard";
+  }
 
   function leaveWizard() {
     view = "home";
@@ -40,11 +48,11 @@
         </nav>
       {/if}
       {#if view === "home"}
-        <Home onnew={() => (view = "wizard")} />
+        <Home onnew={() => openWizard()} onrun={openWizard} onschema={(model) => (schema = model)} />
       {:else if view === "history"}
         <History />
       {:else}
-        <Wizard onschema={(model) => (schema = model)} onexit={leaveWizard} />
+        <Wizard sync={rerun} onschema={(model) => (schema = model)} onexit={leaveWizard} />
       {/if}
     </main>
     <aside class="schema" aria-label="Schema di cosa succede">

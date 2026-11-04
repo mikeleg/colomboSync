@@ -50,3 +50,17 @@ export interface FolderListing {
   /** Plain Italian message when the folder could not be opened. */
   error: string | null;
 }
+
+/** A saved A→B pair (src-tauri/src/sync_store.rs). */
+export interface Sync {
+  id: number;
+  name: string;
+  source: string;
+  destination: string;
+  mode: SyncMode;
+}
+
+/** A saved sync as the home lists it, with how its latest Run ended (null: never run). */
+export interface SyncSummary extends Sync {
+  lastRun: { startedAt: string; outcome: Outcome } | null;
+}

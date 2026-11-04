@@ -1,4 +1,4 @@
-import type { Counts } from "./types";
+import type { Counts, Outcome } from "./types";
 
 /** What SchemaView draws. Whoever owns the current screen builds it and hands it to App. */
 export interface SchemaModel {
@@ -13,6 +13,8 @@ export interface SchemaModel {
   warnCaption: boolean;
   /** A run is going: the arrow is animated. */
   running?: boolean;
+  /** How the run ended: Ok and Error each get one pulse on B. */
+  outcome?: Outcome;
 }
 
 export const emptySchema: SchemaModel = {

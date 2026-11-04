@@ -21,6 +21,10 @@ export const defaultSyncName = (source: string) => invoke<string>("default_sync_
 /** Drives when `path` is empty, otherwise the subfolders of `path`. */
 export const browseFolders = (path: string) => invoke<FolderListing>("browse_folders", { path });
 
+/** Rejects (with the Italian message to show) a B that is A itself or inside A. */
+export const checkDestination = (source: string, destination: string) =>
+  invoke<void>("check_destination", { source, destination });
+
 /** Past runs, newest first. */
 export const listRuns = () => invoke<Run[]>("list_runs");
 

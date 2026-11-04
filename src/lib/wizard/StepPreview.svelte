@@ -1,10 +1,12 @@
 <script lang="ts">
   import Icon from "../Icon.svelte";
+  import Warnbox from "../Warnbox.svelte";
   import { formatNumber, formatSize } from "../format";
   import type { FileGroup, Preview } from "../types";
 
   let {
     scanning,
+    mirror,
     preview,
     error,
     saved = false,
@@ -13,6 +15,7 @@
     onback,
   }: {
     scanning: boolean;
+    mirror: boolean;
     preview: Preview | null;
     error: string;
     /** Re-running a saved sync: nothing to save, nothing to change, "No" just returns to the list. */
@@ -23,11 +26,14 @@
   } = $props();
 
   const total = $derived(preview ? preview.new.count + preview.updated.count + preview.deleted.count : 0);
+  // The consent is per run: this component is built again every time the preview is shown, so it starts unchecked.
+  const needsConsent = $derived(mirror && (preview?.deleted.count ?? 0) > 0);
+  let consent = $state(false);
 </script>
 
-{#snippet group(title: string, why: string, g: FileGroup)}
+{#snippet group(title: string, why: string, g: FileGroup, del = false)}
   {#if g.count > 0}
-    <details class="grp" open>
+    <details class="grp" class:del open>
       <summary><span>{title}</span><b>{formatNumber(g.count)}</b></summary>
       <p class="why">{why}</p>
       <ul class="files">
@@ -48,7 +54,7 @@
 {:else if error}
   <div class="err-msg" role="alert">{error}</div>
   <div class="btns back"><button type="button" class="link" onclick={onback}>Indietro</button></div>
-{:else if preview && total === 0}
+{:else if preview && total === 0 && !preview.blocked}
   <div class="empty">
     <Icon name="check" />
     <h2>B è già aggiornato</h2>
@@ -61,17 +67,44 @@
     </div>
   </div>
 {:else if preview}
-  <p class="sum">
-    Ecco cosa verrà fatto: <b>{formatNumber(preview.new.count)}</b> file nuovi,
-    <b>{formatNumber(preview.updated.count)}</b> da aggiornare. Peso totale da copiare:
-    <b>{formatSize(preview.bytes)}</b>.
-  </p>
+  {#if preview.blocked}
+    <div class="guard">
+      <Warnbox>
+        <p>{preview.blocked}</p>
+      </Warnbox>
+    </div>
+  {:else}
+    <p class="sum">
+      {mirror ? "Ecco cosa succederà in B" : "Ecco cosa verrà fatto"}: <b>{formatNumber(preview.new.count)}</b> file nuovi,
+      <b>{formatNumber(preview.updated.count)}</b> da aggiornare{#if mirror}, <b>{formatNumber(preview.deleted.count)}</b> da cancellare{/if}.
+      Peso totale da copiare: <b>{formatSize(preview.bytes)}</b>.
+    </p>
+  {/if}
   {@render group("Da copiare (nuovi)", "File che ci sono in A e non ci sono ancora in B.", preview.new)}
   {@render group("Da aggiornare", "File che in B sono più vecchi di quelli in A.", preview.updated)}
-  <section class="final" aria-labelledby="fq">
-    <h2 id="fq">Avviare adesso?</h2>
+  {#if mirror}
+    {@render group(
+      "Da cancellare in B",
+      "File che ci sono solo in B. Verranno cancellati e non finiscono nel Cestino.",
+      preview.deleted,
+      true,
+    )}
+    {#if preview.deleted.count === 0 && !preview.blocked}
+      <p class="sum">In B non ci sono file in più: non verrà cancellato niente.</p>
+    {/if}
+  {/if}
+  {#if needsConsent && !preview.blocked}
+    <label class="ack">
+      <input type="checkbox" bind:checked={consent} />
+      <span>Ho capito: {formatNumber(preview.deleted.count)} file verranno cancellati da B</span>
+    </label>
+  {/if}
+  <section class="final" aria-labelledby={preview.blocked ? undefined : "fq"}>
+    {#if !preview.blocked}<h2 id="fq">Avviare adesso?</h2>{/if}
     <div class="btns">
-      <button type="button" class="btn primary big" onclick={onstart}>Sì, avvia</button>
+      {#if !preview.blocked}
+        <button type="button" class="btn primary big" disabled={needsConsent && !consent} onclick={onstart}>Sì, avvia</button>
+      {/if}
       <button type="button" class="btn big" onclick={onstop}>{saved ? "No, torna all’elenco" : "No, salva e basta"}</button>
       {#if !saved}<button type="button" class="link" onclick={onback}>Indietro, cambio qualcosa</button>{/if}
     </div>
@@ -145,10 +178,50 @@
     border-radius: 999px;
     background: var(--card);
   }
+  .grp.del {
+    background: var(--danger-soft);
+    color: var(--on-danger-soft);
+  }
+  .grp.del > summary b {
+    background: var(--danger);
+    color: var(--card);
+  }
+  .grp.del > summary:hover {
+    background: color-mix(in srgb, var(--on-danger-soft) 8%, transparent);
+  }
   .why {
     padding: 0 20px;
     color: var(--fg-2);
     font-size: 15px;
+  }
+  .grp.del .why,
+  .grp.del .more {
+    color: var(--on-danger-soft);
+  }
+  .guard {
+    margin-bottom: 16px;
+  }
+  .ack {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 16px 20px;
+    border-radius: var(--r);
+    background: var(--danger-soft);
+    color: var(--on-danger-soft);
+    margin: 14px 0;
+    cursor: pointer;
+    font-weight: 700;
+  }
+  .ack:hover {
+    background: color-mix(in srgb, var(--on-danger-soft) 8%, var(--danger-soft));
+  }
+  .ack input {
+    width: 28px;
+    height: 28px;
+    flex: none;
+    accent-color: var(--danger);
+    margin: 0;
   }
   .files {
     margin: 10px 0 0;

@@ -15,6 +15,8 @@ export interface Preview {
   updated: FileGroup;
   deleted: FileGroup;
   bytes: number;
+  /** MirrorGuard: why a mirror run must not start (Italian text from Rust); null when it may. */
+  blocked: string | null;
 }
 
 export interface Counts {

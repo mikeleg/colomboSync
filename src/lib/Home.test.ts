@@ -108,15 +108,24 @@ test("the first card is shown in the schema; selecting another shows its A and B
   await screen.findByRole("heading", { name: "Copia di Foto" });
 
   const caption = 'Premi "Controlla e avvia": prima ti mostro cosa cambierà, poi decidi tu.';
-  expect(onschema).toHaveBeenLastCalledWith({ source: foto.source, destination: foto.destination, counts: null, caption });
+  expect(onschema).toHaveBeenLastCalledWith({
+    source: foto.source,
+    destination: foto.destination,
+    counts: null,
+    caption,
+    mirror: false,
+    warnCaption: false,
+  });
 
-  await fireEvent.click(card("Documenti ufficio"));
+  await fireEvent.click(card("Documenti ufficio")); // a mirror sync: the schema is in mirror mode
 
   expect(onschema).toHaveBeenLastCalledWith({
     source: documenti.source,
     destination: documenti.destination,
     counts: null,
     caption,
+    mirror: true,
+    warnCaption: false,
   });
 });
 

@@ -9,6 +9,7 @@
     plus: '<path d="M12 5v14M5 12h14"/>',
     play: '<path d="M7 5l12 7-12 7z" fill="currentColor"/>',
     tick: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    warn: '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>',
     up: '<path d="M12 19V5M5 12l7-7 7 7"/>',
     stop: '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/>',
     cross: '<circle cx="12" cy="12" r="10"/><path d="M8 8l8 8M16 8l-8 8"/>',

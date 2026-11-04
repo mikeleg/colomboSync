@@ -30,6 +30,8 @@ pub struct Preview {
     pub deleted: FileGroup,
     /// Size in bytes of what would be copied (new + updated).
     pub bytes: u64,
+    /// Why this mirror run must not start (MirrorGuard), in Italian; `None` when it may.
+    pub blocked: Option<String>,
 }
 
 /// How many files a run changed; what the UI sends back from the preview it just showed.

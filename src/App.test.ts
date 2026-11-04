@@ -15,6 +15,7 @@ const preview = (n: number, u: number): Preview => ({
   updated: { count: u, files: u ? ["b.pdf"] : [] },
   deleted: { count: 0, files: [] },
   bytes: 3_000_000,
+  blocked: null,
 });
 
 const doneRun: Run = {
@@ -43,7 +44,14 @@ const savedSync: SyncSummary = {
 type Args = Record<string, unknown> | undefined;
 type Handlers = Partial<
   Record<
-    "preview_sync" | "run_sync" | "list_syncs" | "save_sync" | "default_sync_name" | "list_runs" | "read_run_log",
+    | "preview_sync"
+    | "run_sync"
+    | "list_syncs"
+    | "save_sync"
+    | "default_sync_name"
+    | "check_destination"
+    | "list_runs"
+    | "read_run_log",
     (args: Args) => unknown
   >
 >;
@@ -54,6 +62,7 @@ function backend(handlers: Handlers = {}) {
     browse_folders: () => ({ parent: "", folders: [], error: null }),
     list_syncs: () => [],
     default_sync_name: () => "Copia di Foto",
+    check_destination: () => undefined, // B is fine
     save_sync: (args) => ({ id: 7, ...args }),
   };
   invokeMock.mockImplementation(async (cmd, args) => {
@@ -368,6 +377,42 @@ test("No, torna all’elenco leaves a saved sync as it is and shows the list aga
   expect(calls("save_sync")).toHaveLength(0);
 });
 
+test("Controlla e avvia on a saved Mirror sync still shows the red group and asks for the consent before running", async () => {
+  const mirrorSync: SyncSummary = { ...savedSync, mode: "Mirror" };
+  backend({
+    list_syncs: () => [mirrorSync],
+    preview_sync: () => ({ ...preview(20, 1), deleted: { count: 3, files: ["vecchio.txt"] } }),
+    run_sync: () => doneRun,
+  });
+  render(App);
+  expect(
+    ((await screen.findByRole("heading", { name: "Foto di Anna" })).closest("li") as HTMLElement).textContent,
+  ).toContain("Specchio");
+
+  await click(screen.getByRole("button", { name: "Controlla e avvia Foto di Anna" }));
+
+  expect(calls("preview_sync")).toEqual([
+    ["preview_sync", { source: "D:\\Foto", destination: "E:\\Backup", mode: "Mirror" }],
+  ]);
+  const start = (await screen.findByRole("button", { name: "Sì, avvia" })) as HTMLButtonElement;
+  expect(screen.getByText("Da cancellare in B")).toBeTruthy();
+  expect(calls("run_sync")).toHaveLength(0);
+  expect(start.disabled).toBe(true);
+
+  await fireEvent.click(screen.getByLabelText("Ho capito: 3 file verranno cancellati da B"));
+  await click(start);
+
+  await screen.findByText(/Fatto:/);
+  expect(invokeMock).toHaveBeenLastCalledWith(
+    "run_sync",
+    expect.objectContaining({
+      sync: expect.objectContaining({ id: 7, mode: "Mirror" }),
+      counts: { new: 20, updated: 1, deleted: 3 },
+    }),
+  );
+  expect(calls("save_sync")).toHaveLength(0);
+});
+
 test("an unreadable syncs.json says so, shows no list and does not let a new sync be started over it", async () => {
   backend({
     list_syncs: () => {
@@ -535,4 +580,182 @@ test("closing the window during a run asks to stop the copy", async () => {
 
   expect(await screen.findByRole("alertdialog")).toBeTruthy();
   expect(screen.getByText("Vuoi fermare la copia? I file già copiati restano in B.")).toBeTruthy();
+});
+
+const toOpzioni = async () => {
+  await click("Nuova sincronizzazione");
+  await typeInto(/Percorso/, String.raw`D:\Foto`);
+  await click("Avanti");
+  await typeInto(/Percorso/, String.raw`E:\Backup`);
+  await click("Avanti");
+  await screen.findByDisplayValue("Copia di Foto");
+  await click("Avanti"); // Come la chiamo?
+  await screen.findByRole("heading", { name: "Opzioni" });
+};
+const mirrorSwitch = () => screen.getByRole("switch", { name: "Rendi B identico ad A (specchio)" }) as HTMLInputElement;
+
+test("Opzioni: advanced options are collapsed and mirror is off", async () => {
+  backend({});
+  render(App);
+  await toOpzioni();
+
+  expect(screen.getByText("Opzioni avanzate").closest("details")?.open).toBe(false);
+  expect(mirrorSwitch().checked).toBe(false);
+  expect(screen.queryByText("Attenzione: questa opzione cancella dei file")).toBeNull();
+  expect(screen.getByText("Nessun file viene cancellato in B")).toBeTruthy();
+});
+
+test("turning on the mirror switch shows the red warning at once and the schema becomes Specchio", async () => {
+  backend({});
+  render(App);
+  await toOpzioni();
+
+  await fireEvent.click(mirrorSwitch());
+
+  expect(screen.getByRole("alert").textContent).toContain("Attenzione: questa opzione cancella dei file");
+  expect(screen.getByRole("alert").textContent).toContain("Prima di partire vedrai l’elenco dei file che verranno cancellati.");
+  const schema = screen.getByRole("complementary");
+  expect(schema.textContent).toContain("Specchio");
+  expect(schema.textContent).toContain("Eliminati da B");
+  expect(schema.textContent).not.toContain("Nessun file viene cancellato in B");
+
+  await fireEvent.click(mirrorSwitch());
+  expect(screen.queryByText("Attenzione: questa opzione cancella dei file")).toBeNull();
+  expect(screen.getByRole("complementary").textContent).not.toContain("Eliminati da B");
+});
+
+test("mirror on: the preview runs in Mirror mode, lists what is deleted and the schema counts it", async () => {
+  backend({
+    preview_sync: () => ({ ...preview(20, 1), deleted: { count: 12, files: ["vecchio.txt"] } }),
+    run_sync: () => ({ ...doneRun, mode: "Mirror", deleted: 12 }),
+  });
+  render(App);
+  await toOpzioni();
+  await fireEvent.click(mirrorSwitch());
+  await click("Avanti");
+
+  expect(invokeMock).toHaveBeenCalledWith("preview_sync", {
+    source: String.raw`D:\Foto`,
+    destination: String.raw`E:\Backup`,
+    mode: "Mirror",
+  });
+  expect((await screen.findByText("Da cancellare in B")).nextElementSibling?.textContent).toBe("12");
+  expect(screen.getByText("12", { selector: "aside b" })).toBeTruthy();
+  const start = screen.getByRole("button", { name: "Sì, avvia" }) as HTMLButtonElement;
+  expect(start.disabled).toBe(true);
+
+  await fireEvent.click(screen.getByLabelText("Ho capito: 12 file verranno cancellati da B"));
+  await click(start);
+
+  expect(await screen.findByText(/Fatto: 2 file copiati, 1 aggiornato, 12 cancellati da B/)).toBeTruthy();
+  expect(invokeMock).toHaveBeenLastCalledWith("run_sync", {
+    sync: {
+      id: 7,
+      name: "Copia di Foto",
+      source: String.raw`D:\Foto`,
+      destination: String.raw`E:\Backup`,
+      mode: "Mirror",
+    },
+    counts: { new: 20, updated: 1, deleted: 12 },
+  });
+});
+
+test("consent is per run: going back and opening the preview again unchecks it", async () => {
+  backend({ preview_sync: () => ({ ...preview(20, 1), deleted: { count: 3, files: ["x"] } }) });
+  render(App);
+  await toOpzioni();
+  await fireEvent.click(mirrorSwitch());
+  await click("Avanti");
+  await fireEvent.click(await screen.findByLabelText(/Ho capito/));
+
+  await click("Indietro, cambio qualcosa");
+  await click("Avanti");
+
+  expect(((await screen.findByLabelText(/Ho capito/)) as HTMLInputElement).checked).toBe(false);
+});
+
+test("MirrorGuard: a blocked mirror preview shows Rust's reason, in the schema too, and offers no Sì, avvia", async () => {
+  const reason = "Motivo deciso da Rust: non si parte.";
+  backend({ preview_sync: () => ({ ...preview(0, 0), blocked: reason }) });
+  render(App);
+  await toOpzioni();
+  await fireEvent.click(mirrorSwitch());
+  await click("Avanti");
+
+  expect((await screen.findAllByText(reason)).length).toBe(2); // the warning and the schema caption
+  expect(screen.getByRole("complementary").textContent).toContain(reason);
+  expect(screen.getByRole("complementary").textContent).not.toContain("B è già aggiornato");
+  expect(screen.queryByRole("button", { name: "Sì, avvia" })).toBeNull();
+});
+
+test("a blocked preview that still counts files does not say 'Da fare' in the schema", async () => {
+  const reason = "Motivo deciso da Rust: non si parte.";
+  backend({ preview_sync: () => ({ ...preview(2, 1), blocked: reason }) });
+  render(App);
+  await toOpzioni();
+  await fireEvent.click(mirrorSwitch());
+  await click("Avanti");
+
+  await screen.findAllByText(reason);
+  expect(screen.getByRole("complementary").textContent).not.toContain("Da fare");
+});
+
+test("Dove: Avanti is blocked with the message from Rust when B is A or inside A", async () => {
+  let message = "La destinazione è la stessa cartella da copiare. Scegline un’altra.";
+  backend({
+    check_destination: () => {
+      throw message;
+    },
+  });
+  render(App);
+  await click("Nuova sincronizzazione");
+  await typeInto(/Percorso/, String.raw`D:\Foto`);
+  await click("Avanti");
+  await typeInto(/Percorso/, "d:\\foto\\");
+
+  await click("Avanti");
+
+  expect(invokeMock).toHaveBeenCalledWith("check_destination", {
+    source: String.raw`D:\Foto`,
+    destination: "d:\\foto\\",
+  });
+  expect(screen.getByRole("alert").textContent).toContain(message);
+  expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();
+
+  message = "La destinazione non può stare dentro la cartella da copiare.";
+  await typeInto(/Percorso/, String.raw`D:\Foto\Backup`);
+  await click("Avanti");
+
+  expect(screen.getByRole("alert").textContent).toContain(message);
+  expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();
+});
+
+test("Dove: if the paths change while they are being checked, the new ones are checked before moving on", async () => {
+  let release: () => void = () => {};
+  let calls = 0;
+  backend({
+    check_destination: () => {
+      calls++;
+      if (calls === 1) return new Promise<void>((resolve) => (release = resolve));
+      throw "La destinazione non può stare dentro la cartella da copiare.";
+    },
+  });
+  render(App);
+  await click("Nuova sincronizzazione");
+  await typeInto(/Percorso/, String.raw`D:\Foto`);
+  await click("Avanti");
+  await typeInto(/Percorso/, String.raw`E:\Backup`);
+  const first = click("Avanti");
+
+  await typeInto(/Percorso/, String.raw`D:\Foto\Backup`); // changed while the first check is pending
+  release();
+  await first;
+  await vi.waitFor(() => expect(calls).toBe(2));
+
+  expect(invokeMock).toHaveBeenLastCalledWith("check_destination", {
+    source: String.raw`D:\Foto`,
+    destination: String.raw`D:\Foto\Backup`,
+  });
+  await vi.waitFor(() => expect(screen.getByRole("alert").textContent).toContain("non può stare dentro"));
+  expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();
 });

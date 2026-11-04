@@ -33,7 +33,14 @@
   $effect(() => {
     onschema(
       selected
-        ? { source: selected.source, destination: selected.destination, counts: null, caption: CAPTION }
+        ? {
+            source: selected.source,
+            destination: selected.destination,
+            counts: null,
+            caption: CAPTION,
+            mirror: selected.mode === "Mirror",
+            warnCaption: false,
+          }
         : emptySchema,
     );
   });

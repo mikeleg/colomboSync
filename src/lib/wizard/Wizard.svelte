@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import Icon from "../Icon.svelte";
-  import { defaultSyncName, onCloseRequested, previewSync, runSync, saveSync } from "../api";
+  import { checkDestination, defaultSyncName, onCloseRequested, previewSync, runSync, saveSync } from "../api";
   import { formatNumber } from "../format";
   import type { SchemaModel } from "../schema";
   import type { Counts, Preview, Run, Sync, SyncMode } from "../types";
@@ -34,12 +34,11 @@
     { id: "options", label: "Opzioni", title: "Opzioni" },
     { id: "preview", label: "Anteprima", title: "Anteprima" },
   ];
-  const mode: SyncMode = sync?.mode ?? "Copy";
-
   let phase = $state<"steps" | "running" | "result">("steps");
   let step = $state(sync ? STEPS.length - 1 : 0);
   let source = $state(sync?.source ?? "");
   let destination = $state(sync?.destination ?? "");
+  let mirror = $state(sync?.mode === "Mirror");
   let name = $state(sync?.name ?? "");
   let nameTouched = $state(!!sync);
   let error = $state("");
@@ -63,6 +62,7 @@
     };
   });
 
+  const mode = $derived<SyncMode>(mirror ? "Mirror" : "Copy");
   const stepId = $derived(STEPS[step].id);
 
   const previewCounts = $derived<Counts | null>(
@@ -79,31 +79,38 @@
       const ok = run?.outcome === "Ok";
       const counts = run && ok ? { new: run.new, updated: run.updated, deleted: run.deleted } : null;
       const caption = ok ? "Fatto." : run?.outcome === "Cancelled" ? "Annullato." : "Non completato.";
-      return { ...places, counts, caption };
+      return { ...places, counts, caption, mirror, warnCaption: false };
     }
-    if (phase === "running") return { ...places, counts: previewCounts, caption: "Sto copiando…", running: true };
+    if (phase === "running") {
+      return { ...places, counts: previewCounts, caption: "Sto copiando…", running: true, mirror, warnCaption: mirror };
+    }
     if (stepId === "preview" && scanning) {
-      return { ...places, counts: null, caption: "Sto controllando le due cartelle…" };
+      return { ...places, counts: null, caption: "Sto controllando le due cartelle…", mirror, warnCaption: mirror };
+    }
+    if (stepId === "preview" && preview?.blocked) {
+      return { ...places, counts: previewCounts, caption: preview.blocked, mirror, warnCaption: true };
     }
     if (stepId === "preview" && preview && previewCounts) {
       const { new: n, updated: u, deleted: d } = previewCounts;
       const caption =
         n + u + d === 0
           ? "B è già aggiornato."
-          : `Da fare: copiare ${formatNumber(n)} file nuovi, aggiornarne ${formatNumber(u)}.`;
-      return { ...places, counts: previewCounts, caption };
+          : `Da fare: copiare ${formatNumber(n)} file nuovi, aggiornarne ${formatNumber(u)}${mirror ? `, cancellarne ${formatNumber(d)} da B` : ""}.`;
+      return { ...places, counts: previewCounts, caption, mirror, warnCaption: mirror };
     }
     const caption = !places.source
       ? "Scegli la cartella da copiare."
       : !places.destination
         ? "Ora scegli dove mettere la copia."
-        : "I file nuovi e modificati di A verranno copiati in B. In B non cancello niente.";
-    return { ...places, counts: null, caption };
+        : mirror
+          ? "SPECCHIO: B diventerà identico ad A. I file che ci sono solo in B verranno cancellati."
+          : "I file nuovi e modificati di A verranno copiati in B. In B non cancello niente.";
+    return { ...places, counts: null, caption, mirror, warnCaption: mirror };
   });
 
   $effect(() => onschema(schema));
 
-  function next() {
+  async function next() {
     if (stepId === "source" && !source.trim()) {
       error = "Scegli prima la cartella da copiare.";
       return;
@@ -116,6 +123,21 @@
     if (stepId === "name" && !name.trim()) {
       error = "Scrivi un nome per riconoscere questa sincronizzazione.";
       return;
+    }
+    if (stepId === "destination") {
+      const here = step;
+      let checked: string[];
+      do {
+        checked = [source.trim(), destination.trim()];
+        try {
+          await checkDestination(checked[0], checked[1]);
+        } catch (e) {
+          error = String(e);
+          return;
+        }
+        // The user may have edited a path while Rust was answering: check what is there now.
+      } while (checked[0] !== source.trim() || checked[1] !== destination.trim());
+      if (step !== here) return; // a second click got there first
     }
     error = "";
     step++;
@@ -219,10 +241,11 @@
     {:else if stepId === "name"}
       <StepName bind:name {error} onedit={editName} onenter={next} />
     {:else if stepId === "options"}
-      <StepOptions />
+      <StepOptions bind:mirror />
     {:else if stepId === "preview"}
       <StepPreview
         {scanning}
+        {mirror}
         {preview}
         error={previewError}
         saved={!!sync}

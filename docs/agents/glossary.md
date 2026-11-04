@@ -13,5 +13,5 @@ Use these names in Rust and TypeScript. UI shows the Italian column.
 | `Run` | copia / esecuzione | One execution of a `Sync`. Outcome `Ok` / `Error` / `Cancelled` (OK / Errore / Annullato). |
 | `History` | Storico | Append-only `history.jsonl`, one `Run` per line, newest shown first. |
 | `SyncStore` | Le tue sincronizzazioni | `syncs.json`. |
-| `MirrorGuard` | – | Blocks a mirror run when A looks empty/unplugged or deletes exceed kept files. |
-| `SchemaView` | schema | The A → B diagram with counters, always visible. |
+| `MirrorGuard` | – | Blocks a mirror run when A is missing or empty, or when deleted > new + updated. |
+| `SchemaView` | schema | The A → B diagram with counters, visible on home and in the wizard/run/result (Storico shows the history legend instead). |

@@ -2,42 +2,40 @@
 
 Scope: ./scope.md · Prototype (flow, copy, look): ./prototype.html · Implementer: agent alone · Tracker: none (markdown only)
 
-Order is dependency order. A slice with no shared "Blocked by" can start in parallel.
+Order is dependency order. Checkpoints are not slices: they are a real non-technical user trying the portable exe, before the next slice starts.
 
 ```
-S1 ──┬── S2 (mirror)
-     ├── S3 (saved syncs) ── S5 (progress + cancel)
-     ├── S4 (history)
-     └── S6 (plain-language errors)
+S1 (done) ── S1b (new look + wizard details) ──┬── [checkpoint 1: Copy mode] ── S2 (mirror) ── [checkpoint 2: mirror]
+     │                                         └── S3 (saved syncs) ──┐
+     ├── S4 (history) ───────────────────────────────────────────────┴── S6 (plain-language errors)
+     └── S5 (progress + stop)
 ```
+
+- S3, S4 and S5 are independent of S2. S4 and S5 need only S1 (S4 reads `history.jsonl`, S5 extends the run).
+- **S2, S3 and S6 touch the same Svelte files** (`Wizard`, `StepPreview`, `StepResult`, home): do not run them in parallel. S3 → S6 is sequential for the same reason (S6 adds a note to the home card built in S3).
+- S4 and S1b both touch the app shell and `theme.css`: merge S1b first if both are in flight.
 
 ## Shared conventions (apply to every slice)
 
-> **Stack changed 2026-11-03 (user):** Tauri 2 + Svelte 5 replaces WinForms/net48. Where a slice's notes still name C#/WinForms things, translate with the table below. Agent guide: `/CLAUDE.md` and `docs/agents/`.
-
-- **Layout**: Svelte 5 + Vite + TypeScript at repo root (`src/`), Rust in `src-tauri/`. Test with `npm test` (vitest) and `cargo test` (in `src-tauri/`). Portable build: `npm run portable` → single `.exe` in `src-tauri\target\release\`, no installer (WebView2 assumed present).
+- **Layout**: Svelte 5 + Vite + TypeScript at repo root (`src/`), Rust in `src-tauri/`. Test with `npm test` (vitest) and `cargo test` (in `src-tauri/`). Portable build: `npm run portable` → single `.exe` in `src-tauri\target\release\`, no installer (WebView2 assumed present). Agent guide: `/CLAUDE.md` and `docs/agents/`.
+- **Rust**: one module per concern in `src-tauri/src/` (`robocopy`, `preview_parser`, `history`, `storage`, `runner`, …), exposed through async `#[tauri::command]`s (blocking work in `tauri::async_runtime::spawn_blocking`) and events to the UI. Unit tests are `#[test] fn snake_case_name()` next to the module; integration tests with temp dirs go in `src-tauri/tests/`.
+- **Svelte**: one component per wizard step in `src/lib/`; talks to Rust only via `invoke` and events.
 - **Domain terms** (use them in code, Rust and TS): `Sync` (saved A→B pair: name, source, destination, mode), `SyncMode` (`Copy` | `Mirror`), `Preview` (lists New / Updated / Deleted), `Run` (one execution, recorded in `History`).
-- **Engine (Rust)**: module `robocopy` builds arguments, runs `%SystemRoot%\System32\robocopy.exe` hidden (`CREATE_NO_WINDOW`), maps exit codes (0–7 success, ≥ 8 failure). Always `/R:1 /W:1`. Never parse localized labels (see scope.md, Decisions). `/UNILOG` is UTF-16LE with BOM.
-- **Storage (Rust)** in `%LOCALAPPDATA%\ColomboSync\` (read the `LOCALAPPDATA` env var, not Tauri's app dir): `syncs.json`, `history.jsonl`, `logs\<yyyyMMdd-HHmmss>-<sync>.log`. Serialization via `serde_json`.
-- **Look**: copy tokens (light theme) and texts from `prototype.html`; tonal fills, no borders, square corners, Segoe UI. Colors as CSS custom properties in one place (`src/theme.css`). Schema = one Svelte component `SchemaView.svelte` (inline SVG), docked right, visible on every screen.
+- **Engine**: module `robocopy` builds arguments, runs `%SystemRoot%\System32\robocopy.exe` hidden (`CREATE_NO_WINDOW`), maps exit codes (0–7 success, ≥ 8 failure). Always `/R:1 /W:1`. Never parse localized labels (see scope.md, Decisions). `/UNILOG` is UTF-16LE with BOM.
+- **Storage** in `%LOCALAPPDATA%\ColomboSync\` (read the `LOCALAPPDATA` env var, not Tauri's app dir): `syncs.json`, `history.jsonl`, `logs\<yyyyMMdd-HHmmss>-<sync>.log`. Serialization via `serde` / `serde_json`.
+- **Look**: tokens and texts from `prototype.html` (rounded corners, bordered inputs, soft shadows, Nunito, light + dark). Colors as CSS custom properties in one place (`src/theme.css`). Schema = one Svelte component `SchemaView.svelte` (inline SVG), docked right: **visible on home and in the wizard/run/result; the Storico tab shows the history legend instead**.
 - **UI language**: Italian, exactly the wording of the prototype unless a slice says otherwise.
-
-| Backlog says (C#) | Means (Tauri) |
-|---|---|
-| class `Robocopy`, `PreviewParser`, `History`, `SyncStore`, `ErrorMessages`, `PathRules`, `MirrorGuard` | Rust module `robocopy`, `preview_parser`, `history`, `sync_store`, `error_messages`, `path_rules`, `mirror_guard` in `src-tauri/src/` |
-| `XxxTests.Some_case` (xUnit) | `#[test] fn some_case()` in that module's `tests` (integration with temp dirs: `src-tauri/tests/`) |
-| Form / step / `SchemaView` control | Svelte component in `src/lib/` (one per wizard step) |
-| `FolderBrowserDialog` | `@tauri-apps/plugin-dialog` `open({ directory: true })` + editable path input |
-| background thread | async Tauri command (`tauri::async_runtime::spawn_blocking`), events to UI |
-| `DataContractJsonSerializer` | `serde` / `serde_json` |
-| "exe < 1 MB" | dropped: the release exe is what ships, no installer |
 
 ---
 
 ## S1 · Create a sync with the wizard, preview it on the schema and run it
+**Status:** done (commits `92a94a1` … `d23a151`)
 **Why:** walking skeleton – proves wizard → robocopy preview → schema → real copy → history, through every layer, with the safe default mode.
 **Size:** M
 **Blocked by:** –
+
+### Outcome
+Wizard (Da dove → Dove → Opzioni → Anteprima), `SchemaView`, robocopy runner (preview + real run), `history.jsonl`, app shell with tabs. Copy mode only; no saved syncs, no mirror, "Sto copiando…" without real progress.
 
 ### Acceptance criteria
 - Given the app is open, when the user picks A (`D:\Foto`), picks B (`E:\Backup`) and clicks "Avanti" through "Opzioni", then the preview shows "Da copiare (nuovi)" and "Da aggiornare" with counts and the schema shows the same counts plus "Nessun file viene cancellato in B".
@@ -46,106 +44,134 @@ S1 ──┬── S2 (mirror)
 - Given the preview, when the user clicks "Sì, avvia", then robocopy runs with `/E` (never `/MIR`/`/PURGE`), the result says "Fatto: N file copiati, M aggiornati in …", one line is appended to `history.jsonl` and the robocopy log exists in `logs\`.
 - Given robocopy exits with 1, 2 or 3, then the outcome is recorded as OK; given exit ≥ 8, the outcome is "Errore" (raw message for now; plain language in S6).
 
+---
+
+## S1b · Bring the app to the new prototype look and wizard details
+**Why:** the user approved an updated prototype (2026-11-04) with a new look and a click-first folder picker; the real-user checkpoint after this slice must test the real look, not the old one.
+**Size:** S/M
+**Blocked by:** S1
+
+### Acceptance criteria
+- Given the app opens, then the top bar shows the brand "ColomboSync" with the subtitle "Copie di sicurezza senza sorprese" and a theme switch Auto / Chiaro / Scuro; cards use rounded corners (`--r` 22px, `--r-s` 14px), inputs have borders, surfaces have soft shadows.
+- Given the user picks "Scuro", then the dark tokens of the prototype apply immediately; after restarting the app the choice is still there; "Auto" follows the Windows setting.
+- Given the computer has no network, then the text is rendered in Nunito (the font is bundled in the exe; no request to any external host); if the font file fails to load the text falls back to Segoe UI.
+- Given step "Da dove" (and "Dove"), then the user sees the click-first picker: "Clicca sulla cartella da copiare (A)" / "Clicca sulla cartella dove mettere la copia (B)"; at the root the header says "Dischi del computer: scegline uno", after choosing a folder it says "Cartella scelta: <b>X</b>". "Preferisci scrivere il percorso a mano?" is collapsed; when the user types a path there and presses Enter, it behaves as "Avanti"; when a step error appears, the section opens and the input gets focus.
+- Given the preview has something to do, then no wizard footer is shown after the scan: only "Sì, avvia", "No, salva e basta" and the link "Indietro, cambio qualcosa"; given "B è già aggiornato", the screen has an "Indietro" link.
+
 ### Implementation notes
-- Touch: create the solution; `Wizard` form (steps Da dove → Dove → Opzioni → Anteprima; the "Nome" step and saving come in S3; folder choice via `FolderBrowserDialog` + editable path box accepting UNC), `SchemaView`, `Robocopy`, `PreviewParser`, `History`.
-- Preview command: `robocopy "<A>" "<B>" /E /XX /L /R:1 /W:1 /NJH /NJS /NDL /NC /BYTES /FP /NP /UNILOG:<tmp>`; read the UTF-16 log. `/XX` keeps extras in B out of the output in Copy mode. Classify each line by full path: under B → extra (Deleted, mirror only, S2); under A and `B\<relative>` exists → Updated; else → New.
-- Run command: same without `/L`, with `/UNILOG:<logs path>`. Run on a background thread; UI shows a simple "Sto copiando…" (real progress is S5).
-- No `syncs.json` yet: "No" on "Avviare adesso?" just returns to the start. The history line stores A and B, with the sync name = "Copia di <last folder of A>".
-- Tests: `PreviewParserTests.Classifies_new_updated_and_extra_by_path` (fixture from a real `/L` log, including a non-English label line); `RobocopyTests.Exit_codes_0_to_7_are_success`; `RobocopyTests.Copy_mode_never_uses_mir` (args builder); integration `RobocopyIntegrationTests.Copy_keeps_extra_files_in_destination` using temp folders.
-- Do not touch: mirror UI (S2), home list (S3).
-- Done when: tests pass, `bin\Release\ColomboSync.exe` is a single file < 1 MB and the manual flow above works on this machine.
+- Touch: `src/theme.css` (light + dark tokens copied from the prototype), app shell (top bar, theme switch; choice kept in `localStorage`, `Auto` = `prefers-color-scheme`), `FolderPicker.svelte` (today it opens the native dialog), `StepSource`, `StepDestination`, `StepPreview`, `Wizard` footer. Tokens stay in `src/theme.css`; no inline colors.
+- Font: put the Nunito woff2 in `src/` (e.g. `src/assets/fonts/`), declare `@font-face` in `theme.css` with Vite-resolved URLs so the build inlines/bundles it; `font-family: Nunito, "Segoe UI", sans-serif`. No Google Fonts `<link>` or `@import`.
+- Picker needs a new Rust module `folder_browser` with a command that lists drives (root) or the subfolders of a path (directories only, errors as plain Italian), exposed through `#[tauri::command]`. Test: `#[test] fn lists_only_directories()` with a temp dir. The picker keeps UNC paths working through the manual input.
+- Tests: vitest component tests for the picker header states, Enter in the manual input, theme choice persisted (stub `localStorage`), preview footer states. The look itself is checked by eye against `prototype.html`.
+- Do not touch: Rust robocopy/history logic, mirror (S2), saved syncs (S3).
+
+> **Checkpoint 1 (after S1b, before S2):** a real non-technical user tries the portable exe in Copy mode with 2 tasks: (1) create a copy, (2) read the preview and say what will happen. Fix findings before S2.
 
 ---
 
 ## S2 · Turn on mirror from advanced options, with warning and explicit consent
 **Why:** the riskiest UX – deleting files on B must be impossible to do by accident.
 **Size:** M
-**Blocked by:** S1
+**Blocked by:** S1b
 
 ### Acceptance criteria
 - Given step "Opzioni", then "Opzioni avanzate" is collapsed and mirror is off; when the user turns on "Rendi B identico ad A (specchio)", then the red warning box appears immediately and the schema switches to "Specchio" with B and the arrow in red and an "Eliminati da B" counter.
 - Given mirror is on and the preview finds 12 files only in B, then a red group "Da cancellare in B" lists them and "Sì, avvia" stays disabled until "Ho capito: 12 file verranno cancellati da B" is checked.
 - Given mirror is on and the preview finds 0 extra files, then no consent checkbox is shown and the text says "In B non ci sono file in più: non verrà cancellato niente."
 - Given a mirror run completes, then the history line records mode `Mirror` and the deleted count, and robocopy was called with `/MIR`.
-- Given mirror is on and the preview finds A empty (0 files) while B has files, or the files to delete are more than the files B would keep, then the preview shows a distinct warning "A sembra vuota o scollegata: con lo specchio verrebbe svuotato B. Controlla che il disco di A sia collegato." and offers **no** "Sì, avvia" at all (protects against an unplugged disk wiping B).
+- Given mirror is on and A does not exist or has no entries, or the preview counts more deleted files than new + updated, then the preview shows the warning "A sembra vuota o scollegata: con lo specchio verrebbe svuotato B. Controlla che il disco di A sia collegato." and offers **no** "Sì, avvia" at all (protects against an unplugged disk wiping B).
+- Given B equal to A or inside A (case-insensitive, trailing slashes, UNC), when the user clicks "Avanti" on step "Dove", then the wizard blocks with "La destinazione è la stessa cartella da copiare. Scegline un’altra." / "La destinazione non può stare dentro la cartella da copiare."
 
 ### Implementation notes
 - Preview in mirror uses `/MIR /L`; extras (paths under B) become Deleted.
+- `mirror_guard` does **not** walk the tree: "A is empty" = `A` missing or `read_dir(A)` yields no entry (cheap); "deletes exceed what A brings" is approximated by `deleted > new + updated` from the preview counts. Accepted risk: it can block a legitimate big cleanup (see scope.md); an exact guard on the full file count of A is in "Later".
+- `path_rules` module (moved here from S6): pure function on two path strings, no filesystem access; the Wizard calls it through a command so the rule lives in Rust.
 - Consent is per run: re-opening the preview always unchecks it.
-- Tests: `RobocopyTests.Mirror_mode_uses_mir`; `PreviewParserTests.Extra_files_count_as_deleted_only_in_mirror`; `MirrorGuardTests.Blocks_start_when_source_empty_or_deletes_exceed_kept`; integration `Mirror_deletes_extra_files_in_destination`.
+- Tests: `#[test] fn mirror_mode_uses_mir()` (robocopy); `extra_files_count_as_deleted_only_in_mirror()` (preview_parser); `mirror_guard` unit tests `blocks_when_source_missing_or_empty()` and `blocks_when_deleted_exceed_new_plus_updated()`; `path_rules` unit tests `destination_inside_source_is_rejected()` and `destination_equal_to_source_is_rejected()` (case-insensitive, trailing slashes, UNC); integration (`src-tauri/tests/`) `mirror_deletes_extra_files_in_destination()`.
+
+> **Checkpoint 2 (after S2):** a real non-technical user, mirror task only: turn on mirror, then read the preview and say what gets deleted. Fix wording/layout findings before going further.
 
 ---
 
 ## S3 · Name and save syncs, see them on the home screen and run one again
-**Why:** the repeat job – after the first time, the user just clicks "Avvia".
+**Why:** the repeat job – after the first time, the user just clicks "Controlla e avvia".
 **Size:** M
-**Blocked by:** S1
+**Blocked by:** S1b
 
 ### Acceptance criteria
 - Given the wizard, then a "Come la chiamo?" step (prefilled "Copia di <last folder of A>") sits before "Opzioni"; an empty name blocks "Avanti". The sync is saved to `syncs.json` when the run starts or on "No, salva e basta".
-- Given two saved syncs, when the app opens, then the home "Le tue sincronizzazioni" lists both with name, A → B, mode chip and last outcome ("Ultima volta: 02/11/2026 21:30" + OK/Errore), and selecting one shows its A and B in the schema.
-- Given a saved sync, when the user clicks "Avvia", then the app goes straight to the preview (step 5) with fresh counts; it never runs without showing the preview.
-- Given `syncs.json` is missing or unreadable, then the home shows an empty state with "+ Nuova sincronizzazione" and the app does not crash.
+- Given two saved syncs, when the app opens, then the home "Le tue sincronizzazioni" (with the lead text of the prototype) lists one card per sync showing A → B with drive-kind icons, the mode chip, and "Ultima volta: 02/11/2026 21:30" with an OK/Errore chip, or "Mai avviata"; selecting a card shows its A and B in the schema, with the caption 'Premi "Controlla e avvia": prima ti mostro cosa cambierà, poi decidi tu.'
+- Given a saved sync, when the user clicks "Controlla e avvia" (it reads "Riprova" when the last outcome is Errore), then the app goes straight to the preview with fresh counts; it never runs without showing the preview.
+- Given `syncs.json` is missing or unreadable, then the home shows an empty state with the dashed card "Nuova sincronizzazione" and the app does not crash; with saved syncs the same dashed card sits below the list.
 
 ### Implementation notes
-- Home is the main form; the wizard opens from it and returns to it.
-- Tests: `SyncStoreTests.Round_trips_syncs`; `SyncStoreTests.Corrupt_file_returns_empty_list`.
+- Home is the main view; the wizard opens from it and returns to it. Module `sync_store` (Rust) reads/writes `syncs.json`.
+- The plain-language error note on the card is S6; S3 shows only the outcome chip.
+- Tests: `#[test] fn round_trips_syncs()` and `corrupt_file_returns_empty_list()` in `sync_store`; vitest for card states (Mai avviata / OK / Errore → "Riprova").
 
 ---
 
 ## S4 · Browse the history of runs and open a run's log
 **Why:** the user explicitly asked for a history; it is also how they check that last night's copy happened.
 **Size:** S
-**Blocked by:** S1
+**Blocked by:** S1 (can run in parallel to S3)
 
 ### Acceptance criteria
-- Given runs in `history.jsonl`, when the user opens the "Storico" tab, then runs are listed newest first with date and time, sync name, mode chip, Nuovi / Aggiornati / Cancellati, durata and outcome chip (OK / Errore / Annullato).
-- When the user clicks "Registro" on a run, then the robocopy log of that run opens in an in-app read-only window; if the log file was deleted, the window says "Il registro di questa copia non è più disponibile."
+- Given runs in `history.jsonl`, when the user opens the "Storico" tab, then the lead says "Tutte le copie fatte, dalla più recente. Ogni riga ha il suo registro completo." and runs are listed newest first with date and time, sync name, mode chip, Nuovi / Aggiornati / Cancellati, durata and outcome chip (OK / Errore / Annullato).
+- Given the Storico tab, then the side panel shows "Come leggere lo storico" instead of the schema: counters "Copie fatte" and "Riuscite", a legend for the OK / Errore / Annullato / Specchio chips (texts as in the prototype) and "Ultima copia riuscita: <when>".
+- When the user clicks "Registro" on a run, then a modal "Registro – <name> (<when>)" shows the robocopy log read-only, with "Chiudi" (Esc also closes); if the log file was deleted, it says "Il registro di questa copia non è più disponibile."
 - Given a malformed line in `history.jsonl`, then that line is skipped and the others are shown.
 
 ### Implementation notes
-- Tests: `HistoryTests.Reads_newest_first`; `HistoryTests.Skips_malformed_lines`.
+- Command to read a run's log file (UTF-16LE with BOM, via the `history`/`storage` module). The side panel switches by tab in the app shell; `SchemaView` is not rendered on Storico.
+- Tests: `#[test] fn reads_newest_first()` and `skips_malformed_lines()` in `history`; vitest for legend counters and the modal closing on Esc.
 
 ---
 
 ## S5 · Follow the copy live on the schema and stop it safely
 **Why:** a long copy with no feedback looks like a crash to a non-technical user.
 **Size:** M
-**Blocked by:** S3
+**Blocked by:** S1
 
 ### Acceptance criteria
-- Given a run of 151 files, while it runs, then the schema arrow is animated, a progress bar shows "N di 151 file", the current file name is shown, and the counters grow.
-- When the user clicks "Annulla", then an inline question "Vuoi fermare la copia? I file già copiati restano in B." appears; on "Sì, ferma" robocopy is terminated, the result says "Annullato" and history records outcome `Annullato` with partial counts.
+- Given a run of 151 files, while it runs, then the screen says "Sto copiando <name>…" with a big percentage, "N di 151 file", "Mancano circa N secondi", the current file name and an animated schema arrow; screen readers get an aria-live announcement every 10%.
+- When the user clicks "Ferma la copia", then the inline question "Vuoi fermare la copia? I file già copiati restano in B." appears with "Sì, ferma" / "No, continua"; on "Sì, ferma" the robocopy process is killed, the result says "Annullato" and history records outcome `Annullato`.
 - When the user closes the window during a run, then the same confirmation is asked before exiting.
+- Given a run that ends in Errore or Annullato after copying 40 files, then the result and the history row say "40 file copiati (parziale)"; given a run that ends OK, history keeps the preview counts (new / updated).
 
 ### Implementation notes
-- Progress: `/UNILOG` is written in bursts, so read redirected stdout line by line instead (`/UNICODE` + UTF-16 decoding, or the console OEM code page – decide while implementing), keeping `/UNILOG` for the history log via `/TEE`. Total comes from the preview.
-- Cancel = `Process.Kill()` on robocopy (it spawns no children); never leave it running after the app exits.
+- Progress: `/UNILOG` is written in bursts, so read redirected stdout line by line (decode the console OEM code page or `/UNICODE`; decide while implementing), keeping `/UNILOG` for the history log via `/TEE`. Total comes from the preview (new + updated). Emit progress as Tauri events; ETA from rate so far.
+- Stop = kill the robocopy child process (it spawns no children); never leave it running after the app exits. Closing the window: Tauri `CloseRequested` → `prevent_close` + event to the UI, exit only after confirmation.
+- Real counts: on Errore/Annullato count the file lines in the run's own `/UNILOG` and store a single partial total. **Do not reuse the preview parser's classification for the run log**: it labels a file Updated when `B\<relative>` exists, and after a copy every file exists in B, so everything would be counted as Updated. No new/updated split for partial runs (in "Later").
+- `history::Run` gets an optional `partial: Option<usize>` (`#[serde(default, skip_serializing_if = "Option::is_none")]`); existing `history.jsonl` lines must still load. The Storico row (S4) shows "N file copiati (parziale)" when it is set.
+- Tests: `#[test] fn counts_file_lines_in_run_log()`; `run_without_partial_field_still_loads()` (history); vitest for the confirm question and the percentage/ETA texts.
 
 ---
 
 ## S6 · Explain problems in plain Italian
 **Why:** "ERRORE 53" means nothing to the user; every failure must say what happened and what to do.
 **Size:** S
-**Blocked by:** S1
+**Blocked by:** S1, S3, S4 (S3: shares the home card and Wizard/StepPreview files, run after it; S4: "Apri il registro" opens its log viewer)
 
 ### Acceptance criteria
-- Given B is inside A or equal to A, when the user clicks "Avanti" on step 2, then the wizard blocks with "La destinazione non può stare dentro la cartella da copiare." / "La destinazione è la stessa cartella da copiare. Scegline un'altra."
 - Given the network share is unreachable at preview or during the run, then the result says "Non completato: la cartella di rete \\NAS non è raggiungibile. Controlla la connessione e riprova." with "Riprova" and "Apri il registro".
 - Given A does not exist (disk unplugged), then the preview says "Non trovo la cartella A (D:\Foto). Il disco è collegato?" and offers no start button.
 - Given the app runs elevated, then a banner warns "Le unità di rete potrebbero non essere visibili: apri ColomboSync senza 'Esegui come amministratore'."
+- Given the last run of a saved sync failed, then its home card shows the note "La cartella di rete \\NAS non era raggiungibile. Controlla che sia collegato e riprova."; given it was stopped, the note is "La copia era stata fermata a mano: puoi riprenderla quando vuoi."
 
 ### Implementation notes
-- Map robocopy Windows error codes found in the log (`ERROR 53`, `67`, `2`, `3`, `5`) to messages; anything else → generic "Non completato" + log link.
-- Tests: `ErrorMessagesTests` with one case per mapped code; `PathRulesTests.Destination_inside_source_is_rejected` (case-insensitive, trailing slashes, UNC).
+- Module `error_messages`: map Windows error codes found in the log (`ERROR 53`, `67`, `2`, `3`, `5`) to messages **by code, never by label**; anything else → generic "Non completato" + log link. Disk vs network wording follows the path (UNC → "cartella di rete", drive letter → "disco"), as in the prototype.
+- Path rules are not here any more: they moved to S2.
+- Tests: `#[test]` one case per mapped code in `error_messages`; vitest for the card notes and the elevated banner.
 
 ---
 
 ## Later (cut from this round)
-- Dark theme following Windows settings (prototype has one; not needed for MVP).
 - Scheduling (Task Scheduler) – manual start only for now.
 - Exclusion filters (file types, folders).
 - SSH / remote, macOS/Linux with rsync.
 - Installer, auto-update, tray icon, notifications.
 - Protecting newer files in B (`/XO`) – today A always wins, as in a normal copy; revisit if users complain.
 - Two-way sync; several sources into one destination.
+- Partial run counts split into new/updated (today a single partial total).
+- Exact MirrorGuard based on the full file count of A.

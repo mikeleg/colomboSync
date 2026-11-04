@@ -1,11 +1,11 @@
 # ColomboSync – agent guide
 
-Windows desktop app that lets a non-technical user copy folder A → B with robocopy, safely: wizard, mandatory preview, always-visible A→B schema, history. UI in Italian.
+Windows desktop app that lets a non-technical user copy folder A → B with robocopy, safely: wizard, mandatory preview, A→B schema (visible on home and in the wizard/run/result; Storico shows the history legend instead), history. UI in Italian.
 
 **Stack:** Tauri 2 (Rust, `src-tauri/`) + Svelte 5 + Vite + TypeScript (`src/`). Deliverable: one portable exe, no installer.
 
 ## Read first
-- `docs/backlog/colombo-sync/backlog.md` – slices S1…S6, acceptance criteria, shared conventions (incl. C#→Tauri table).
+- `docs/backlog/colombo-sync/backlog.md` – slices S1…S6 (+ S1b), acceptance criteria, shared conventions.
 - `docs/backlog/colombo-sync/scope.md` – what's in/out, decisions.
 - `docs/backlog/colombo-sync/prototype.html` – approved look, flow and **exact Italian copy**.
 - `docs/agents/glossary.md` – domain names to use in code.
@@ -30,7 +30,7 @@ First release build takes ~5 min.
 
 ## Architecture rules
 - **Rust owns all logic and I/O**: robocopy args, running it, preview parsing, path rules, error messages, `syncs.json`, `history.jsonl`, logs in `%LOCALAPPDATA%\ColomboSync\`. One module per concern in `src-tauri/src/`, exposed through `#[tauri::command]`s registered in `lib.rs`.
-- **Svelte owns presentation**: one component per wizard step in `src/lib/`, `SchemaView.svelte` always visible, theme tokens in `src/theme.css`. Talks to Rust only via `invoke` and events.
+- **Svelte owns presentation**: one component per wizard step in `src/lib/`, `SchemaView.svelte` visible on home and in the wizard/run/result (Storico shows the history legend instead), theme tokens in `src/theme.css`. Talks to Rust only via `invoke` and events.
 - Domain logic stays free of Tauri types where possible, so it is unit-testable with plain `cargo test`.
 - No elevation, no installer, nothing from the backlog's "Later" section.
 

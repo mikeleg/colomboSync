@@ -9,7 +9,7 @@ const preview = (n: number, u: number, files = { n: ["a.jpg", "b.jpg"], u: ["c.p
   updated: group(u, files.u.slice(0, u)),
   deleted: group(0),
   bytes: 5_000_000,
-  blocked: false,
+  blocked: null,
 });
 
 const props = { scanning: false, mirror: false, error: "", onstart: () => {}, onstop: () => {}, onback: () => {} };
@@ -81,6 +81,7 @@ const mirrorPreview = (deleted: number, over: Partial<Preview> = {}): Preview =>
   deleted: group(deleted, ["vecchio.txt", String.raw`sub\altro.txt`].slice(0, deleted)),
   ...over,
 });
+const REASON = "Motivo deciso da Rust: non si parte.";
 const mirrorProps = { ...props, mirror: true };
 
 test("mirror: extras in B are a red group 'Da cancellare in B' and Sì, avvia waits for the consent", async () => {
@@ -131,11 +132,9 @@ test("mirror: the summary also counts what will be deleted", () => {
 
 test("MirrorGuard: when blocked it shows the warning and offers no Sì, avvia and no consent", async () => {
   const onback = vi.fn();
-  render(StepPreview, { ...mirrorProps, preview: mirrorPreview(9, { blocked: true }), onback });
+  render(StepPreview, { ...mirrorProps, preview: mirrorPreview(9, { blocked: REASON }), onback });
 
-  expect(screen.getByRole("alert").textContent).toContain(
-    "A sembra vuota o scollegata: con lo specchio verrebbe svuotato B. Controlla che il disco di A sia collegato.",
-  );
+  expect(screen.getByRole("alert").textContent).toContain(REASON);
   expect(screen.queryByRole("button", { name: "Sì, avvia" })).toBeNull();
   expect(screen.queryByRole("checkbox")).toBeNull();
 
@@ -144,9 +143,9 @@ test("MirrorGuard: when blocked it shows the warning and offers no Sì, avvia an
 });
 
 test("MirrorGuard: an A that is missing (nothing to list) still shows the warning, not 'B è già aggiornato'", () => {
-  render(StepPreview, { ...mirrorProps, preview: { ...preview(0, 0), blocked: true } });
+  render(StepPreview, { ...mirrorProps, preview: { ...preview(0, 0), blocked: REASON } });
 
-  expect(screen.getByRole("alert").textContent).toContain("A sembra vuota o scollegata");
+  expect(screen.getByRole("alert").textContent).toContain(REASON);
   expect(screen.queryByText("B è già aggiornato")).toBeNull();
   expect(screen.queryByRole("button", { name: "Sì, avvia" })).toBeNull();
   expect(screen.getByRole("button", { name: "Indietro, cambio qualcosa" })).toBeTruthy();

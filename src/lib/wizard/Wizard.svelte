@@ -68,6 +68,9 @@
     if (stepId === "preview" && scanning) {
       return { ...places, counts: null, caption: "Sto controllando le due cartelle…", mirror, warnCaption: mirror };
     }
+    if (stepId === "preview" && preview?.blocked) {
+      return { ...places, counts: previewCounts, caption: preview.blocked, mirror, warnCaption: true };
+    }
     if (stepId === "preview" && preview && previewCounts) {
       const { new: n, updated: u, deleted: d } = previewCounts;
       const caption =
@@ -99,12 +102,17 @@
     }
     if (stepId === "destination") {
       const here = step;
-      try {
-        await checkDestination(source.trim(), destination.trim());
-      } catch (e) {
-        error = String(e);
-        return;
-      }
+      let checked: string[];
+      do {
+        checked = [source.trim(), destination.trim()];
+        try {
+          await checkDestination(checked[0], checked[1]);
+        } catch (e) {
+          error = String(e);
+          return;
+        }
+        // The user may have edited a path while Rust was answering: check what is there now.
+      } while (checked[0] !== source.trim() || checked[1] !== destination.trim());
       if (step !== here) return; // a second click got there first
     }
     error = "";

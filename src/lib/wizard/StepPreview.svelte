@@ -67,7 +67,7 @@
   {#if preview.blocked}
     <div class="guard">
       <Warnbox>
-        <p>A sembra vuota o scollegata: con lo specchio verrebbe svuotato B. Controlla che il disco di A sia collegato.</p>
+        <p>{preview.blocked}</p>
       </Warnbox>
     </div>
   {:else}

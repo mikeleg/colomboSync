@@ -15,7 +15,7 @@ const preview = (n: number, u: number): Preview => ({
   updated: { count: u, files: u ? ["b.pdf"] : [] },
   deleted: { count: 0, files: [] },
   bytes: 3_000_000,
-  blocked: false,
+  blocked: null,
 });
 
 const doneRun: Run = {
@@ -362,15 +362,30 @@ test("consent is per run: going back and opening the preview again unchecks it",
   expect(((await screen.findByLabelText(/Ho capito/)) as HTMLInputElement).checked).toBe(false);
 });
 
-test("MirrorGuard: a blocked mirror preview offers no Sì, avvia", async () => {
-  backend({ preview_sync: () => ({ ...preview(0, 0), blocked: true }) });
+test("MirrorGuard: a blocked mirror preview shows Rust's reason, in the schema too, and offers no Sì, avvia", async () => {
+  const reason = "Motivo deciso da Rust: non si parte.";
+  backend({ preview_sync: () => ({ ...preview(0, 0), blocked: reason }) });
   render(App);
   await toOpzioni();
   await fireEvent.click(mirrorSwitch());
   await click("Avanti");
 
-  expect((await screen.findAllByText(/A sembra vuota o scollegata/)).length).toBeGreaterThan(0);
+  expect((await screen.findAllByText(reason)).length).toBe(2); // the warning and the schema caption
+  expect(screen.getByRole("complementary").textContent).toContain(reason);
+  expect(screen.getByRole("complementary").textContent).not.toContain("B è già aggiornato");
   expect(screen.queryByRole("button", { name: "Sì, avvia" })).toBeNull();
+});
+
+test("a blocked preview that still counts files does not say 'Da fare' in the schema", async () => {
+  const reason = "Motivo deciso da Rust: non si parte.";
+  backend({ preview_sync: () => ({ ...preview(2, 1), blocked: reason }) });
+  render(App);
+  await toOpzioni();
+  await fireEvent.click(mirrorSwitch());
+  await click("Avanti");
+
+  await screen.findAllByText(reason);
+  expect(screen.getByRole("complementary").textContent).not.toContain("Da fare");
 });
 
 test("Dove: Avanti is blocked with the message from Rust when B is A or inside A", async () => {
@@ -400,5 +415,35 @@ test("Dove: Avanti is blocked with the message from Rust when B is A or inside A
   await click("Avanti");
 
   expect(screen.getByRole("alert").textContent).toContain(message);
+  expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();
+});
+
+test("Dove: if the paths change while they are being checked, the new ones are checked before moving on", async () => {
+  let release: () => void = () => {};
+  let calls = 0;
+  backend({
+    check_destination: () => {
+      calls++;
+      if (calls === 1) return new Promise<void>((resolve) => (release = resolve));
+      throw "La destinazione non può stare dentro la cartella da copiare.";
+    },
+  });
+  render(App);
+  await click("+ Nuova sincronizzazione");
+  await typeInto(/Percorso/, String.raw`D:\Foto`);
+  await click("Avanti");
+  await typeInto(/Percorso/, String.raw`E:\Backup`);
+  const first = click("Avanti");
+
+  await typeInto(/Percorso/, String.raw`D:\Foto\Backup`); // changed while the first check is pending
+  release();
+  await first;
+  await vi.waitFor(() => expect(calls).toBe(2));
+
+  expect(invokeMock).toHaveBeenLastCalledWith("check_destination", {
+    source: String.raw`D:\Foto`,
+    destination: String.raw`D:\Foto\Backup`,
+  });
+  await vi.waitFor(() => expect(screen.getByRole("alert").textContent).toContain("non può stare dentro"));
   expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();
 });

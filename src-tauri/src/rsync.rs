@@ -177,7 +177,7 @@ mod process {
     use super::*;
     use crate::engine::Finished;
     use std::fs::File;
-    use std::io::{self, PipeReader, Read, Write};
+    use std::io::{self, Read, Write};
     use std::os::unix::process::ExitStatusExt;
     use std::process::{Child, Command, ExitStatus, Stdio};
 
@@ -217,7 +217,7 @@ mod process {
         })
     }
 
-    /// Starts the real run. stdout and stderr share one pipe; what is read from it is also
+    /// Starts the real run. stdout and stderr go to one channel; what is read from it is also
     /// written to `log`, which is the run's log for the history.
     pub fn spawn(
         mode: SyncMode,
@@ -232,19 +232,19 @@ mod process {
             ));
         }
         let log = File::create(log)?;
-        let (reader, writer) = io::pipe()?;
+        let (reader, stdout, stderr) = output_channel()?;
         let child = {
-            // The command holds the write end of the pipe: it is dropped before anyone reads,
-            // or the pipe would never end.
+            // The command holds rsync's end of the channel: it is dropped before anyone reads,
+            // or the channel would never end.
             let mut command = command(&run_args(mode, source, destination));
-            command.stdout(writer.try_clone()?).stderr(writer);
+            command.stdout(stdout).stderr(stderr);
             command.spawn()?
         };
         Ok((child, Box::new(LogTee { reader, log })))
     }
 
     struct LogTee {
-        reader: PipeReader,
+        reader: Box<dyn Read + Send>,
         log: File,
     }
 
@@ -253,6 +253,70 @@ mod process {
             let n = self.reader.read(buf)?;
             self.log.write_all(&buf[..n])?;
             Ok(n)
+        }
+    }
+
+    /// What the app reads, and rsync's stdout and stderr. A pipe, except on macOS: openrsync
+    /// buffers stdout in full when it is not a terminal, so no line would arrive before it
+    /// exits and the progress would stand still. A pseudo-terminal makes it write line by line.
+    #[cfg(not(target_os = "macos"))]
+    fn output_channel() -> io::Result<(Box<dyn Read + Send>, Stdio, Stdio)> {
+        let (reader, writer) = io::pipe()?;
+        Ok((
+            Box::new(reader),
+            Stdio::from(writer.try_clone()?),
+            Stdio::from(writer),
+        ))
+    }
+
+    #[cfg(target_os = "macos")]
+    fn output_channel() -> io::Result<(Box<dyn Read + Send>, Stdio, Stdio)> {
+        let (master, slave) = pty()?;
+        Ok((
+            Box::new(master),
+            Stdio::from(slave.try_clone()?),
+            Stdio::from(slave),
+        ))
+    }
+
+    /// A pseudo-terminal: (master, slave). Neither end leaks into rsync, which gets the slave as
+    /// stdout and stderr; a master that rsync inherited would keep the read from ever ending.
+    #[cfg(target_os = "macos")]
+    fn pty() -> io::Result<(File, std::os::fd::OwnedFd)> {
+        use std::ffi::{c_char, c_int, c_void};
+        use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+
+        unsafe extern "C" {
+            fn openpty(
+                master: *mut c_int,
+                slave: *mut c_int,
+                name: *mut c_char,
+                terminal_settings: *const c_void,
+                window_size: *const c_void,
+            ) -> c_int;
+            fn fcntl(fd: c_int, command: c_int, ...) -> c_int;
+        }
+        const F_SETFD: c_int = 2;
+        const FD_CLOEXEC: c_int = 1;
+
+        let (mut master, mut slave) = (0, 0);
+        // SAFETY: `openpty` writes two new file descriptors, which are taken over right away
+        // by `OwnedFd`; `fcntl` only sets a flag on descriptors that are open.
+        unsafe {
+            if openpty(
+                &mut master,
+                &mut slave,
+                std::ptr::null_mut(),
+                std::ptr::null(),
+                std::ptr::null(),
+            ) != 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+            let (master, slave) = (OwnedFd::from_raw_fd(master), OwnedFd::from_raw_fd(slave));
+            fcntl(master.as_raw_fd(), F_SETFD, FD_CLOEXEC);
+            fcntl(slave.as_raw_fd(), F_SETFD, FD_CLOEXEC);
+            Ok((File::from(master), slave))
         }
     }
 

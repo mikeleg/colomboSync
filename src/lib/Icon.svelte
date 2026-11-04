@@ -8,6 +8,7 @@
     check: '<circle cx="12" cy="12" r="10"/><path d="M7.5 12.5l3 3 6-6.5"/>',
     tick: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     up: '<path d="M12 19V5M5 12l7-7 7 7"/>',
+    stop: '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/>',
     cross: '<circle cx="12" cy="12" r="10"/><path d="M8 8l8 8M16 8l-8 8"/>',
     auto: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/>',
     light:

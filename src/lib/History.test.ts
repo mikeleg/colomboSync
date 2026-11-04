@@ -49,6 +49,16 @@ test("a row shows mode and outcome chips, counts and duration", () => {
   expect(within(row).getByText("Durata").nextElementSibling?.textContent).toBe("1 min");
 });
 
+test("a stopped or failed run shows the files really copied, not the previewed counts", () => {
+  render(History, { runs: [run({ outcome: "Cancelled", new: 12, updated: 1, partial: 40 })], status: "ready" });
+
+  const row = screen.getByRole("listitem");
+  expect(within(row).getByText("40 file copiati (parziale)")).toBeTruthy();
+  expect(within(row).queryByText("Nuovi")).toBeNull();
+  expect(within(row).queryByText("Aggiornati")).toBeNull();
+  expect(within(row).getByText("Durata")).toBeTruthy();
+});
+
 test("outcome chips: OK, Errore, Annullato; Copia for copy mode", () => {
   render(History, { runs: [run({ outcome: "Ok" }), run({ outcome: "Cancelled" })], status: "ready" });
 

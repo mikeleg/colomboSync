@@ -1,10 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App.svelte";
 import type { Preview, Run } from "./lib/types";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
 
 const invokeMock = vi.mocked(invoke);
 
@@ -121,7 +123,7 @@ test("while the copy runs the UI says Sto copiando…", async () => {
 
   await click(await screen.findByRole("button", { name: "Sì, avvia" }));
 
-  expect(screen.getByRole("heading", { name: "Sto copiando…" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: /^Sto copiando/ })).toBeTruthy();
 });
 
 test("a run that ends in Error says Non completato with the raw message", async () => {
@@ -256,4 +258,17 @@ test("while the history loads there are no old rows, and a late older answer is 
 
   expect(screen.queryByText("Vecchia")).toBeNull();
   expect(screen.getByText("Aggiornata")).toBeTruthy();
+});
+
+test("closing the window during a run asks to stop the copy", async () => {
+  backend({ preview_sync: () => preview(2, 1), run_sync: () => new Promise(() => {}) });
+  render(App);
+  await goToPreview();
+  await click(await screen.findByRole("button", { name: "Sì, avvia" }));
+
+  const closeRequested = vi.mocked(listen).mock.calls.find(([name]) => name === "close-requested")![1];
+  closeRequested({ event: "close-requested", id: 1, payload: null });
+
+  expect(await screen.findByRole("alertdialog")).toBeTruthy();
+  expect(screen.getByText("Vuoi fermare la copia? I file già copiati restano in B.")).toBeTruthy();
 });

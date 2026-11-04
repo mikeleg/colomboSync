@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatDuration, formatNumber, formatWhen, modeChip, outcomeChip } from "./format";
+  import { formatDuration, formatNumber, formatWhen, modeChip, outcomeChip, partialText } from "./format";
   import LogViewer from "./LogViewer.svelte";
   import type { Run } from "./types";
 
@@ -28,8 +28,12 @@
         </span>
       </div>
       <dl class="stats">
-        <div><dt>Nuovi</dt><dd>{formatNumber(run.new)}</dd></div>
-        <div><dt>Aggiornati</dt><dd>{formatNumber(run.updated)}</dd></div>
+        {#if run.partial != null}
+          <div><dd>{partialText(run.partial)}</dd></div>
+        {:else}
+          <div><dt>Nuovi</dt><dd>{formatNumber(run.new)}</dd></div>
+          <div><dt>Aggiornati</dt><dd>{formatNumber(run.updated)}</dd></div>
+        {/if}
         <div class:d={run.deleted > 0}><dt>Cancellati</dt><dd>{formatNumber(run.deleted)}</dd></div>
         <div><dt>Durata</dt><dd>{formatDuration(run.durationMs)}</dd></div>
         <div class="lg"><button type="button" class="link" onclick={() => (viewing = run)}>Registro</button></div>

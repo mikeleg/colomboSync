@@ -7,7 +7,6 @@ name: Release
 on:
   push:
     tags: ["v*"]
-    branches: ["slice/s8"] # TEMP: dispatch needs the file on main
   workflow_dispatch:
 
 permissions:
@@ -67,7 +66,7 @@ jobs:
           - name: windows
             os: windows-latest
           - name: macos
-            os: macos-14 # TEMP
+            os: macos-latest
           - name: linux
             os: ubuntu-22.04 # AppImage needs a glibc at least as old as the oldest target distro
     runs-on: ${{ matrix.os }}
@@ -113,7 +112,13 @@ jobs:
       - name: macOS universal dmg
         if: runner.os == 'macOS'
         run: |
-          npx tauri build --target universal-apple-darwin --bundles dmg
+          # hdiutil sometimes fails with "Resource busy" on the runners: retry the build.
+          for attempt in 1 2 3; do
+            npx tauri build --target universal-apple-darwin --bundles dmg && break
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            echo "dmg build failed, retrying"
+            sleep 10
+          done
           mkdir release-files
           cp src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg "release-files/ColomboSync-$VERSION-macos-universal.dmg"
 

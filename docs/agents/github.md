@@ -40,7 +40,7 @@ Steps:
 5. Publish the draft by hand (GitHub → Releases → Edit → Publish; keep "pre-release" for 0.x).
 6. The owner downloads the files and `SHA256SUMS.txt` and shares them privately with the Italian install notes (repo stays private).
 
-Dry run without a tag: `gh workflow run release.yml -R mikeleg/colomboSync --ref <branch>`; builds and uploads workflow artifacts, creates no release. A bad throwaway tag/draft is removed with `gh release delete <tag> --cleanup-tag -R mikeleg/colomboSync` (and `git tag -d <tag>`).
+Dry run without a tag: `gh workflow run release.yml -R mikeleg/colomboSync --ref <branch>`; builds and uploads workflow artifacts, creates no release. GitHub only accepts `workflow_dispatch` for a workflow file that is on `main`, so until it is merged add a temporary `push: branches: [<branch>]` trigger to test a branch (a non-tag run takes the same dry-run path). macOS runner queues can last long or time out ("job was not acquired"): `gh run rerun <id> --failed`. A bad throwaway tag/draft is removed with `gh release delete <tag> --cleanup-tag -R mikeleg/colomboSync` (and `git tag -d <tag>`).
 
 ## Iterating on Unix-only code
 1. Work on a `slice/<id>` branch (CI runs on every push to it).

@@ -18,7 +18,7 @@ jobs:
           - name: windows
             os: windows-latest
           - name: macos
-            os: macos-14 # TEMP
+            os: macos-latest
           - name: linux
             os: ubuntu-22.04 # same baseline as the released AppImage
     runs-on: ${{ matrix.os }}

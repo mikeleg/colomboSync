@@ -262,7 +262,9 @@ mod tests {
         let text: String = (1..=100).map(|n| format!("riga {n:03}\r\n")).collect();
         fs::write(&file, unilog(&text)).unwrap();
 
-        let shown = read_log_capped(dir.path(), &file, 200).unwrap();
+        // About 10 lines: 2 bytes per character in UTF-16, 1 in UTF-8.
+        let cap = if cfg!(windows) { 200 } else { 100 };
+        let shown = read_log_capped(dir.path(), &file, cap).unwrap();
 
         assert!(shown.starts_with("… (mostro solo l’ultima parte del registro)\n"));
         assert!(shown.ends_with("riga 100\r\n"));

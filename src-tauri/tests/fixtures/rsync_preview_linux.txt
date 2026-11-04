@@ -1,0 +1,10 @@
+*deleting   old-dir/inside.txt
+*deleting   old-dir/
+*deleting   only-in-b.txt
+skipping non-regular file "link.txt"
+>f+++++++++ new.txt
+>f.st...... updated.txt
+>f+++++++++ with space.txt
+>f+++++++++ è già.txt
+*deleting   sub/only-in-b-too.txt
+>f+++++++++ sub/deep.txt

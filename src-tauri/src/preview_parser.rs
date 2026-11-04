@@ -15,7 +15,7 @@ pub struct FileGroup {
 }
 
 impl FileGroup {
-    fn add(&mut self, relative: &str) {
+    pub(crate) fn add(&mut self, relative: &str) {
         self.count += 1;
         if self.files.len() < MAX_LISTED {
             self.files.push(relative.to_string());
@@ -131,14 +131,17 @@ fn size_and_path<'a>(line: &'a str, prefixes: &[&str]) -> Option<(u64, &'a str)>
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
     use crate::robocopy::decode_unilog;
 
     // Real `/E /L /NJH /NJS /NDL /NC /BYTES /FP /NP /UNILOG` output (UTF-16LE with BOM) from
     // temp folders, paths rewritten to D:\Foto and E:\Backup, plus one hand-added line carrying
     // an Italian label ("Nuovo file").
+    #[cfg(windows)]
     const FIXTURE: &[u8] = include_bytes!("../tests/fixtures/preview_unilog_utf16le.txt");
 
     #[test]
+    #[cfg(windows)]
     fn classifies_new_updated_and_extra_by_path() {
         let log = decode_unilog(FIXTURE);
         let exists = |p: &Path| p == Path::new(r"E:\Backup\updated.txt");

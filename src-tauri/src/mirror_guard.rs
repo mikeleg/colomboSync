@@ -17,13 +17,43 @@ const SYSTEM_ENTRIES: [&str; 4] = [
     "thumbs.db",
 ];
 
+/// What macOS and Linux put in the root of a disk, with the case macOS writes them in.
+const UNIX_SYSTEM_ENTRIES: [&str; 6] = [
+    ".DS_Store",
+    ".Spotlight-V100",
+    ".fseventsd",
+    ".Trashes",
+    ".TemporaryItems",
+    "lost+found",
+];
+
+/// `.Trash-1000` is the trash a Linux desktop keeps on each disk, one per user id.
+const LINUX_TRASH_PREFIX: &str = ".Trash-";
+
+/// Names compare without regard to case on Windows and macOS, exactly on Linux.
+fn is_unix_system_entry(name: &str, ignore_case: bool) -> bool {
+    if ignore_case {
+        let lower = name.to_lowercase();
+        UNIX_SYSTEM_ENTRIES
+            .iter()
+            .any(|known| known.to_lowercase() == lower)
+            || lower.starts_with(&LINUX_TRASH_PREFIX.to_lowercase())
+    } else {
+        UNIX_SYSTEM_ENTRIES.contains(&name) || name.starts_with(LINUX_TRASH_PREFIX)
+    }
+}
+
+fn is_system_entry(name: &str) -> bool {
+    SYSTEM_ENTRIES.contains(&name.to_lowercase().as_str())
+        || is_unix_system_entry(name, !cfg!(target_os = "linux"))
+}
+
 /// A is missing or has no entries (system entries do not count).
 pub fn source_problem(source: &Path) -> Option<&'static str> {
     let has_entries = fs::read_dir(source).is_ok_and(|entries| {
-        entries.flatten().any(|entry| {
-            let name = entry.file_name().to_string_lossy().to_lowercase();
-            !SYSTEM_ENTRIES.contains(&name.as_str())
-        })
+        entries
+            .flatten()
+            .any(|entry| !is_system_entry(&entry.file_name().to_string_lossy()))
     });
     (!has_entries).then_some(SOURCE_EMPTY)
 }
@@ -77,6 +107,51 @@ mod tests {
 
         fs::write(temp.path().join("foto.jpg"), "x").unwrap();
         assert_eq!(source_problem(temp.path()), None);
+    }
+
+    #[test]
+    fn unix_system_entries_do_not_make_a_source_non_empty() {
+        let temp = tempfile::tempdir().unwrap();
+        for dir in [
+            ".Spotlight-V100",
+            ".fseventsd",
+            ".Trashes",
+            ".TemporaryItems",
+            "lost+found",
+            ".Trash-1000",
+        ] {
+            fs::create_dir(temp.path().join(dir)).unwrap();
+        }
+        fs::write(temp.path().join(".DS_Store"), "x").unwrap();
+
+        assert_eq!(source_problem(temp.path()), Some(SOURCE_EMPTY));
+
+        fs::write(temp.path().join("foto.jpg"), "x").unwrap();
+        assert_eq!(source_problem(temp.path()), None);
+    }
+
+    #[test]
+    fn unix_system_names_are_exact_on_linux_and_any_case_elsewhere() {
+        for (name, exact, any_case) in [
+            (".DS_Store", true, true),
+            (".ds_store", false, true),
+            (".SPOTLIGHT-V100", false, true),
+            (".Trash-1000", true, true),
+            (".trash-1000", false, true),
+            ("lost+found", true, true),
+            ("Lost+Found", false, true),
+            (".Trashes", true, true),
+            (".Trash", false, false),
+            ("foto.jpg", false, false),
+            (".DS_Store.bak", false, false),
+        ] {
+            assert_eq!(is_unix_system_entry(name, false), exact, "{name} exact");
+            assert_eq!(
+                is_unix_system_entry(name, true),
+                any_case,
+                "{name} any case"
+            );
+        }
     }
 
     #[test]

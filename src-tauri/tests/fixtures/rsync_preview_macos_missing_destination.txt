@@ -1,0 +1,9 @@
+skipping non-regular file "link.txt"
+cd+++++++ ./
+>f....... new.txt
+>f....... same.txt
+>f....... updated.txt
+>f....... with space.txt
+>f....... è già.txt
+cd+++++++ sub/
+>f....... sub/deep.txt

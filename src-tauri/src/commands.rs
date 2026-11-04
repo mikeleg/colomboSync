@@ -1,12 +1,12 @@
 //! Thin `#[tauri::command]` wrappers: robocopy runs on a blocking thread so the UI never freezes.
 
 use crate::elevation;
+use crate::engine::SyncMode;
 use crate::error_messages::{self, Explanation};
 use crate::folder_browser::{self, FolderListing};
 use crate::history::{self, Run};
 use crate::path_rules;
 use crate::preview_parser::{Counts, Preview};
-use crate::robocopy::SyncMode;
 use crate::runner::{self, ActiveRun, PreviewMemo};
 use crate::storage::Storage;
 use crate::sync_store::{self, ListedSyncs, SavedSync};

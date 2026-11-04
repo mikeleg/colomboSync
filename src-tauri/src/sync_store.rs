@@ -1,8 +1,8 @@
 //! `syncs.json`: the saved syncs, and what the home screen shows about each.
 
+use crate::engine::SyncMode;
 use crate::error_messages;
 use crate::history::{self, Outcome};
-use crate::robocopy::SyncMode;
 use crate::storage::Storage;
 use chrono::Local;
 use serde::{Deserialize, Serialize};

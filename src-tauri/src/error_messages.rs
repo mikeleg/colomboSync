@@ -57,6 +57,23 @@ pub const GENERIC_NOTE: &str =
 const MAPPED_CODES: [u32; 5] = [2, 3, 5, 53, 67];
 /// `ERROR_PATH_NOT_FOUND`: what a missing folder is, when Windows says only "not found".
 const PATH_NOT_FOUND: u32 = 3;
+/// `ERROR_ACCESS_DENIED`, which is also what a refused folder is on macOS and Linux.
+const ACCESS_DENIED: u32 = 5;
+/// The copy engine is not installed (rsync): "command not found" is 127 in a shell. Not a folder
+/// problem, so it is only ever made by the runner, never read from a log.
+pub const ENGINE_MISSING: u32 = 127;
+
+/// The mapped Windows error code inside an OS error. Elsewhere raw codes are errno values
+/// (5 is I/O error, 53 something unrelated), so only the error kind says what happened.
+fn windows_code(error: &io::Error) -> Option<u32> {
+    if !cfg!(windows) {
+        return None;
+    }
+    error
+        .raw_os_error()
+        .and_then(|code| u32::try_from(code).ok())
+        .filter(|code| MAPPED_CODES.contains(code))
+}
 
 /// The first mapped error in a robocopy log, and the folder it is about. `source` (A) and
 /// `destination` (B) tell which one that is. `None` when the log holds no mapped code.
@@ -68,13 +85,11 @@ pub fn find_cause(log: &str, source: &str, destination: &str) -> Option<Cause> {
     })
 }
 
-/// Why A could not be read before robocopy even started.
+/// Why A could not be read before the engine even started.
 pub fn explain_source_error(error: &io::Error, source: &str, destination: &str) -> Explanation {
-    let code = error
-        .raw_os_error()
-        .and_then(|code| u32::try_from(code).ok())
-        .filter(|code| MAPPED_CODES.contains(code))
-        .or_else(|| (error.kind() == io::ErrorKind::NotFound).then_some(PATH_NOT_FOUND));
+    let code = windows_code(error)
+        .or_else(|| (error.kind() == io::ErrorKind::NotFound).then_some(PATH_NOT_FOUND))
+        .or_else(|| (error.kind() == io::ErrorKind::PermissionDenied).then_some(ACCESS_DENIED));
     let cause = code.map(|code| Cause {
         code,
         folder: Folder::A,
@@ -103,7 +118,9 @@ pub fn describe(
         };
     };
     let title = match moment {
-        // "Non trovo la cartella A (D:\Foto)." reads the same in both.
+        // "Su questo computer manca rsync." and "Non trovo la cartella A (D:\Foto)." read the
+        // same in both.
+        _ if cause.code == ENGINE_MISSING => format!("{}.", capitalized(&reason.what)),
         Moment::Preview if matches!(cause.code, 2 | 3) => format!("{}.", capitalized(&reason.what)),
         Moment::Preview => format!("Non riesco a controllare le cartelle: {}.", reason.what),
         Moment::Run => format!("Non completato: {}.", reason.what),
@@ -169,6 +186,10 @@ fn reason(cause: Cause, source: &str, destination: &str) -> Option<Reason> {
             format!("non ho il permesso di usare la cartella {name} ({path})"),
             "Controlla i permessi e riprova.",
         ),
+        ENGINE_MISSING => (
+            "su questo computer manca rsync".to_string(),
+            "Installalo con il gestore dei pacchetti (per esempio: sudo apt install rsync) e riprova.",
+        ),
         _ => return None,
     };
     Some(Reason {
@@ -217,7 +238,7 @@ fn folder_of(line: &str, source: &str, destination: &str) -> Folder {
 /// follows is the end of the line or a `\`, never other characters (`D:\Foto 2` is not in
 /// `D:\Foto`), and what comes before is a space, as after a label.
 fn mentions(line: &str, path: &str) -> bool {
-    let path = path_rules::normalize(path);
+    let path = path_rules::normalize_windows(path);
     let line = line.trim_end();
     !path.is_empty()
         && line.match_indices(&path).any(|(at, _)| {
@@ -245,15 +266,32 @@ fn unreachable_name(path: &str) -> (String, String) {
             format!("La cartella di rete {tag}"),
         )
     } else {
-        let tag: String = path.chars().take(2).collect::<String>().to_uppercase();
+        let tag = if path.starts_with('/') {
+            mount_point(path)
+        } else {
+            path.chars().take(2).collect::<String>().to_uppercase()
+        };
         (format!("il disco {tag}"), format!("Il disco {tag}"))
     }
+}
+
+/// The disk a macOS or Linux path lives on, as the user sees it: `/Volumes/Backup`,
+/// `/media/anna/Backup`, `/mnt/nas`. Anywhere else the whole path says it best.
+fn mount_point(path: &str) -> String {
+    let parts: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
+    let depth = match parts.as_slice() {
+        ["Volumes" | "mnt", ..] => 2,
+        ["media", ..] => 3,
+        ["run", "media", ..] => 4,
+        _ => return path.trim_end_matches('/').to_string(),
+    };
+    format!("/{}", parts[..depth.min(parts.len())].join("/"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::robocopy::SyncMode;
+    use crate::engine::SyncMode;
 
     const A: &str = r"D:\Foto";
     const NAS_B: &str = r"\\NAS\Backup";
@@ -413,6 +451,48 @@ mod tests {
     }
 
     #[test]
+    fn a_source_is_explained_by_the_kind_of_error_on_every_platform() {
+        let explain = |kind| explain_source_error(&io::Error::from(kind), A, NAS_B);
+        let missing = explain(io::ErrorKind::NotFound);
+        assert_eq!(missing.title, r"Non trovo la cartella A (D:\Foto).");
+        assert_eq!(missing.advice, "Il disco è collegato?");
+        assert_eq!(
+            explain(io::ErrorKind::PermissionDenied).title,
+            r"Non riesco a controllare le cartelle: non ho il permesso di usare la cartella A (D:\Foto)."
+        );
+        assert_eq!(
+            explain(io::ErrorKind::TimedOut).title,
+            "Non riesco a controllare le cartelle."
+        );
+    }
+
+    #[test]
+    fn a_unix_path_names_the_disk_it_lives_on() {
+        for (path, disk) in [
+            ("/Volumes/Backup/Foto", "/Volumes/Backup"),
+            ("/Volumes/Backup", "/Volumes/Backup"),
+            ("/media/anna/Backup/Foto/2024", "/media/anna/Backup"),
+            ("/run/media/anna/Backup/Foto", "/run/media/anna/Backup"),
+            ("/mnt/nas/Foto", "/mnt/nas"),
+            ("/home/anna/Foto/", "/home/anna/Foto"),
+        ] {
+            assert_eq!(mount_point(path), disk, "{path}");
+        }
+        let e = run_text(53, Folder::B, "/home/anna/Foto", "/Volumes/Backup/Foto");
+        assert_eq!(
+            e.title,
+            "Non completato: il disco /Volumes/Backup non è raggiungibile."
+        );
+        let e = run_text(3, Folder::B, "/home/anna/Foto", "/Volumes/Backup/Foto");
+        assert_eq!(
+            e.title,
+            "Non completato: non trovo la cartella B (/Volumes/Backup/Foto)."
+        );
+        assert_eq!(e.advice, "Il disco è collegato?");
+    }
+
+    #[test]
+    #[cfg(windows)]
     fn a_source_that_cannot_be_read_is_explained_by_its_os_error() {
         let explain = |error: io::Error| explain_source_error(&error, A, NAS_B);
         assert_eq!(
@@ -521,6 +601,26 @@ mod tests {
         );
         assert_eq!(explain_run(&run(Outcome::Cancelled, None)), None);
         assert_eq!(explain_run(&run(Outcome::Ok, None)), None);
+    }
+
+    #[test]
+    fn a_missing_engine_is_said_plainly_in_a_preview_a_run_and_on_the_card() {
+        let missing = Some(Cause {
+            code: ENGINE_MISSING,
+            folder: Folder::A,
+        });
+        for moment in [Moment::Preview, Moment::Run] {
+            let e = describe(missing, A, NAS_B, moment);
+            assert_eq!(e.title, "Su questo computer manca rsync.");
+            assert_eq!(
+                e.advice,
+                "Installalo con il gestore dei pacchetti (per esempio: sudo apt install rsync) e riprova."
+            );
+        }
+        assert_eq!(
+            card_note(&run(Outcome::Error, missing)).unwrap(),
+            "Su questo computer manca rsync. Installalo con il gestore dei pacchetti (per esempio: sudo apt install rsync) e riprova."
+        );
     }
 
     #[test]

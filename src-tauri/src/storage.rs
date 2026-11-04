@@ -1,6 +1,9 @@
-//! Where ColomboSync keeps its files: `%LOCALAPPDATA%\ColomboSync\`.
+//! Where ColomboSync keeps its files: `%LOCALAPPDATA%\ColomboSync\` on Windows,
+//! `~/Library/Application Support/ColomboSync` on macOS, `$XDG_DATA_HOME/ColomboSync` or
+//! `~/.local/share/ColomboSync` on Linux.
 
 use chrono::NaiveDateTime;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -9,11 +12,17 @@ pub struct Storage {
 }
 
 impl Storage {
-    /// Reads the `LOCALAPPDATA` env var (not Tauri's app dir).
+    /// Reads the environment (not Tauri's app dir).
     pub fn from_env() -> Result<Self, String> {
-        let base = std::env::var_os("LOCALAPPDATA")
-            .ok_or("La variabile LOCALAPPDATA non è impostata.".to_string())?;
-        Ok(Self::at(Path::new(&base).join("ColomboSync")))
+        let env = |name: &str| std::env::var_os(name);
+        let root = if cfg!(windows) {
+            windows_dir(env)
+        } else if cfg!(target_os = "macos") {
+            macos_dir(env)
+        } else {
+            linux_dir(env)
+        }?;
+        Ok(Self::at(root))
     }
 
     pub fn at(root: impl Into<PathBuf>) -> Self {
@@ -52,29 +61,99 @@ impl Storage {
     }
 }
 
+const MISSING_HOME: &str = "La variabile HOME non è impostata.";
+
+fn windows_dir(env: impl Fn(&str) -> Option<OsString>) -> Result<PathBuf, String> {
+    let base = env("LOCALAPPDATA").ok_or("La variabile LOCALAPPDATA non è impostata.")?;
+    Ok(Path::new(&base).join("ColomboSync"))
+}
+
+fn macos_dir(env: impl Fn(&str) -> Option<OsString>) -> Result<PathBuf, String> {
+    let home = env("HOME").ok_or(MISSING_HOME)?;
+    Ok(Path::new(&home)
+        .join("Library")
+        .join("Application Support")
+        .join("ColomboSync"))
+}
+
+/// `XDG_DATA_HOME` counts only when it is an absolute path, as the XDG specification says.
+fn linux_dir(env: impl Fn(&str) -> Option<OsString>) -> Result<PathBuf, String> {
+    if let Some(xdg) = env("XDG_DATA_HOME").map(PathBuf::from)
+        && xdg.is_absolute()
+    {
+        return Ok(xdg.join("ColomboSync"));
+    }
+    let home = env("HOME").ok_or(MISSING_HOME)?;
+    Ok(Path::new(&home)
+        .join(".local")
+        .join("share")
+        .join("ColomboSync"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use chrono::NaiveDate;
 
     fn storage() -> Storage {
-        Storage::at(r"C:\Users\Anna\AppData\Local\ColomboSync")
+        Storage::at("ColomboSync")
     }
 
     #[test]
     fn files_live_under_the_root() {
+        let root = Path::new("ColomboSync");
+        assert_eq!(storage().syncs_file(), root.join("syncs.json"));
+        assert_eq!(storage().history_file(), root.join("history.jsonl"));
+        assert_eq!(storage().logs_dir(), root.join("logs"));
+    }
+
+    fn env<'a>(vars: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<OsString> + 'a {
+        move |name| {
+            vars.iter()
+                .find(|(key, _)| *key == name)
+                .map(|(_, value)| OsString::from(value))
+        }
+    }
+
+    #[test]
+    fn windows_and_macos_have_their_own_data_folder() {
         assert_eq!(
-            storage().syncs_file(),
-            Path::new(r"C:\Users\Anna\AppData\Local\ColomboSync\syncs.json")
+            windows_dir(env(&[("LOCALAPPDATA", "base")])).unwrap(),
+            Path::new("base").join("ColomboSync")
         );
+        assert!(windows_dir(env(&[])).is_err());
+
         assert_eq!(
-            storage().history_file(),
-            Path::new(r"C:\Users\Anna\AppData\Local\ColomboSync\history.jsonl")
+            macos_dir(env(&[("HOME", "/Users/anna")])).unwrap(),
+            Path::new("/Users/anna")
+                .join("Library")
+                .join("Application Support")
+                .join("ColomboSync")
         );
+        assert!(macos_dir(env(&[])).is_err());
+    }
+
+    #[test]
+    fn linux_prefers_an_absolute_xdg_data_home_and_falls_back_to_home() {
+        let absolute = Path::new(if cfg!(windows) { r"C:\data" } else { "/data" });
+        let xdg = absolute.to_str().unwrap();
         assert_eq!(
-            storage().logs_dir(),
-            Path::new(r"C:\Users\Anna\AppData\Local\ColomboSync\logs")
+            linux_dir(env(&[("XDG_DATA_HOME", xdg), ("HOME", "/home/anna")])).unwrap(),
+            absolute.join("ColomboSync")
         );
+        let fallback = Path::new("/home/anna")
+            .join(".local")
+            .join("share")
+            .join("ColomboSync");
+        for xdg in ["dati", ""] {
+            assert_eq!(
+                linux_dir(env(&[("XDG_DATA_HOME", xdg), ("HOME", "/home/anna")])).unwrap(),
+                fallback,
+                "XDG_DATA_HOME={xdg:?} is not absolute"
+            );
+        }
+        assert_eq!(linux_dir(env(&[("HOME", "/home/anna")])).unwrap(), fallback);
+        assert!(linux_dir(env(&[])).is_err());
     }
 
     #[test]

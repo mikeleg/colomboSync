@@ -1,7 +1,9 @@
-//! Rules on the two folders of a Sync. Pure text: no filesystem access, so UNC paths and
-//! disconnected drives are judged the same way. Windows paths are `D:\Foto` or `\\NAS\share`;
-//! macOS and Linux paths start with `/`.
+//! Rules on the two folders of a Sync. On Windows pure text: no filesystem access, so UNC paths
+//! and disconnected drives are judged the same way (`D:\Foto`, `\\NAS\share`). On macOS and
+//! Linux paths start with `/` and the links on them are resolved first, as far as the disk has
+//! the folders: `/Volumes/Macintosh HD` is the root itself, whatever it is called.
 
+pub const NOT_ABSOLUTE: &str = "Scrivi il percorso completo, che inizia con /.";
 pub const SAME_FOLDER: &str = "La destinazione è la stessa cartella da copiare. Scegline un’altra.";
 pub const INSIDE_SOURCE: &str = "La destinazione non può stare dentro la cartella da copiare.";
 /// B above A: a mirror would purge everything else that lives in B.
@@ -13,6 +15,10 @@ pub const SOURCE_INSIDE_DESTINATION: &str =
 /// segments. On Windows it also ignores case, `/` vs `\` and the `\\?\` prefix; on macOS case
 /// (its volumes usually do); on Linux case matters.
 pub fn check_destination(source: &str, destination: &str) -> Result<(), &'static str> {
+    // A relative path would mean the folder the app was started in: not what anyone typed.
+    if !cfg!(windows) && !(is_absolute(source) && is_absolute(destination)) {
+        return Err(NOT_ABSOLUTE);
+    }
     let source = normalize(source);
     let destination = normalize(destination);
     if source == destination {
@@ -31,11 +37,41 @@ fn is_inside(path: &str, folder: &str) -> bool {
     path.starts_with(&format!("{folder}{separator}"))
 }
 
+fn is_absolute(path: &str) -> bool {
+    path.trim().starts_with('/')
+}
+
 fn normalize(path: &str) -> String {
     if cfg!(windows) {
         normalize_windows(path)
     } else {
-        normalize_unix(path, cfg!(target_os = "macos"))
+        normalize_unix(&resolve_links(path), cfg!(target_os = "macos"))
+    }
+}
+
+/// The path with the links on it resolved: the deepest folder that exists is made canonical and
+/// the rest, which is not there yet, is put back as written.
+fn resolve_links(path: &str) -> String {
+    let lexical = normalize_unix(path, false);
+    let mut rest: Vec<&str> = Vec::new();
+    let mut head = lexical.as_str();
+    loop {
+        let probe = if head.is_empty() { "/" } else { head };
+        if let Ok(real) = std::fs::canonicalize(probe) {
+            let mut resolved = real.to_string_lossy().into_owned();
+            for part in rest.iter().rev() {
+                resolved.push('/');
+                resolved.push_str(part);
+            }
+            return resolved;
+        }
+        match head.rfind('/') {
+            Some(at) => {
+                rest.push(&head[at + 1..]);
+                head = &head[..at];
+            }
+            None => return lexical,
+        }
     }
 }
 
@@ -212,6 +248,72 @@ mod tests {
         ] {
             assert_eq!(check_destination(a, b), Ok(()), "{a} -> {b}");
         }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn a_path_that_does_not_start_with_a_slash_is_refused() {
+        for (a, b) in [
+            ("Foto", "/Volumes/Backup"),
+            ("/Users/anna/Foto", "Backup"),
+            ("~/Foto", "/Volumes/Backup"),
+            ("", "/Volumes/Backup"),
+            (r"D:\Foto", "/Volumes/Backup"),
+        ] {
+            assert_eq!(check_destination(a, b), Err(NOT_ABSOLUTE), "{a} -> {b}");
+        }
+        assert_eq!(
+            NOT_ABSOLUTE,
+            "Scrivi il percorso completo, che inizia con /."
+        );
+        assert_eq!(check_destination(" /a/x ", "/b"), Ok(()));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn a_link_to_a_folder_cannot_hide_that_it_is_the_same_folder() {
+        use std::os::unix::fs::symlink;
+        let temp = tempfile::tempdir().unwrap();
+        let real = temp.path().join("vera");
+        std::fs::create_dir_all(real.join("dentro")).unwrap();
+        let alias = temp.path().join("scorciatoia");
+        symlink(&real, &alias).unwrap();
+        let (real, alias) = (real.to_str().unwrap(), alias.to_str().unwrap());
+
+        assert_eq!(check_destination(real, alias), Err(SAME_FOLDER));
+        assert_eq!(check_destination(alias, real), Err(SAME_FOLDER));
+        let inside = format!("{alias}/dentro");
+        assert_eq!(check_destination(real, &inside), Err(INSIDE_SOURCE));
+        let not_yet = format!("{alias}/nuova/cartella");
+        assert_eq!(check_destination(real, &not_yet), Err(INSIDE_SOURCE));
+        assert_eq!(
+            check_destination(&inside, alias),
+            Err(SOURCE_INSIDE_DESTINATION)
+        );
+        let sibling = temp.path().join("altra");
+        assert_eq!(check_destination(alias, sibling.to_str().unwrap()), Ok(()));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn an_alias_of_the_root_is_the_root() {
+        // `/Volumes/Macintosh HD` on a Mac is a link to `/`.
+        let temp = tempfile::tempdir().unwrap();
+        let boot = temp.path().join("Macintosh HD");
+        std::os::unix::fs::symlink("/", &boot).unwrap();
+        let folder = temp.path().join("Foto");
+        std::fs::create_dir(&folder).unwrap();
+        let (boot, folder) = (boot.to_str().unwrap(), folder.to_str().unwrap());
+
+        assert_eq!(
+            check_destination(folder, boot),
+            Err(SOURCE_INSIDE_DESTINATION)
+        );
+        assert_eq!(check_destination("/", boot), Err(SAME_FOLDER));
+        assert_eq!(
+            check_destination(&format!("{boot}{folder}"), folder),
+            Err(SAME_FOLDER)
+        );
     }
 
     #[test]

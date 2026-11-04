@@ -18,6 +18,11 @@ pub struct Finished {
     pub log: String,
 }
 
+/// The engine program itself is not there: rsync is not installed (robocopy is part of Windows).
+pub fn is_missing(error: &std::io::Error) -> bool {
+    cfg!(unix) && error.kind() == std::io::ErrorKind::NotFound
+}
+
 #[cfg(windows)]
 pub use crate::robocopy::{
     decode_log, dry_run, exit_code, find_cause, is_success, parse_preview, partial_count, spawn,

@@ -62,12 +62,18 @@ enum Item<'a> {
 
 /// Files only: directories (names ending in `/`), links and rsync's own notices
 /// (`skipping non-regular file`, `created directory`) are not items.
-fn item(line: &str) -> Option<Item<'_>> {
+fn item(line: &str, padded: bool) -> Option<Item<'_>> {
     let line = line.trim_end_matches('\r');
     let (code, rest) = line.split_once(' ')?;
     if code == "*deleting" {
-        // GNU rsync pads the word with spaces, openrsync does not.
-        let name = rest.trim_start();
+        // GNU rsync pads the word to the width of an itemize code (11) before the separating
+        // space, openrsync does not. The padding is cut by width, not trimmed: a name may start
+        // with spaces.
+        let name = if padded {
+            rest.strip_prefix("  ").unwrap_or(rest)
+        } else {
+            rest
+        };
         return (!name.is_empty() && !name.ends_with('/')).then_some(Item::Deleted { name });
     }
     // The code is `>f` plus attribute letters; its length differs (11 characters on GNU rsync,
@@ -76,13 +82,29 @@ fn item(line: &str) -> Option<Item<'_>> {
         .then_some(Item::Copied { code, name: rest })
 }
 
+/// Which rsync wrote this log: GNU pads `*deleting`, openrsync does not. Told by the width of
+/// the first itemize code (11 characters on GNU, 9 on openrsync); a log with no other code than
+/// `*deleting` is taken to come from this platform's rsync.
+fn is_padded(log: &str) -> bool {
+    log.lines()
+        .filter_map(|line| line.split(' ').next())
+        .find(|code| {
+            (code.starts_with(">f") || code.starts_with("cd")) && matches!(code.len(), 9 | 11)
+        })
+        .map_or(NATIVE_PADDED, |code| code.len() == 11)
+}
+
+/// GNU rsync everywhere but on macOS, which ships openrsync.
+const NATIVE_PADDED: bool = !cfg!(target_os = "macos");
+
 /// `destination_exists` is `false` when B is not there yet: openrsync's dry run then prints no
 /// `+` flags, so every copied file is New. `size_of` gives the size of a file of A, by its path
 /// relative to A (itemize lines carry no sizes).
 pub fn parse(log: &str, destination_exists: bool, size_of: impl Fn(&str) -> u64) -> Preview {
     let mut preview = Preview::default();
+    let padded = is_padded(log);
     for line in log.lines() {
-        match item(line) {
+        match item(line, padded) {
             Some(Item::Copied { code, name }) => {
                 if destination_exists && !code.contains('+') {
                     preview.updated.add(name);
@@ -107,13 +129,30 @@ pub fn parse_preview(log: &str, source: &str, destination: &str) -> Preview {
 }
 
 /// Files copied before a failed or stopped run ended. The log lists a file when rsync starts on
-/// it, so the last one is the file in flight (possibly cut short) and is not counted.
-pub fn partial_count(log: &str, _source: &str, _destination: &str) -> usize {
-    let copied = log
-        .lines()
-        .filter(|line| matches!(item(line), Some(Item::Copied { .. })))
-        .count();
-    copied.saturating_sub(1)
+/// it, so when the run was cut short the last file line is the file in flight (possibly cut
+/// short itself) and is not counted. Not so when rsync ran to the end (exit 23 and 24: some
+/// files were skipped or vanished) or when the last line is a deletion.
+pub fn partial_count(
+    log: &str,
+    _source: &str,
+    _destination: &str,
+    exit_code: i32,
+    cancelled: bool,
+) -> usize {
+    let (mut copied, mut last_is_copy) = (0, false);
+    for line in log.lines() {
+        match item(line, NATIVE_PADDED) {
+            Some(Item::Copied { .. }) => (copied, last_is_copy) = (copied + 1, true),
+            Some(Item::Deleted { .. }) => last_is_copy = false,
+            None => {}
+        }
+    }
+    let ran_to_the_end = !cancelled && matches!(exit_code, 23 | 24);
+    if last_is_copy && !ran_to_the_end {
+        copied - 1
+    } else {
+        copied
+    }
 }
 
 /// A run's log is plain UTF-8 (rsync output as the app captured it).
@@ -123,49 +162,105 @@ pub fn decode_log(bytes: &[u8]) -> String {
 
 /// Is this stdout line a file the run has just started on (or deleted)? Used by the progress.
 pub fn is_file_line(line: &str) -> bool {
-    item(line).is_some()
+    item(line, NATIVE_PADDED).is_some()
 }
 
 /// File name (no folders) of an itemize line.
 pub fn file_name(line: &str) -> Option<&str> {
-    let name = match item(line)? {
+    let name = match item(line, NATIVE_PADDED)? {
         Item::Copied { name, .. } | Item::Deleted { name } => name,
     };
     name.rsplit('/').next()
+}
+
+/// How a folder looks right now. B may well not exist yet (the run creates it), so it is
+/// `Missing` only when its parent is missing too: an unplugged disk, not a new folder.
+#[derive(PartialEq)]
+enum Reach {
+    Fine,
+    Missing,
+    Unreachable,
+}
+
+fn reach(folder: Folder, path: &str) -> Reach {
+    match std::fs::metadata(path.trim()) {
+        Ok(_) => Reach::Fine,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            if folder == Folder::B && !parent_is_missing(path) {
+                Reach::Fine
+            } else {
+                Reach::Missing
+            }
+        }
+        // Refused is not gone: the permission check tells that apart.
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => Reach::Fine,
+        Err(_) => Reach::Unreachable,
+    }
+}
+
+/// openrsync creates every missing folder above B, which would fill the computer's own disk when
+/// B is on an unplugged one (`/Volumes/Backup/Foto`). Only B itself may be new.
+pub fn parent_is_missing(destination: &str) -> bool {
+    let destination = Path::new(destination.trim());
+    !destination.exists()
+        && destination
+            .parent()
+            .is_some_and(|parent| !parent.as_os_str().is_empty() && !parent.exists())
 }
 
 /// The reason of a failed rsync, in the Windows-style codes the messages of `error_messages`
 /// are keyed on (2/3 not found, 5 no permission, 53 unreachable). It is read from the exit
 /// code and from what the two folders are like right now, never from rsync's English text.
 /// Exit 23 and 11 cover many things, so they are only explained when a folder is missing or
-/// cannot be opened; every other failure stays generic ("apri il registro"). `_log` is there
+/// cannot be opened; the socket and stream codes (10, 12, 30, 35) only when a folder really is
+/// out of reach. Every other failure stays generic ("apri il registro"). `_log` is there
 /// because robocopy's cause is in its log; rsync's text is never read.
 pub fn find_cause(exit_code: i32, _log: &str, source: &str, destination: &str) -> Option<Cause> {
     let folders = [(Folder::A, source), (Folder::B, destination)];
-    let missing = folders
+    let broken = folders
         .iter()
-        .find(|(_, path)| !Path::new(path.trim()).exists())
-        .map(|(folder, _)| *folder);
-    match exit_code {
-        // Socket and stream errors, timeouts: the other side went away.
-        10 | 12 | 30 | 35 => Some(Cause {
-            code: 53,
-            folder: missing.unwrap_or(Folder::B),
-        }),
-        3 | 11 | 23 => match missing {
-            Some(folder) => Some(Cause { code: 3, folder }),
-            None => folders
-                .iter()
-                .find(|(_, path)| {
-                    std::fs::read_dir(path.trim())
-                        .is_err_and(|e| e.kind() == std::io::ErrorKind::PermissionDenied)
-                })
-                .map(|(folder, _)| Cause {
-                    code: 5,
-                    folder: *folder,
-                }),
-        },
+        .map(|(folder, path)| (*folder, reach(*folder, path)))
+        .find(|(_, reach)| *reach != Reach::Fine);
+    match (exit_code, broken) {
+        (10 | 12 | 30 | 35, Some((folder, _))) => Some(Cause { code: 53, folder }),
+        (3 | 11 | 23, Some((folder, Reach::Missing))) => Some(Cause { code: 3, folder }),
+        (3 | 11 | 23, _) => folders
+            .iter()
+            .find(|(_, path)| {
+                std::fs::read_dir(path.trim())
+                    .is_err_and(|e| e.kind() == std::io::ErrorKind::PermissionDenied)
+            })
+            .map(|(folder, _)| Cause {
+                code: 5,
+                folder: *folder,
+            }),
         _ => None,
+    }
+}
+
+/// Copies what is read from `reader` into `log`, best effort: once the log cannot be written
+/// it is dropped and the reading goes on. Never stopping to read is what keeps rsync from
+/// blocking on a full pipe.
+pub struct LogTee<R, W> {
+    reader: R,
+    log: Option<W>,
+}
+
+impl<R, W> LogTee<R, W> {
+    pub fn new(reader: R, log: Option<W>) -> Self {
+        Self { reader, log }
+    }
+}
+
+impl<R: std::io::Read, W: std::io::Write> std::io::Read for LogTee<R, W> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.reader.read(buf)?;
+        if let Some(log) = &mut self.log
+            && log.write_all(&buf[..n]).is_err()
+        {
+            self.log = None;
+        }
+        Ok(n)
     }
 }
 
@@ -177,7 +272,7 @@ mod process {
     use super::*;
     use crate::engine::Finished;
     use std::fs::File;
-    use std::io::{self, Read, Write};
+    use std::io::{self, Read};
     use std::os::unix::process::ExitStatusExt;
     use std::process::{Child, Command, ExitStatus, Stdio};
 
@@ -188,16 +283,6 @@ mod process {
         let mut command = Command::new("rsync");
         command.args(args).stdin(Stdio::null());
         command
-    }
-
-    /// openrsync creates every missing folder above B, which would fill the computer's own
-    /// disk when B is on an unplugged one (`/Volumes/Backup/Foto`). Only B itself may be new.
-    fn parent_is_missing(destination: &str) -> bool {
-        let destination = Path::new(destination.trim());
-        !destination.exists()
-            && destination
-                .parent()
-                .is_some_and(|parent| !parent.as_os_str().is_empty() && !parent.exists())
     }
 
     /// Runs the dry run and blocks until it exits. `log` holds stdout then stderr.
@@ -225,35 +310,23 @@ mod process {
         destination: &str,
         log: &Path,
     ) -> io::Result<(Child, Box<dyn Read + Send>)> {
-        if parent_is_missing(destination) {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "la cartella B non esiste",
-            ));
-        }
-        let log = File::create(log)?;
         let (reader, stdout, stderr) = output_channel()?;
         let child = {
             // The command holds rsync's end of the channel: it is dropped before anyone reads,
             // or the channel would never end.
-            let mut command = command(&run_args(mode, source, destination));
+            let mut command = if parent_is_missing(destination) {
+                // Nothing may be created above B: a stand-in that fails like GNU rsync does
+                // (exit 11), so the run is recorded as any other failed run.
+                let mut stand_in = Command::new("sh");
+                stand_in.args(["-c", "exit 11"]).stdin(Stdio::null());
+                stand_in
+            } else {
+                command(&run_args(mode, source, destination))
+            };
             command.stdout(stdout).stderr(stderr);
             command.spawn()?
         };
-        Ok((child, Box::new(LogTee { reader, log })))
-    }
-
-    struct LogTee {
-        reader: Box<dyn Read + Send>,
-        log: File,
-    }
-
-    impl Read for LogTee {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            let n = self.reader.read(buf)?;
-            self.log.write_all(&buf[..n])?;
-            Ok(n)
-        }
+        Ok((child, Box::new(LogTee::new(reader, File::create(log).ok()))))
     }
 
     /// What the app reads, and rsync's stdout and stderr. A pipe, except on macOS: openrsync
@@ -487,12 +560,12 @@ sending incremental file list\n";
             assert!(!is_file_line(line), "{line}");
         }
         assert_eq!(
-            partial_count(LINUX, "", ""),
+            partial_count(LINUX, "", "", 1, true),
             4,
             "5 files, the last is in flight"
         );
-        assert_eq!(partial_count(MACOS, "", ""), 4);
-        assert_eq!(partial_count("", "", ""), 0);
+        assert_eq!(partial_count(MACOS, "", "", 1, true), 4);
+        assert_eq!(partial_count("", "", "", 1, true), 0);
     }
 
     #[test]
@@ -504,24 +577,87 @@ sending incremental file list\n";
         let (a, b) = (a.to_str().unwrap(), b.to_str().unwrap());
         let cause = |code, folder| Some(Cause { code, folder });
 
-        // B is not there, A is: 23 or 11 are about B; with A gone it is about A.
-        assert_eq!(find_cause(11, "", a, b), cause(3, Folder::B));
-        assert_eq!(find_cause(23, "", a, b), cause(3, Folder::B));
-        let gone = temp.path().join("gone");
-        assert_eq!(
-            find_cause(23, "", gone.to_str().unwrap(), b),
-            cause(3, Folder::A)
-        );
-        // The other side went away.
-        assert_eq!(find_cause(12, "", a, b), cause(53, Folder::B));
-        assert_eq!(
-            find_cause(10, "", gone.to_str().unwrap(), a),
-            cause(53, Folder::A)
-        );
-        // Both folders are there: nothing to say, so the generic message is used.
-        std::fs::create_dir(b).unwrap();
-        for code in [1, 3, 11, 13, 23, 24] {
+        // B is not there yet but its parent is: that is a normal first run, not a cause.
+        for code in [3, 10, 11, 12, 23] {
             assert_eq!(find_cause(code, "", a, b), None, "exit {code}");
         }
+        // B whose parent is missing is an unplugged disk; with A gone it is about A.
+        let lost = temp.path().join("Disco").join("B");
+        let lost = lost.to_str().unwrap();
+        for code in [3, 11, 23] {
+            assert_eq!(find_cause(code, "", a, lost), cause(3, Folder::B));
+        }
+        let gone = temp.path().join("gone");
+        let gone = gone.to_str().unwrap();
+        assert_eq!(find_cause(23, "", gone, b), cause(3, Folder::A));
+        // The other side went away, and a folder really is out of reach.
+        assert_eq!(find_cause(12, "", a, lost), cause(53, Folder::B));
+        assert_eq!(find_cause(10, "", gone, a), cause(53, Folder::A));
+        // Both folders are there: nothing to say, so the generic message is used.
+        std::fs::create_dir(b).unwrap();
+        for code in [1, 3, 10, 11, 12, 13, 23, 24, 30, 35] {
+            assert_eq!(find_cause(code, "", a, b), None, "exit {code}");
+        }
+    }
+
+    #[test]
+    fn a_deleted_name_keeps_its_leading_spaces_on_both_rsync_flavours() {
+        // GNU pads `*deleting` to 11 characters and a space; openrsync adds one space.
+        let gnu = ">f+++++++++ new.txt\n*deleting     vecchio.txt\n*deleting   altro.txt\n";
+        let open = ">f+++++++ new.txt\n*deleting   vecchio.txt\n*deleting altro.txt\n";
+        for (log, name) in [(gnu, "GNU"), (open, "openrsync")] {
+            let preview = parse(log, true, |_| 0);
+            assert_eq!(
+                preview.deleted.files,
+                ["  vecchio.txt", "altro.txt"],
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_file_in_flight_is_not_counted_only_when_the_run_was_cut_short() {
+        let log = ">f+++++++++ a.txt\n>f+++++++++ b.txt\n>f+++++++++ c.txt\n";
+        // Killed or aborted mid-transfer: the last one is not done.
+        assert_eq!(partial_count(log, "", "", 137, true), 2);
+        assert_eq!(partial_count(log, "", "", 12, false), 2);
+        // rsync ran to the end with some files skipped or vanished: all were done.
+        assert_eq!(partial_count(log, "", "", 23, false), 3);
+        assert_eq!(partial_count(log, "", "", 24, false), 3);
+        // A stop wins over the exit code.
+        assert_eq!(partial_count(log, "", "", 23, true), 2);
+        // A deletion is never a file in flight.
+        let log = ">f+++++++++ a.txt\n>f+++++++++ b.txt\n*deleting   old.txt\n";
+        assert_eq!(partial_count(log, "", "", 137, true), 2);
+        assert_eq!(partial_count(log, "", "", 12, false), 2);
+    }
+
+    #[test]
+    fn a_log_that_cannot_be_written_never_stops_the_reading() {
+        use std::io::{Cursor, Read, Write};
+        struct Broken;
+        impl Write for Broken {
+            fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::other("disco pieno"))
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let output: Vec<u8> = (0..20_000u32).map(|n| (n % 251) as u8).collect();
+        let mut tee = LogTee::new(Cursor::new(output.clone()), Some(Broken));
+        let mut all = Vec::new();
+        tee.read_to_end(&mut all).unwrap();
+        assert_eq!(all, output, "rsync's output is drained to the end");
+
+        let mut kept = Vec::new();
+        LogTee::new(Cursor::new(output.clone()), Some(&mut kept))
+            .read_to_end(&mut Vec::new())
+            .unwrap();
+        assert_eq!(kept, output, "a working log gets everything");
+        let mut no_log = LogTee::new(Cursor::new(output.clone()), None::<Vec<u8>>);
+        let mut all = Vec::new();
+        no_log.read_to_end(&mut all).unwrap();
+        assert_eq!(all, output);
     }
 }

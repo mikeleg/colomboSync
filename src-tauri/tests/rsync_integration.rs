@@ -134,6 +134,25 @@ fn a_destination_that_does_not_exist_yet_previews_everything_as_new_and_stays_un
         assert_eq!(preview.updated.count, 0);
         assert!(!b.exists(), "a preview creates nothing");
     }
+
+    // The first run creates B itself: not a failure, not a "folder not found".
+    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let counts = runner::preview(path_str(&a), path_str(&b), SyncMode::Copy)
+        .unwrap()
+        .counts();
+    let run = runner::run(
+        &storage,
+        &saved("Copia di A", &a, &b),
+        counts,
+        &ActiveRun::default(),
+        |_| {},
+    )
+    .unwrap();
+    assert_eq!(run.outcome, Outcome::Ok);
+    assert_eq!(
+        fs::read_to_string(b.join("sub").join("due.txt")).unwrap(),
+        "due"
+    );
 }
 
 #[test]
@@ -151,17 +170,34 @@ fn a_destination_whose_parent_is_missing_is_reported_and_never_created() {
     );
     assert_eq!(failure.advice, "Il disco è collegato?");
 
-    assert!(
-        runner::run(
-            &storage,
-            &saved("Copia di A", &a, &b),
-            Default::default(),
-            &ActiveRun::default(),
-            |_| {},
-        )
-        .is_err()
+    // A run does not start rsync on it, and is recorded like any other failed run.
+    let run = runner::run(
+        &storage,
+        &saved("Copia di A", &a, &b),
+        Default::default(),
+        &ActiveRun::default(),
+        |_| {},
+    )
+    .unwrap();
+    assert_eq!(run.outcome, Outcome::Error);
+    assert_eq!(
+        run.cause,
+        Some(Cause {
+            code: 3,
+            folder: Folder::B
+        })
     );
-    assert!(!temp.path().join("Backup").exists());
+    assert_eq!(run.partial, Some(0));
+    assert_eq!(
+        error_messages::explain_run(&run).unwrap().title,
+        format!(
+            "Non completato: non trovo la cartella B ({}).",
+            path_str(&b)
+        )
+    );
+    let history = fs::read_to_string(storage.history_file()).unwrap();
+    assert_eq!(serde_json::from_str::<Run>(history.trim()).unwrap(), run);
+    assert!(!temp.path().join("Backup").exists(), "nothing was created");
 }
 
 #[test]

@@ -95,9 +95,23 @@ fn roots() -> Vec<Folder> {
         ]
     };
     for dir in mount_dirs {
-        roots.extend(subfolders(Path::new(&dir)).unwrap_or_default());
+        roots.extend(without_boot_aliases(
+            subfolders(Path::new(&dir)).unwrap_or_default(),
+        ));
     }
     roots
+}
+
+/// `/Volumes/Macintosh HD` is a link to `/`: not a disk of its own, and a way to reach A from
+/// inside B. Folders that resolve to the root are left out.
+#[cfg(unix)]
+fn without_boot_aliases(folders: Vec<Folder>) -> Vec<Folder> {
+    folders
+        .into_iter()
+        .filter(|folder| {
+            std::fs::canonicalize(&folder.path).is_ok_and(|real| real != Path::new("/"))
+        })
+        .collect()
 }
 
 /// A folder that sits directly in the list of drives: one level up is that list, not a folder.
@@ -247,6 +261,23 @@ mod tests {
             .collect();
 
         assert_eq!(names, ["scorciatoia", "vera"]);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn an_alias_of_the_boot_volume_is_not_listed_as_a_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("Backup")).unwrap();
+        std::os::unix::fs::symlink("/", dir.path().join("Macintosh HD")).unwrap();
+        std::os::unix::fs::symlink(dir.path().join("Backup"), dir.path().join("Scorciatoia"))
+            .unwrap();
+
+        let names: Vec<_> = without_boot_aliases(subfolders(dir.path()).unwrap())
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+
+        assert_eq!(names, ["Backup", "Scorciatoia"]);
     }
 
     #[test]

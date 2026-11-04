@@ -1,7 +1,7 @@
 //! A Preview or a Run end to end: copy engine + parser + storage + history. No Tauri types.
 
 use crate::engine::{self, SyncMode};
-use crate::error_messages::{self, Explanation, Moment};
+use crate::error_messages::{self, Cause, ENGINE_MISSING, Explanation, Folder, Moment};
 use crate::history::{self, Outcome, Run};
 use crate::mirror_guard;
 use crate::path_rules;
@@ -42,8 +42,10 @@ pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Previe
         });
     }
 
-    let finished =
-        engine::dry_run(mode, source, destination).map_err(|e| Explanation::from(e.to_string()))?;
+    let finished = engine::dry_run(mode, source, destination).map_err(|error| {
+        // Never the raw OS error: either the engine is not installed or it is a generic failure.
+        error_messages::describe(missing_engine(&error), source, destination, Moment::Preview)
+    })?;
 
     if !engine::is_success(finished.code) {
         let cause = engine::find_cause(finished.code, &finished.log, source, destination);
@@ -142,13 +144,13 @@ impl ActiveRun {
         source: &str,
         destination: &str,
         log: &Path,
-    ) -> Result<Box<dyn Read + Send>, String> {
+    ) -> Result<Box<dyn Read + Send>, StartError> {
         let mut slot = self.slot();
         if slot.is_some() {
-            return Err("C’è già una copia in corso.".into());
+            return Err(StartError::Busy);
         }
         let (child, stdout) =
-            engine::spawn(mode, source, destination, log).map_err(|e| e.to_string())?;
+            engine::spawn(mode, source, destination, log).map_err(StartError::Failed)?;
         self.cancelled.store(false, Ordering::SeqCst);
         self.exit_when_done.store(false, Ordering::SeqCst);
         *slot = Some(child);
@@ -184,11 +186,27 @@ impl Drop for SlotGuard<'_> {
     }
 }
 
+enum StartError {
+    /// Another Run is in flight.
+    Busy,
+    /// The engine process could not be started.
+    Failed(io::Error),
+}
+
+/// The cause to record when the engine is not installed; nothing else about a failed start is
+/// worth a message of its own.
+fn missing_engine(error: &io::Error) -> Option<Cause> {
+    engine::is_missing(error).then_some(Cause {
+        code: ENGINE_MISSING,
+        folder: Folder::A,
+    })
+}
+
 /// Progress is reported at most this often (the engine can print thousands of lines a second).
 const PROGRESS_EVERY: Duration = Duration::from_millis(100);
 
-/// Real run. Always returns the recorded `Run` (outcome `Ok`, `Error` or `Cancelled`); `Err` only
-/// when the engine cannot be started or the history cannot be written. `counts` come from the
+/// Real run. Always returns the recorded `Run` (outcome `Ok`, `Error` or `Cancelled`, also when the
+/// engine cannot be started); `Err` only when the history cannot be written. `counts` come from the
 /// preview the user just confirmed and give the total of `on_progress`, which is called at most
 /// every `PROGRESS_EVERY` while the engine writes, and once more when its output ends.
 pub fn run(
@@ -211,7 +229,38 @@ pub fn run(
     fs::create_dir_all(storage.logs_dir()).map_err(|e| e.to_string())?;
 
     let clock = Instant::now();
-    let mut stdout = active.start(mode, source, destination, &log)?;
+    let record =
+        |outcome: Outcome, counts: Counts, partial: Option<usize>, cause: Option<Cause>| Run {
+            sync_id: Some(sync.id),
+            sync_name: sync.name.clone(),
+            source: source.to_string(),
+            destination: destination.to_string(),
+            mode,
+            new: counts.new,
+            updated: counts.updated,
+            deleted: counts.deleted,
+            duration_ms: clock.elapsed().as_millis() as u64,
+            outcome,
+            started_at: started.to_rfc3339(),
+            log_path: log.to_string_lossy().into_owned(),
+            partial,
+            cause,
+        };
+    let mut stdout = match active.start(mode, source, destination, &log) {
+        Ok(stdout) => stdout,
+        Err(StartError::Busy) => return Err("C’è già una copia in corso.".into()),
+        Err(StartError::Failed(error)) => {
+            // The engine could not even start: a failed Run like any other, in the history.
+            let run = record(
+                Outcome::Error,
+                Counts::default(),
+                Some(0),
+                missing_engine(&error),
+            );
+            history::append(&storage.history_file(), &run).map_err(|e| e.to_string())?;
+            return Ok(run);
+        }
+    };
     let _slot = SlotGuard(active);
     let total = counts.new + counts.updated + counts.deleted;
     let mut follower = StdoutFollower::default();
@@ -235,7 +284,6 @@ pub fn run(
     // The state the throttle may have skipped, so the UI ends on the real count.
     on_progress(&progress(&follower));
     let status = active.wait().map_err(|e| e.to_string())?;
-    let duration_ms = clock.elapsed().as_millis() as u64;
 
     // A killed robocopy exits with code 1, which alone would read as success; a killed rsync has
     // no exit code of its own (128 + 9).
@@ -249,26 +297,16 @@ pub fn run(
     } else {
         engine::find_cause(code, &log_text, source, destination)
     };
-    let run = Run {
-        sync_id: Some(sync.id),
-        sync_name,
-        source: source.to_string(),
-        destination: destination.to_string(),
-        mode,
-        new: if ok { counts.new } else { 0 },
-        updated: if ok { counts.updated } else { 0 },
-        deleted: if ok { counts.deleted } else { 0 },
-        duration_ms,
-        outcome: match (ok, cancelled) {
+    let run = record(
+        match (ok, cancelled) {
             (true, _) => Outcome::Ok,
             (false, true) => Outcome::Cancelled,
             (false, false) => Outcome::Error,
         },
-        started_at: started.to_rfc3339(),
-        log_path: log.to_string_lossy().into_owned(),
-        partial: (!ok).then(|| engine::partial_count(&log_text, source, destination)),
+        if ok { counts } else { Counts::default() },
+        (!ok).then(|| engine::partial_count(&log_text, source, destination, code, cancelled)),
         cause,
-    };
+    );
     history::append(&storage.history_file(), &run).map_err(|e| e.to_string())?;
     Ok(run)
 }
@@ -418,13 +456,31 @@ mod tests {
     }
 
     #[test]
+    fn a_program_that_is_not_found_is_a_missing_engine_only_where_the_engine_is_installed_by_hand()
+    {
+        let not_found = io::Error::from(io::ErrorKind::NotFound);
+        assert_eq!(missing_engine(&not_found).is_some(), cfg!(unix));
+        assert_eq!(
+            missing_engine(&io::Error::from(io::ErrorKind::PermissionDenied)),
+            None
+        );
+        if cfg!(unix) {
+            let explanation =
+                error_messages::describe(missing_engine(&not_found), "/a", "/b", Moment::Preview);
+            assert_eq!(explanation.title, "Su questo computer manca rsync.");
+        }
+    }
+
+    #[test]
     fn preview_of_a_missing_source_says_where_to_look_in_both_modes() {
         let temp = tempfile::tempdir().unwrap();
         let missing = temp.path().join("Foto");
         let missing = missing.to_str().unwrap();
+        let backup = temp.path().join("Backup");
+        let backup = backup.to_str().unwrap();
 
         for mode in [SyncMode::Copy, SyncMode::Mirror] {
-            let failure = preview(missing, r"E:\Backup", mode).unwrap_err();
+            let failure = preview(missing, backup, mode).unwrap_err();
             assert_eq!(
                 failure.title,
                 format!("Non trovo la cartella A ({missing}).")

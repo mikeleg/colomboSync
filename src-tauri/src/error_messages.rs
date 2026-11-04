@@ -59,6 +59,9 @@ const MAPPED_CODES: [u32; 5] = [2, 3, 5, 53, 67];
 const PATH_NOT_FOUND: u32 = 3;
 /// `ERROR_ACCESS_DENIED`, which is also what a refused folder is on macOS and Linux.
 const ACCESS_DENIED: u32 = 5;
+/// The copy engine is not installed (rsync): "command not found" is 127 in a shell. Not a folder
+/// problem, so it is only ever made by the runner, never read from a log.
+pub const ENGINE_MISSING: u32 = 127;
 
 /// The mapped Windows error code inside an OS error. Elsewhere raw codes are errno values
 /// (5 is I/O error, 53 something unrelated), so only the error kind says what happened.
@@ -115,7 +118,9 @@ pub fn describe(
         };
     };
     let title = match moment {
-        // "Non trovo la cartella A (D:\Foto)." reads the same in both.
+        // "Su questo computer manca rsync." and "Non trovo la cartella A (D:\Foto)." read the
+        // same in both.
+        _ if cause.code == ENGINE_MISSING => format!("{}.", capitalized(&reason.what)),
         Moment::Preview if matches!(cause.code, 2 | 3) => format!("{}.", capitalized(&reason.what)),
         Moment::Preview => format!("Non riesco a controllare le cartelle: {}.", reason.what),
         Moment::Run => format!("Non completato: {}.", reason.what),
@@ -180,6 +185,10 @@ fn reason(cause: Cause, source: &str, destination: &str) -> Option<Reason> {
         5 => (
             format!("non ho il permesso di usare la cartella {name} ({path})"),
             "Controlla i permessi e riprova.",
+        ),
+        ENGINE_MISSING => (
+            "su questo computer manca rsync".to_string(),
+            "Installalo con il gestore dei pacchetti (per esempio: sudo apt install rsync) e riprova.",
         ),
         _ => return None,
     };
@@ -592,6 +601,26 @@ mod tests {
         );
         assert_eq!(explain_run(&run(Outcome::Cancelled, None)), None);
         assert_eq!(explain_run(&run(Outcome::Ok, None)), None);
+    }
+
+    #[test]
+    fn a_missing_engine_is_said_plainly_in_a_preview_a_run_and_on_the_card() {
+        let missing = Some(Cause {
+            code: ENGINE_MISSING,
+            folder: Folder::A,
+        });
+        for moment in [Moment::Preview, Moment::Run] {
+            let e = describe(missing, A, NAS_B, moment);
+            assert_eq!(e.title, "Su questo computer manca rsync.");
+            assert_eq!(
+                e.advice,
+                "Installalo con il gestore dei pacchetti (per esempio: sudo apt install rsync) e riprova."
+            );
+        }
+        assert_eq!(
+            card_note(&run(Outcome::Error, missing)).unwrap(),
+            "Su questo computer manca rsync. Installalo con il gestore dei pacchetti (per esempio: sudo apt install rsync) e riprova."
+        );
     }
 
     #[test]

@@ -67,7 +67,13 @@ pub fn parse_preview(log: &str, source: &str, destination: &str) -> Preview {
 
 /// Files copied before a failed or stopped run ended. The last file line is the file in flight
 /// (possibly cut short), so it is not counted.
-pub fn partial_count(log: &str, source: &str, destination: &str) -> usize {
+pub fn partial_count(
+    log: &str,
+    source: &str,
+    destination: &str,
+    _exit_code: i32,
+    _cancelled: bool,
+) -> usize {
     preview_parser::count_source_files(log, source, destination).saturating_sub(1)
 }
 
@@ -249,8 +255,9 @@ mod tests {
     fn partial_count_skips_the_file_in_flight() {
         let line = |name: &str| format!("\t  \t\t 5\tD:\\Foto\\{name}\r\n");
         let log = line("a.txt") + &line("b.txt") + &line("c.txt");
-        assert_eq!(partial_count(&log, r"D:\Foto", r"E:\Backup"), 2);
-        assert_eq!(partial_count(&line("a.txt"), r"D:\Foto", r"E:\Backup"), 0);
-        assert_eq!(partial_count("", r"D:\Foto", r"E:\Backup"), 0);
+        let (a, b) = (r"D:\Foto", r"E:\Backup");
+        assert_eq!(partial_count(&log, a, b, 16, false), 2);
+        assert_eq!(partial_count(&line("a.txt"), a, b, 16, true), 0);
+        assert_eq!(partial_count("", a, b, 16, false), 0);
     }
 }

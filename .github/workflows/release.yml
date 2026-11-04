@@ -67,7 +67,7 @@ jobs:
           - name: windows
             os: windows-latest
           - name: macos
-            os: macos-15-intel # TEMP: arm64 pool starved
+            os: macos-14 # TEMP
           - name: linux
             os: ubuntu-22.04 # AppImage needs a glibc at least as old as the oldest target distro
     runs-on: ${{ matrix.os }}

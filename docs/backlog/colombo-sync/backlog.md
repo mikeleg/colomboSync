@@ -197,6 +197,7 @@ Wizard (Da dove → Dove → Opzioni → Anteprima), `SchemaView`, robocopy runn
 ---
 
 ## S8 · Release pipeline
+**Status:** done (2026-11-04, merged on main; dry run and `v0.1.0-rc.1` draft green, version-mismatch tag correctly failed; first beta `v0.1.0-beta.1`)
 **Why:** one tag gives tested, checksummed binaries the owner can hand out to users.
 **Size:** M
 **Blocked by:** S7

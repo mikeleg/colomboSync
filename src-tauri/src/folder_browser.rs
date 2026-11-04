@@ -1,14 +1,18 @@
-//! Lists drives and subfolders for the click-first folder picker.
+//! Lists drives (Windows) or the home folder and the mounted disks (macOS, Linux) and the
+//! subfolders for the click-first folder picker.
 //! A folder that cannot be opened is reported in the listing (never a panic or a failed command).
 
 use serde::Serialize;
-use std::os::windows::fs::MetadataExt;
+use std::fs::DirEntry;
 use std::path::Path;
 
 const CANNOT_OPEN: &str =
     "Non riesco ad aprire questa cartella. Il disco o la rete sono collegati?";
+#[cfg(windows)]
 const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
+#[cfg(windows)]
 const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
+#[cfg(windows)]
 const FILE_ATTRIBUTE_SYSTEM: u32 = 0x4;
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -19,7 +23,7 @@ pub struct Folder {
 
 #[derive(Debug, PartialEq, Serialize)]
 pub struct FolderListing {
-    /// The folder one level up; empty when that is the list of drives.
+    /// The folder one level up; empty when that is the list of drives (or of places).
     pub parent: String,
     pub folders: Vec<Folder>,
     /// Plain Italian message when `path` could not be opened (disconnected disk or network, no access).
@@ -32,14 +36,18 @@ pub fn browse(path: &str) -> FolderListing {
     if path.is_empty() {
         return FolderListing {
             parent: String::new(),
-            folders: drives(),
+            folders: roots(),
             error: None,
         };
     }
-    let parent = Path::new(path)
-        .parent()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_default();
+    let parent = if is_root(path) {
+        String::new()
+    } else {
+        Path::new(path)
+            .parent()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    };
     let (folders, error) = match subfolders(Path::new(path)) {
         Ok(folders) => (folders, None),
         Err(_) => (Vec::new(), Some(CANNOT_OPEN.to_string())),
@@ -52,7 +60,8 @@ pub fn browse(path: &str) -> FolderListing {
 }
 
 /// Drives that exist, found by probing `A:\` to `Z:\` (UNC shares cannot be enumerated).
-fn drives() -> Vec<Folder> {
+#[cfg(windows)]
+fn roots() -> Vec<Folder> {
     ('A'..='Z')
         .filter_map(|letter| {
             let root = format!("{letter}:\\");
@@ -64,18 +73,53 @@ fn drives() -> Vec<Folder> {
         .collect()
 }
 
+/// The home folder, then the disks mounted where the system puts them: `/Volumes` on macOS,
+/// `/media/<user>`, `/run/media/<user>` and `/mnt` on Linux.
+#[cfg(unix)]
+fn roots() -> Vec<Folder> {
+    let mut roots = Vec::new();
+    if let Some(home) = std::env::var_os("HOME") {
+        roots.push(Folder {
+            name: "Cartella personale".into(),
+            path: home.to_string_lossy().into_owned(),
+        });
+    }
+    let user = std::env::var("USER").unwrap_or_default();
+    let mount_dirs = if cfg!(target_os = "macos") {
+        vec!["/Volumes".to_string()]
+    } else {
+        vec![
+            format!("/media/{user}"),
+            format!("/run/media/{user}"),
+            "/mnt".to_string(),
+        ]
+    };
+    for dir in mount_dirs {
+        roots.extend(subfolders(Path::new(&dir)).unwrap_or_default());
+    }
+    roots
+}
+
+/// A folder that sits directly in the list of drives: one level up is that list, not a folder.
+/// On Windows `Path::parent` already says so for a drive.
+#[cfg(windows)]
+fn is_root(_path: &str) -> bool {
+    false
+}
+
+#[cfg(unix)]
+fn is_root(path: &str) -> bool {
+    roots()
+        .iter()
+        .any(|root| Path::new(&root.path) == Path::new(path))
+}
+
 /// Visible directories directly inside `path`, sorted by name.
 fn subfolders(path: &Path) -> std::io::Result<Vec<Folder>> {
     let entries = std::fs::read_dir(path)?;
     let mut folders: Vec<Folder> = entries
         .flatten()
-        // One stat-free read per entry: on Windows `DirEntry::metadata` comes with the directory listing.
-        // Junctions and directory symlinks carry the DIRECTORY attribute too.
-        .filter(|entry| {
-            entry
-                .metadata()
-                .is_ok_and(|m| is_visible_folder(m.file_attributes()))
-        })
+        .filter(is_visible_folder)
         .map(|entry| Folder {
             name: entry.file_name().to_string_lossy().into_owned(),
             path: entry.path().to_string_lossy().into_owned(),
@@ -85,9 +129,26 @@ fn subfolders(path: &Path) -> std::io::Result<Vec<Folder>> {
     Ok(folders)
 }
 
-fn is_visible_folder(attributes: u32) -> bool {
+/// One stat-free read per entry: on Windows `DirEntry::metadata` comes with the directory
+/// listing. Junctions and directory symlinks carry the DIRECTORY attribute too.
+#[cfg(windows)]
+fn is_visible_folder(entry: &DirEntry) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    entry
+        .metadata()
+        .is_ok_and(|m| has_visible_folder_attributes(m.file_attributes()))
+}
+
+#[cfg(windows)]
+fn has_visible_folder_attributes(attributes: u32) -> bool {
     attributes & FILE_ATTRIBUTE_DIRECTORY != 0
         && attributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM) == 0
+}
+
+/// A folder (also a link to one) whose name does not start with a dot.
+#[cfg(unix)]
+fn is_visible_folder(entry: &DirEntry) -> bool {
+    !entry.file_name().to_string_lossy().starts_with('.') && entry.path().is_dir()
 }
 
 #[cfg(test)]
@@ -133,18 +194,20 @@ mod tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn only_visible_directories_pass() {
-        assert!(is_visible_folder(FILE_ATTRIBUTE_DIRECTORY));
-        assert!(!is_visible_folder(
+        assert!(has_visible_folder_attributes(FILE_ATTRIBUTE_DIRECTORY));
+        assert!(!has_visible_folder_attributes(
             FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN
         ));
-        assert!(!is_visible_folder(
+        assert!(!has_visible_folder_attributes(
             FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_SYSTEM
         ));
-        assert!(!is_visible_folder(0x20)); // a file
+        assert!(!has_visible_folder_attributes(0x20)); // a file
     }
 
     #[test]
+    #[cfg(windows)]
     fn empty_path_lists_the_drives_including_the_system_one() {
         let system_drive = std::env::var("SystemDrive").unwrap(); // "C:"
 
@@ -160,9 +223,50 @@ mod tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn parent_of_a_folder_is_the_one_above_and_of_a_drive_root_is_empty() {
         assert_eq!(browse(r"C:\Non\Esiste").parent, r"C:\Non");
         assert_eq!(browse(r"C:\Non").parent, r"C:\");
         assert_eq!(browse(r"C:\").parent, "");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn hidden_folders_are_left_out_and_links_to_folders_are_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(".nascosta")).unwrap();
+        std::fs::create_dir(dir.path().join("vera")).unwrap();
+        std::os::unix::fs::symlink(dir.path().join("vera"), dir.path().join("scorciatoia"))
+            .unwrap();
+        std::fs::write(dir.path().join("file.txt"), "x").unwrap();
+
+        let names: Vec<_> = subfolders(dir.path())
+            .unwrap()
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+
+        assert_eq!(names, ["scorciatoia", "vera"]);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn empty_path_lists_the_home_folder_whose_parent_is_the_list() {
+        let home = std::env::var("HOME").unwrap();
+
+        let listing = browse("");
+        assert_eq!(listing.parent, "");
+        assert_eq!(
+            listing.folders.first().map(|f| f.path.as_str()),
+            Some(home.as_str())
+        );
+
+        assert_eq!(
+            browse(&home).parent,
+            "",
+            "one level up from home is the list, not its folder"
+        );
+        assert_eq!(browse(&format!("{home}/non-esiste")).parent, home);
+        assert_eq!(browse("/").parent, "");
     }
 }

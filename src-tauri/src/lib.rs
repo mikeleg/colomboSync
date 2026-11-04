@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod elevation;
+pub mod engine;
 pub mod error_messages;
 pub mod folder_browser;
 pub mod history;
@@ -8,6 +9,7 @@ pub mod path_rules;
 pub mod preview_parser;
 pub mod progress;
 pub mod robocopy;
+pub mod rsync;
 pub mod runner;
 pub mod storage;
 pub mod sync_store;
@@ -43,7 +45,7 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            // Never leave robocopy running after the app is gone.
+            // Never leave the copy engine running after the app is gone.
             if let tauri::RunEvent::Exit = event {
                 app.state::<runner::ActiveRun>().cancel(false);
             }

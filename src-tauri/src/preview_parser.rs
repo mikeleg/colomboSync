@@ -15,7 +15,7 @@ pub struct FileGroup {
 }
 
 impl FileGroup {
-    fn add(&mut self, relative: &str) {
+    pub(crate) fn add(&mut self, relative: &str) {
         self.count += 1;
         if self.files.len() < MAX_LISTED {
             self.files.push(relative.to_string());
@@ -139,6 +139,7 @@ mod tests {
     const FIXTURE: &[u8] = include_bytes!("../tests/fixtures/preview_unilog_utf16le.txt");
 
     #[test]
+    #[cfg(windows)]
     fn classifies_new_updated_and_extra_by_path() {
         let log = decode_unilog(FIXTURE);
         let exists = |p: &Path| p == Path::new(r"E:\Backup\updated.txt");

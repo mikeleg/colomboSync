@@ -1,7 +1,7 @@
-//! Follows a running robocopy through its stdout (`/TEE`): counts file lines, remembers the
-//! file being copied. Labels are never read: with `/NJH /NJS /NDL /NC /NP` a file line is the
-//! only kind of line that starts with a tab (the `/TEE` header, blank lines and `ERROR` lines
-//! do not).
+//! Follows a running copy through its stdout: counts file lines, remembers the file being
+//! copied. Labels are never read. robocopy (`/TEE` with `/NJH /NJS /NDL /NC /NP`): a file line is
+//! the only kind of line that starts with a tab (the `/TEE` header, blank lines and `ERROR`
+//! lines do not). rsync: a file line starts with its itemize code (`>f…`, `*deleting`).
 
 use serde::Serialize;
 
@@ -42,13 +42,11 @@ impl StdoutFollower {
 
     /// File name (no folders) of the last file line.
     pub fn current_file(&self) -> String {
-        let text = decode_oem(&self.last_file_line);
-        let path = text.rsplit('\t').next().unwrap_or_default().trim_end();
-        path.rsplit(['\\', '/']).next().unwrap_or(path).to_string()
+        file_name(&self.last_file_line)
     }
 
     fn end_line(&mut self) {
-        if self.line.first() == Some(&b'\t') {
+        if is_file_line(&self.line) {
             self.done += 1;
             std::mem::swap(&mut self.line, &mut self.last_file_line);
         }
@@ -56,7 +54,33 @@ impl StdoutFollower {
     }
 }
 
+#[cfg(windows)]
+fn is_file_line(line: &[u8]) -> bool {
+    line.first() == Some(&b'\t')
+}
+
+#[cfg(windows)]
+fn file_name(raw: &[u8]) -> String {
+    let text = decode_oem(raw);
+    let path = text.rsplit('\t').next().unwrap_or_default().trim_end();
+    path.rsplit(['\\', '/']).next().unwrap_or(path).to_string()
+}
+
+#[cfg(unix)]
+fn is_file_line(line: &[u8]) -> bool {
+    crate::rsync::is_file_line(&String::from_utf8_lossy(line))
+}
+
+#[cfg(unix)]
+fn file_name(raw: &[u8]) -> String {
+    let text = String::from_utf8_lossy(raw);
+    crate::rsync::file_name(&text)
+        .unwrap_or_default()
+        .to_string()
+}
+
 /// Text robocopy writes to a pipe is in the console OEM code page (even with `/UNICODE`).
+#[cfg(windows)]
 fn decode_oem(bytes: &[u8]) -> String {
     const CP_OEMCP: u32 = 1;
     #[link(name = "kernel32")]
@@ -86,7 +110,7 @@ fn decode_oem(bytes: &[u8]) -> String {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, windows))]
 mod tests {
     use super::*;
 
@@ -141,5 +165,48 @@ mod tests {
         follower.feed(b"\t\t 5\tD:\\Foto\\a.txt\r\n");
         assert_eq!(follower.done(), 1);
         assert_eq!(follower.current_file(), "a.txt");
+    }
+}
+
+#[cfg(all(test, unix))]
+mod unix_tests {
+    use super::*;
+
+    // What an rsync run prints on its pipe: itemize lines, plus notices that are not files.
+    const STDOUT: &[u8] = "created directory /tmp/B\ncd+++++++++ ./\n>f+++++++++ due.txt\n>f+++++++++ uno.txt\nskipping non-regular file \"l\"\n>f+++++++++ sub/è già.txt\n*deleting   extra.txt\n*deleting   old-dir/\n".as_bytes();
+
+    #[test]
+    fn counts_only_file_lines_and_names_the_last_one() {
+        let mut follower = StdoutFollower::default();
+        follower.feed(STDOUT);
+        assert_eq!(
+            follower.done(),
+            4,
+            "three copied, one deleted; folders and notices are not files"
+        );
+        assert_eq!(follower.current_file(), "extra.txt");
+
+        let mut follower = StdoutFollower::default();
+        follower.feed(&STDOUT[..STDOUT.len() - 40]);
+        assert_eq!(follower.done(), 3);
+        assert_eq!(follower.current_file(), "è già.txt");
+    }
+
+    #[test]
+    fn a_line_split_across_reads_counts_once() {
+        let mut follower = StdoutFollower::default();
+        for chunk in STDOUT.chunks(5) {
+            follower.feed(chunk);
+        }
+        assert_eq!(follower.done(), 4);
+        assert_eq!(follower.current_file(), "extra.txt");
+    }
+
+    #[test]
+    fn errors_are_not_files() {
+        let mut follower = StdoutFollower::default();
+        follower.feed(b"rsync: [sender] change_dir \"/x\" failed: No such file or directory (2)\nrsync error: some files/attrs were not transferred (see previous errors) (code 23)\n");
+        assert_eq!(follower.done(), 0);
+        assert_eq!(follower.current_file(), "");
     }
 }

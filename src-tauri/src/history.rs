@@ -1,7 +1,7 @@
 //! `history.jsonl`: append-only, one `Run` per line.
 
+use crate::engine::{self, SyncMode};
 use crate::error_messages::Cause;
-use crate::robocopy::{SyncMode, decode_unilog};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -71,12 +71,12 @@ pub fn read(file: &Path) -> io::Result<Vec<Run>> {
     Ok(runs)
 }
 
-/// Longest log tail shown: 1 Mi characters of UTF-16.
+/// Longest log tail shown: 2 MiB of the file.
 const MAX_LOG_BYTES: u64 = 2 * 1024 * 1024;
 const TRUNCATED_NOTICE: &str = "… (mostro solo l’ultima parte del registro)\n";
 
-/// A run's robocopy log (`/UNILOG`, UTF-16LE with BOM) as text, only if the file is inside
-/// `logs_dir`. Long logs are cut to their last part.
+/// A run's log as text (robocopy's `/UNILOG`, UTF-16LE with BOM, or rsync's UTF-8 output), only
+/// if the file is inside `logs_dir`. Long logs are cut to their last part.
 pub fn read_log(logs_dir: &Path, file: &Path) -> io::Result<String> {
     read_log_capped(logs_dir, file, MAX_LOG_BYTES)
 }
@@ -95,13 +95,13 @@ fn read_log_capped(logs_dir: &Path, file: &Path, max_bytes: u64) -> io::Result<S
     if len <= max_bytes {
         let mut bytes = Vec::with_capacity(len as usize);
         input.read_to_end(&mut bytes)?;
-        return Ok(decode_unilog(&bytes));
+        return Ok(engine::decode_log(&bytes));
     }
     // Start on a UTF-16 unit boundary, then drop the cut line.
     input.seek(SeekFrom::Start((len - max_bytes) & !1))?;
     let mut tail = Vec::new();
     input.read_to_end(&mut tail)?;
-    let text = decode_unilog(&tail);
+    let text = engine::decode_log(&tail);
     let from_next_line = text
         .split_once('\n')
         .map_or(text.as_str(), |(_, rest)| rest);
@@ -220,7 +220,11 @@ mod tests {
         assert!(read(dir.path()).is_err());
     }
 
+    /// A run's log file as the engine writes it: UTF-16LE with BOM for robocopy, UTF-8 for rsync.
     fn unilog(text: &str) -> Vec<u8> {
+        if !cfg!(windows) {
+            return text.as_bytes().to_vec();
+        }
         let mut bytes = vec![0xFF, 0xFE];
         bytes.extend(text.encode_utf16().flat_map(u16::to_le_bytes));
         bytes

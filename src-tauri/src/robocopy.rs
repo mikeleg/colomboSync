@@ -1,18 +1,9 @@
-//! Robocopy engine: argument builder, exit-code rules, hidden process spawn, `/UNILOG` decoding.
+//! Robocopy engine: argument builder, exit-code rules, `/UNILOG` decoding and, on Windows, the
+//! hidden process calls. The text rules are plain functions, tested on every platform.
 
-use serde::{Deserialize, Serialize};
-use std::io;
-use std::os::windows::process::CommandExt;
-use std::path::PathBuf;
-use std::process::{Child, Command, ExitStatus, Stdio};
-
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SyncMode {
-    Copy,
-    Mirror,
-}
+use crate::engine::SyncMode;
+use crate::error_messages::{self, Cause};
+use crate::preview_parser::{self, Preview};
 
 /// Arguments of the `/L` dry run. `log` receives the UTF-16LE `/UNILOG`.
 pub fn preview_args(mode: SyncMode, source: &str, destination: &str, log: &str) -> Vec<String> {
@@ -69,35 +60,20 @@ pub fn is_success(exit_code: i32) -> bool {
     (0..8).contains(&exit_code)
 }
 
-fn robocopy_exe() -> PathBuf {
-    let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
-    PathBuf::from(root).join("System32").join("robocopy.exe")
+/// The preview of a `/L` log; B decides whether a file of A is New or Updated.
+pub fn parse_preview(log: &str, source: &str, destination: &str) -> Preview {
+    preview_parser::parse(log, source, destination, |p| p.exists())
 }
 
-fn command(args: &[String]) -> Command {
-    let mut command = Command::new(robocopy_exe());
-    command
-        .args(args)
-        .creation_flags(CREATE_NO_WINDOW)
-        .stdin(Stdio::null())
-        .stderr(Stdio::null());
-    command
+/// Files copied before a failed or stopped run ended. The last file line is the file in flight
+/// (possibly cut short), so it is not counted.
+pub fn partial_count(log: &str, source: &str, destination: &str) -> usize {
+    preview_parser::count_source_files(log, source, destination).saturating_sub(1)
 }
 
-/// Runs robocopy hidden and blocks until it exits; returns its exit code.
-pub fn execute(args: &[String]) -> io::Result<i32> {
-    exit_code(command(args).stdout(Stdio::null()).status()?)
-}
-
-/// Starts robocopy hidden with stdout piped; the caller reads the pipe, so it never blocks.
-pub fn spawn(args: &[String]) -> io::Result<Child> {
-    command(args).stdout(Stdio::piped()).spawn()
-}
-
-pub fn exit_code(status: ExitStatus) -> io::Result<i32> {
-    status
-        .code()
-        .ok_or_else(|| io::Error::other("robocopy terminated without an exit code"))
+/// The mapped Windows error in the log (`ERROR 53 (0x35)`); the exit code says only "failed".
+pub fn find_cause(_exit_code: i32, log: &str, source: &str, destination: &str) -> Option<Cause> {
+    error_messages::find_cause(log, source, destination)
 }
 
 /// `/UNILOG` is UTF-16LE with BOM: never read it as UTF-8.
@@ -110,6 +86,86 @@ pub fn decode_unilog(bytes: &[u8]) -> String {
         .map(|pair| u16::from_le_bytes(*pair))
         .collect();
     String::from_utf16_lossy(&units)
+}
+
+/// A run's log as text: the `/UNILOG` of a robocopy run.
+pub fn decode_log(bytes: &[u8]) -> String {
+    decode_unilog(bytes)
+}
+
+#[cfg(windows)]
+pub use process::{dry_run, exit_code, spawn};
+
+#[cfg(windows)]
+mod process {
+    use super::*;
+    use crate::engine::Finished;
+    use std::fs;
+    use std::io::{self, Read};
+    use std::os::windows::process::CommandExt;
+    use std::path::{Path, PathBuf};
+    use std::process::{Child, Command, ExitStatus, Stdio};
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+    fn robocopy_exe() -> PathBuf {
+        let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
+        PathBuf::from(root).join("System32").join("robocopy.exe")
+    }
+
+    fn command(args: &[String]) -> Command {
+        let mut command = Command::new(robocopy_exe());
+        command
+            .args(args)
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdin(Stdio::null())
+            .stderr(Stdio::null());
+        command
+    }
+
+    /// Runs the `/L` dry run hidden and blocks until it exits; `log` is its decoded `/UNILOG`.
+    pub fn dry_run(mode: SyncMode, source: &str, destination: &str) -> io::Result<Finished> {
+        static SEQ: AtomicU32 = AtomicU32::new(0);
+        let log = std::env::temp_dir().join(format!(
+            "colombosync-anteprima-{}-{}.log",
+            std::process::id(),
+            SEQ.fetch_add(1, Ordering::Relaxed)
+        ));
+        let args = preview_args(mode, source, destination, &log.to_string_lossy());
+        let status = command(&args).stdout(Stdio::null()).status()?;
+        let text = fs::read(&log)
+            .map(|bytes| decode_unilog(&bytes))
+            .unwrap_or_default();
+        let _ = fs::remove_file(&log);
+        Ok(Finished {
+            code: exit_code(status)?,
+            log: text,
+        })
+    }
+
+    /// Starts the real run hidden with stdout piped; the caller reads the pipe, so it never
+    /// blocks. robocopy writes the run's log to `log` itself (`/UNILOG`).
+    pub fn spawn(
+        mode: SyncMode,
+        source: &str,
+        destination: &str,
+        log: &Path,
+    ) -> io::Result<(Child, Box<dyn Read + Send>)> {
+        let args = run_args(mode, source, destination, &log.to_string_lossy());
+        let mut child = command(&args).stdout(Stdio::piped()).spawn()?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| io::Error::other("robocopy senza stdout"))?;
+        Ok((child, Box::new(stdout)))
+    }
+
+    pub fn exit_code(status: ExitStatus) -> io::Result<i32> {
+        status
+            .code()
+            .ok_or_else(|| io::Error::other("robocopy terminated without an exit code"))
+    }
 }
 
 #[cfg(test)]
@@ -187,5 +243,14 @@ mod tests {
             bytes.extend(unit.to_le_bytes());
         }
         assert_eq!(decode_unilog(&bytes), "è già\r\n");
+    }
+
+    #[test]
+    fn partial_count_skips_the_file_in_flight() {
+        let line = |name: &str| format!("\t  \t\t 5\tD:\\Foto\\{name}\r\n");
+        let log = line("a.txt") + &line("b.txt") + &line("c.txt");
+        assert_eq!(partial_count(&log, r"D:\Foto", r"E:\Backup"), 2);
+        assert_eq!(partial_count(&line("a.txt"), r"D:\Foto", r"E:\Backup"), 0);
+        assert_eq!(partial_count("", r"D:\Foto", r"E:\Backup"), 0);
     }
 }

@@ -1,37 +1,30 @@
-//! A Preview or a Run end to end: robocopy + parser + storage + history. No Tauri types.
+//! A Preview or a Run end to end: copy engine + parser + storage + history. No Tauri types.
 
+use crate::engine::{self, SyncMode};
 use crate::error_messages::{self, Explanation, Moment};
 use crate::history::{self, Outcome, Run};
 use crate::mirror_guard;
 use crate::path_rules;
-use crate::preview_parser::{self, Counts, Preview};
+use crate::preview_parser::{Counts, Preview};
 use crate::progress::{Progress, StdoutFollower};
-use crate::robocopy::{self, SyncMode};
 use crate::storage::Storage;
 use crate::sync_store::SavedSync;
 use chrono::Local;
 use std::fs;
 use std::io::{self, Read};
 use std::path::Path;
-use std::process::{Child, ChildStdout, ExitStatus};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::process::{Child, ExitStatus};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
-/// Dry run (`/L`): lists what a Run would do, touches nothing. Blocks until robocopy exits.
+/// Dry run: lists what a Run would do, touches nothing. Blocks until the engine exits.
 pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Preview, Explanation> {
     path_rules::check_destination(source, destination)?;
-    static SEQ: AtomicU32 = AtomicU32::new(0);
-    let log = std::env::temp_dir().join(format!(
-        "colombosync-anteprima-{}-{}.log",
-        std::process::id(),
-        SEQ.fetch_add(1, Ordering::Relaxed)
-    ));
-    let log_arg = log.to_string_lossy();
 
     // A that cannot be read says why (unplugged disk, share down, no permission): that is not
-    // the same as an A with nothing in it, and robocopy would only fail on it.
+    // the same as an A with nothing in it, and the engine would only fail on it.
     if let Err(error) = fs::metadata(source) {
         return Err(error_messages::explain_source_error(
             &error,
@@ -39,7 +32,7 @@ pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Previe
             destination,
         ));
     }
-    // An empty A would empty B: answer "blocked" without running robocopy.
+    // An empty A would empty B: answer "blocked" without running the engine.
     if mode == SyncMode::Mirror
         && let Some(reason) = mirror_guard::source_problem(Path::new(source))
     {
@@ -49,13 +42,11 @@ pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Previe
         });
     }
 
-    let code = robocopy::execute(&robocopy::preview_args(mode, source, destination, &log_arg))
-        .map_err(|e| Explanation::from(e.to_string()))?;
-    let text = read_log(&log);
-    let _ = fs::remove_file(&log);
+    let finished =
+        engine::dry_run(mode, source, destination).map_err(|e| Explanation::from(e.to_string()))?;
 
-    if !robocopy::is_success(code) {
-        let cause = error_messages::find_cause(&text, source, destination);
+    if !engine::is_success(finished.code) {
+        let cause = engine::find_cause(finished.code, &finished.log, source, destination);
         return Err(error_messages::describe(
             cause,
             source,
@@ -63,7 +54,7 @@ pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Previe
             Moment::Preview,
         ));
     }
-    let mut preview = preview_parser::parse(&text, source, destination, |p| p.exists());
+    let mut preview = engine::parse_preview(&finished.log, source, destination);
     if mode == SyncMode::Mirror {
         preview.blocked = mirror_guard::counts_problem(preview.counts()).map(str::to_string);
     }
@@ -105,7 +96,7 @@ impl PreviewMemo {
     }
 }
 
-/// The robocopy process of the Run in progress, shared so another thread can stop it.
+/// The engine process of the Run in progress, shared so another thread can stop it.
 #[derive(Default)]
 pub struct ActiveRun {
     child: Mutex<Option<Child>>,
@@ -114,12 +105,12 @@ pub struct ActiveRun {
 }
 
 impl ActiveRun {
-    /// A Run is in flight: from robocopy's start until its history line is written.
+    /// A Run is in flight: from the engine's start until its history line is written.
     pub fn is_running(&self) -> bool {
         self.slot().is_some()
     }
 
-    /// Kills robocopy; the Run then ends as `Cancelled`. `false` when nothing is running.
+    /// Kills the engine process; the Run then ends as `Cancelled`. `false` when nothing is running.
     /// `exit_when_done` (the app is closing) is remembered either way, so the caller of `run` can
     /// exit after the history line is written; when `false` is returned there is no run left to
     /// wait for.
@@ -144,27 +135,34 @@ impl ActiveRun {
         self.child.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn start(&self, args: &[String]) -> Result<ChildStdout, String> {
+    /// Starts the engine; what it writes comes back from the returned reader.
+    fn start(
+        &self,
+        mode: SyncMode,
+        source: &str,
+        destination: &str,
+        log: &Path,
+    ) -> Result<Box<dyn Read + Send>, String> {
         let mut slot = self.slot();
         if slot.is_some() {
             return Err("C’è già una copia in corso.".into());
         }
-        let mut child = robocopy::spawn(args).map_err(|e| e.to_string())?;
-        let stdout = child.stdout.take().ok_or("robocopy senza stdout")?;
+        let (child, stdout) =
+            engine::spawn(mode, source, destination, log).map_err(|e| e.to_string())?;
         self.cancelled.store(false, Ordering::SeqCst);
         self.exit_when_done.store(false, Ordering::SeqCst);
         *slot = Some(child);
         Ok(stdout)
     }
 
-    /// Waits for robocopy to exit without holding the lock, so `cancel` stays possible.
+    /// Waits for the engine to exit without holding the lock, so `cancel` stays possible.
     fn wait(&self) -> io::Result<ExitStatus> {
         loop {
             {
                 let mut slot = self.slot();
                 let child = slot
                     .as_mut()
-                    .ok_or_else(|| io::Error::other("no robocopy process"))?;
+                    .ok_or_else(|| io::Error::other("no engine process"))?;
                 if let Some(status) = child.try_wait()? {
                     return Ok(status);
                 }
@@ -174,7 +172,7 @@ impl ActiveRun {
     }
 }
 
-/// Frees the `ActiveRun` slot when `run` ends on any path, and makes sure robocopy is gone.
+/// Frees the `ActiveRun` slot when `run` ends on any path, and makes sure the engine process is gone.
 struct SlotGuard<'a>(&'a ActiveRun);
 
 impl Drop for SlotGuard<'_> {
@@ -186,13 +184,13 @@ impl Drop for SlotGuard<'_> {
     }
 }
 
-/// Progress is reported at most this often (robocopy can print thousands of lines a second).
+/// Progress is reported at most this often (the engine can print thousands of lines a second).
 const PROGRESS_EVERY: Duration = Duration::from_millis(100);
 
 /// Real run. Always returns the recorded `Run` (outcome `Ok`, `Error` or `Cancelled`); `Err` only
-/// when robocopy cannot be started or the history cannot be written. `counts` come from the
+/// when the engine cannot be started or the history cannot be written. `counts` come from the
 /// preview the user just confirmed and give the total of `on_progress`, which is called at most
-/// every `PROGRESS_EVERY` while robocopy writes, and once more when its output ends.
+/// every `PROGRESS_EVERY` while the engine writes, and once more when its output ends.
 pub fn run(
     storage: &Storage,
     sync: &SavedSync,
@@ -213,12 +211,7 @@ pub fn run(
     fs::create_dir_all(storage.logs_dir()).map_err(|e| e.to_string())?;
 
     let clock = Instant::now();
-    let mut stdout = active.start(&robocopy::run_args(
-        mode,
-        source,
-        destination,
-        &log.to_string_lossy(),
-    ))?;
+    let mut stdout = active.start(mode, source, destination, &log)?;
     let _slot = SlotGuard(active);
     let total = counts.new + counts.updated + counts.deleted;
     let mut follower = StdoutFollower::default();
@@ -231,7 +224,7 @@ pub fn run(
     };
     let mut last_report: Option<Instant> = None;
     let mut chunk = [0u8; 8192];
-    // Ends at EOF: robocopy exited or was killed.
+    // Ends at EOF: the engine exited or was killed.
     while let Ok(n @ 1..) = stdout.read(&mut chunk) {
         follower.feed(&chunk[..n]);
         if last_report.is_none_or(|t| t.elapsed() >= PROGRESS_EVERY) {
@@ -244,16 +237,17 @@ pub fn run(
     let status = active.wait().map_err(|e| e.to_string())?;
     let duration_ms = clock.elapsed().as_millis() as u64;
 
-    // A killed robocopy exits with code 1, which alone would read as success.
+    // A killed robocopy exits with code 1, which alone would read as success; a killed rsync has
+    // no exit code of its own (128 + 9).
     let cancelled = active.cancelled.load(Ordering::SeqCst);
-    let code = robocopy::exit_code(status).map_err(|e| e.to_string())?;
-    let ok = !cancelled && robocopy::is_success(code);
+    let code = engine::exit_code(status).map_err(|e| e.to_string())?;
+    let ok = !cancelled && engine::is_success(code);
     // Only a failed or stopped run needs its log: it can be huge.
     let log_text = if ok { String::new() } else { read_log(&log) };
     let cause = if ok || cancelled {
         None
     } else {
-        error_messages::find_cause(&log_text, source, destination)
+        engine::find_cause(code, &log_text, source, destination)
     };
     let run = Run {
         sync_id: Some(sync.id),
@@ -272,17 +266,11 @@ pub fn run(
         },
         started_at: started.to_rfc3339(),
         log_path: log.to_string_lossy().into_owned(),
-        partial: (!ok).then(|| partial_count(&log_text, source, destination)),
+        partial: (!ok).then(|| engine::partial_count(&log_text, source, destination)),
         cause,
     };
     history::append(&storage.history_file(), &run).map_err(|e| e.to_string())?;
     Ok(run)
-}
-
-/// Files copied before a failed or stopped run ended. The last file line is the file in flight
-/// (possibly cut short), so it is not counted.
-fn partial_count(log: &str, source: &str, destination: &str) -> usize {
-    preview_parser::count_source_files(log, source, destination).saturating_sub(1)
 }
 
 /// "Copia di <last folder of A>"; for a drive root, "Copia di disco D:".
@@ -298,7 +286,7 @@ pub fn default_sync_name(source: &str) -> String {
 
 fn read_log(path: &Path) -> String {
     fs::read(path)
-        .map(|bytes| robocopy::decode_unilog(&bytes))
+        .map(|bytes| engine::decode_log(&bytes))
         .unwrap_or_default()
 }
 
@@ -365,15 +353,35 @@ mod tests {
     fn preview_and_run_enforce_the_path_rules_themselves() {
         let temp = tempfile::tempdir().unwrap();
         let storage = Storage::at(temp.path().join("ColomboSync"));
-        let cases = [
-            (r"D:\Foto", r"d:\foto\", path_rules::SAME_FOLDER),
-            (r"D:\Foto", r"D:\Foto\Backup", path_rules::INSIDE_SOURCE),
-            (
-                r"D:\Foto\2024",
-                r"D:\Foto",
-                path_rules::SOURCE_INSIDE_DESTINATION,
-            ),
-        ];
+        let cases = if cfg!(windows) {
+            [
+                (r"D:\Foto", r"d:\foto\", path_rules::SAME_FOLDER),
+                (r"D:\Foto", r"D:\Foto\Backup", path_rules::INSIDE_SOURCE),
+                (
+                    r"D:\Foto\2024",
+                    r"D:\Foto",
+                    path_rules::SOURCE_INSIDE_DESTINATION,
+                ),
+            ]
+        } else {
+            [
+                (
+                    "/home/anna/Foto",
+                    "/home/anna/Foto/",
+                    path_rules::SAME_FOLDER,
+                ),
+                (
+                    "/home/anna/Foto",
+                    "/home/anna/Foto/Backup",
+                    path_rules::INSIDE_SOURCE,
+                ),
+                (
+                    "/home/anna/Foto/2024",
+                    "/home/anna/Foto",
+                    path_rules::SOURCE_INSIDE_DESTINATION,
+                ),
+            ]
+        };
         for (a, b, message) in cases {
             for mode in [SyncMode::Copy, SyncMode::Mirror] {
                 assert_eq!(preview(a, b, mode).unwrap_err(), Explanation::from(message));
@@ -407,15 +415,6 @@ mod tests {
         assert!(!active.exit_when_done());
         assert!(!active.cancel(true), "nothing to stop");
         assert!(active.exit_when_done());
-    }
-
-    #[test]
-    fn partial_count_skips_the_file_in_flight() {
-        let line = |name: &str| format!("\t  \t\t 5\tD:\\Foto\\{name}\r\n");
-        let log = line("a.txt") + &line("b.txt") + &line("c.txt");
-        assert_eq!(partial_count(&log, r"D:\Foto", r"E:\Backup"), 2);
-        assert_eq!(partial_count(&line("a.txt"), r"D:\Foto", r"E:\Backup"), 0);
-        assert_eq!(partial_count("", r"D:\Foto", r"E:\Backup"), 0);
     }
 
     #[test]

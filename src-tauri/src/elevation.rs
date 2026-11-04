@@ -1,15 +1,19 @@
-//! Is the app running as administrator? Mapped network drives belong to the user's normal
-//! token and are not visible to an elevated one.
+//! Is the app running as administrator (root)? Mapped network drives belong to the user's normal
+//! token and are not visible to an elevated one; on macOS and Linux root is the same warning.
 
+#[cfg(windows)]
 const TOKEN_QUERY: u32 = 0x0008;
+#[cfg(windows)]
 const TOKEN_ELEVATION: i32 = 20;
 
+#[cfg(windows)]
 #[link(name = "kernel32")]
 unsafe extern "system" {
     fn GetCurrentProcess() -> isize;
     fn CloseHandle(handle: isize) -> i32;
 }
 
+#[cfg(windows)]
 #[link(name = "advapi32")]
 unsafe extern "system" {
     fn OpenProcessToken(process: isize, access: u32, token: *mut isize) -> i32;
@@ -23,6 +27,7 @@ unsafe extern "system" {
 }
 
 /// `false` when the answer cannot be had: the banner is a hint, not a gate.
+#[cfg(windows)]
 pub fn is_elevated() -> bool {
     // SAFETY: plain Win32 calls on the current process; `token` is closed on every path and
     // `elevated` is the 4-byte TOKEN_ELEVATION struct that `TokenElevation` fills.
@@ -37,6 +42,16 @@ pub fn is_elevated() -> bool {
         CloseHandle(token);
         read != 0 && elevated != 0
     }
+}
+
+/// Effective user id 0.
+#[cfg(unix)]
+pub fn is_elevated() -> bool {
+    unsafe extern "C" {
+        fn geteuid() -> u32;
+    }
+    // SAFETY: `geteuid` takes no arguments, cannot fail and touches no memory.
+    unsafe { geteuid() == 0 }
 }
 
 #[cfg(test)]

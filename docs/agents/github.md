@@ -20,10 +20,27 @@ Triggers: push to `main` and `slice/**`, every pull request, manual `workflow_di
 | Job | Runner | Steps | Artifact |
 |---|---|---|---|
 | windows | windows-latest | `npm run check`, `npm test`, `npm run build`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, `npm run portable` | `colombo-sync-windows`: `colombo-sync.exe` |
-| macos | macos-latest | same checks, then `npx tauri build --bundles app,dmg` (ad-hoc signed, `bundle.macOS.signingIdentity` = `-`, not notarized) | `colombo-sync-macos`: `ColomboSync-macos.zip` (the `.app`) and the `.dmg` |
-| linux | ubuntu-latest | same checks (after installing `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`), then `npx tauri build --bundles appimage` | `colombo-sync-linux`: `*.AppImage` |
+| macos | macos-14 | same checks, then `npx tauri build --bundles app,dmg` (ad-hoc signed, `bundle.macOS.signingIdentity` = `-`, not notarized) | `colombo-sync-macos`: `ColomboSync-macos.zip` (the `.app`) and the `.dmg` |
+| linux | ubuntu-22.04 | same checks (after installing `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`), then `npx tauri build --bundles appimage` | `colombo-sync-linux`: `*.AppImage` |
 
 `npm run build` runs before cargo because `generate_context!` needs `dist/`.
+
+All three CI jobs run on `windows-latest`, `macos-14` (pinned: `macos-latest` jobs stayed queued with no runner) and `ubuntu-22.04` (the AppImage baseline). `ci.yml` is also `workflow_call`-able: the release workflow uses it as its test gate.
+
+## Releasing (`.github/workflows/release.yml`, spec in `docs/release-plan.md`)
+A tag `v*` runs: version check → CI gate on three OS → builds → **draft** release with `ColomboSync-<ver>-windows-x64.exe`, `-macos-universal.dmg`, `-linux-x86_64.AppImage` and `SHA256SUMS.txt`. Notes = `feat`/`fix` commits since the previous `v*` tag + `.github/release-notes-it.md` (edit that file for the Italian install notes). Pre-release flag is set when the version starts with `0.` or contains `-`.
+
+Version rule: `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` must be identical. The tag without the `v` must equal that version, or that version plus a pre-release suffix (`v0.1.0-rc.1` is accepted while the files say `0.1.0`; `v0.1.1` is not). The suffix lets you test the pipeline without bumping files; it ends up in the file names.
+
+Steps:
+1. Bump the three files to the new version (`npm version X.Y.Z --no-git-tag-version` for `package.json` + lock, edit `tauri.conf.json` and `Cargo.toml` by hand, `cd src-tauri && cargo check` to refresh `Cargo.lock`). Commit `chore(release): X.Y.Z` on `main`, push (CI green).
+2. Tag and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z` (with the token recipe's credential helper).
+3. `gh run watch <id> -R mikeleg/colomboSync --exit-status` (run id: `gh run list -R mikeleg/colomboSync --workflow release.yml --limit 1`). Any red job → no release; fix, bump patch, new tag.
+4. Smoke checklist from `docs/release-plan.md` on a clean machine per OS with the **release files**, not local builds. Note the result as a comment on the draft.
+5. Publish the draft by hand (GitHub → Releases → Edit → Publish; keep "pre-release" for 0.x).
+6. The owner downloads the files and `SHA256SUMS.txt` and shares them privately with the Italian install notes (repo stays private).
+
+Dry run without a tag: `gh workflow run release.yml -R mikeleg/colomboSync --ref <branch>`; builds and uploads workflow artifacts, creates no release. GitHub only accepts `workflow_dispatch` for a workflow file that is on `main`, so until it is merged add a temporary `push: branches: [<branch>]` trigger to test a branch (a non-tag run takes the same dry-run path). macOS runner queues can last long or time out ("job was not acquired"): `gh run rerun <id> --failed`. A bad throwaway tag/draft is removed with `gh release delete <tag> --cleanup-tag -R mikeleg/colomboSync` (and `git tag -d <tag>`).
 
 ## Iterating on Unix-only code
 1. Work on a `slice/<id>` branch (CI runs on every push to it).

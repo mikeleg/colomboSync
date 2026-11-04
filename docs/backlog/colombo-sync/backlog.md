@@ -7,7 +7,7 @@ Order is dependency order. Checkpoints are not slices: they are a real non-techn
 ```
 S1 (done) ── S1b (new look + wizard details) ──┬── [checkpoint 1: Copy mode] ── S2 (mirror) ── [checkpoint 2: mirror]
      │                                         └── S3 (saved syncs) ──┐
-     ├── S4 (history) ───────────────────────────────────────────────┴── S6 (plain-language errors) ──► S7 (macOS + Linux with rsync)
+     ├── S4 (history) ───────────────────────────────────────────────┴── S6 (plain-language errors) ──► S7 (macOS + Linux with rsync) ──► S8 (release pipeline)
      └── S5 (progress + stop)
 ```
 
@@ -185,7 +185,7 @@ Wizard (Da dove → Dove → Opzioni → Anteprima), `SchemaView`, robocopy runn
 - Given Mirror mode on macOS/Linux, then rsync uses `--delete` only in Mirror, files only in B are listed as "Da cancellare in B", and consent + MirrorGuard behave exactly as on Windows (integration test with temp dirs on the CI runners).
 - Given a run on macOS/Linux, then progress, "Ferma la copia" (kill rsync), partial counts, history and logs work as on Windows; data lives in `~/Library/Application Support/ColomboSync` (macOS) or `$XDG_DATA_HOME/ColomboSync` / `~/.local/share/ColomboSync` (Linux).
 - Given an rsync failure (exit 23, 24, 10–12, 3, 13…), then the plain-Italian messages of S6 are shown (mapped by exit code, never by English text).
-- Given a push to main, then GitHub Actions builds and tests on windows-latest, macos-latest and ubuntu-latest and uploads `colombo-sync.exe`, a zipped `.app`/`.dmg` (ad-hoc signed) and an AppImage.
+- Given a push to main, then GitHub Actions builds and tests on windows-latest, macos-14 and ubuntu-latest and uploads `colombo-sync.exe`, a zipped `.app`/`.dmg` (ad-hoc signed) and an AppImage.
 
 ### Implementation notes
 - Riskiest assumption: recent macOS ships `openrsync`, not GNU rsync 3.x. Spike first on the macos runner: `rsync --version`, and whether `rsync -a --dry-run --itemize-changes [--delete] A/ B/` gives `>f+++++++++` (new), `>f.st……` (updated), `*deleting` (extra). Fallback: `--out-format='%i %n'`. Classify by itemize code, never by message text.
@@ -193,6 +193,23 @@ Wizard (Da dove → Dove → Opzioni → Anteprima), `SchemaView`, robocopy runn
 - `cfg(windows)` gating for the Windows-only parts: `MetadataExt` in folder_browser, `MultiByteToWideChar` in progress, token elevation, `CREATE_NO_WINDOW`, `%LOCALAPPDATA%`, A:–Z: drive probing. Unix counterparts: folder browser roots `/Volumes` (macOS) and `/media/$USER`, `/mnt`, home (Linux); elevation = effective uid 0; path_rules for `/`-rooted, case-sensitive paths (macOS default volumes are case-insensitive: compare case-insensitively there).
 - Bundles: macOS `tauri build --bundles app,dmg` with `bundle.macOS.signingIdentity = "-"`; Linux `--bundles appimage` (CI deps: libwebkit2gtk-4.1-dev, libappindicator3-dev, librsvg2-dev, patchelf).
 - UI copy that is Windows wording ("Esegui come amministratore", "Cestino", drive letters in examples): flag per platform; new Italian copy must be listed in the report for the user.
+
+---
+
+## S8 · Release pipeline
+**Why:** one tag gives tested, checksummed binaries the owner can hand out to users.
+**Size:** M
+**Blocked by:** S7
+**Spec:** `docs/release-plan.md` (decisions taken by the owner: distribution by hand, universal macOS dmg, Linux AppImage only).
+
+### Acceptance criteria
+- Given a `v0.1.0-rc.1` tag, then `.github/workflows/release.yml` creates a **draft** release (pre-release because the version starts with `0.` or has a `-` suffix) with `ColomboSync-<ver>-windows-x64.exe`, `ColomboSync-<ver>-macos-universal.dmg`, `ColomboSync-<ver>-linux-x86_64.AppImage`, `SHA256SUMS.txt` and notes (commits since the previous tag grouped feat/fix + the Italian install notes).
+- Given the tag does not match `package.json`, `tauri.conf.json` and `Cargo.toml`, or those three differ from each other, then the run fails before any build.
+- Given any test/lint job red on any OS, then no release is created.
+- Given the macOS build, then the dmg contains a universal binary (`lipo -info` shows arm64 and x86_64, asserted in CI); the AppImage is built on ubuntu-22.04.
+- Given a manual run (`workflow_dispatch`), then the three files are built and uploaded as workflow artifacts and **no release** is created.
+- Actions in both workflows run on Node 24; the CI Linux job also uses ubuntu-22.04.
+- `docs/agents/github.md` has a "Releasing" section (bump, tag, watch, smoke checklist, publish by hand).
 
 ---
 

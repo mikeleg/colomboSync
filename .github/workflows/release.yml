@@ -1,0 +1,209 @@
+name: Release
+
+# Tag `vX.Y.Z` (or `vX.Y.Z-rc.1`) -> tested binaries in a DRAFT GitHub Release.
+# Manual run (workflow_dispatch) = dry run: builds and uploads workflow artifacts, creates no release.
+# Spec: docs/release-plan.md. Steps: docs/agents/github.md "Releasing".
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # package.json, tauri.conf.json and Cargo.toml must agree. On a tag, the tag
+      # without the "v" must equal that version, or that version plus a pre-release
+      # suffix: v0.1.0-rc.1 is accepted while the files say 0.1.0.
+      - name: Check versions
+        id: check
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          tauri=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          cargo=$(sed -n 's/^version *= *"\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n 1)
+          echo "package.json=$pkg tauri.conf.json=$tauri Cargo.toml=$cargo"
+          if [ "$pkg" != "$tauri" ] || [ "$pkg" != "$cargo" ]; then
+            echo "::error::package.json, tauri.conf.json and Cargo.toml have different versions"
+            exit 1
+          fi
+          version=$pkg
+          if [ "$REF_TYPE" = "tag" ]; then
+            version=${REF_NAME#v}
+            if [ "${version%%-*}" != "$pkg" ]; then
+              echo "::error::tag $REF_NAME does not match the app version $pkg"
+              exit 1
+            fi
+          fi
+          prerelease=false
+          case "$version" in 0.* | *-*) prerelease=true ;; esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version (prerelease=$prerelease)"
+
+  gate:
+    needs: version
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: [version, gate]
+    name: build-${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+          - name: macos
+            os: macos-14 # macos-latest jobs stayed queued with no runner (2026-11-04)
+          - name: linux
+            os: ubuntu-22.04 # AppImage needs a glibc at least as old as the oldest target distro
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Linux libraries for Tauri
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: macOS targets (universal binary)
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - run: npm ci
+
+      - name: Windows portable exe
+        if: runner.os == 'Windows'
+        run: |
+          npm run portable
+          mkdir release-files
+          cp src-tauri/target/release/colombo-sync.exe "release-files/ColomboSync-$VERSION-windows-x64.exe"
+
+      # Ad-hoc signed (`bundle.macOS.signingIdentity` is "-"), not notarized.
+      - name: macOS universal dmg
+        if: runner.os == 'macOS'
+        run: |
+          # hdiutil sometimes fails with "Resource busy" on the runners: retry the build.
+          for attempt in 1 2 3; do
+            npx tauri build --target universal-apple-darwin --bundles dmg && break
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            echo "dmg build failed, retrying"
+            sleep 10
+          done
+          mkdir release-files
+          cp src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg "release-files/ColomboSync-$VERSION-macos-universal.dmg"
+
+      - name: Assert the dmg holds a universal binary
+        if: runner.os == 'macOS'
+        run: |
+          mnt=$(mktemp -d)
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" release-files/*.dmg
+          ok=1
+          for bin in "$mnt"/*.app/Contents/MacOS/*; do
+            info=$(lipo -info "$bin")
+            echo "$info"
+            case "$info" in *arm64*x86_64* | *x86_64*arm64*) ;; *) ok=0 ;; esac
+          done
+          hdiutil detach "$mnt"
+          if [ "$ok" != 1 ]; then
+            echo "::error::the dmg is not a universal (arm64 + x86_64) build"
+            exit 1
+          fi
+
+      - name: Linux AppImage
+        if: runner.os == 'Linux'
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1 # no FUSE on the runner
+        run: |
+          npx tauri build --bundles appimage
+          mkdir release-files
+          cp src-tauri/target/release/bundle/appimage/*.AppImage "release-files/ColomboSync-$VERSION-linux-x86_64.AppImage"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.name }}
+          path: release-files/*
+          if-no-files-found: error
+
+  release:
+    # Tags only: a manual run stops after the builds.
+    if: github.ref_type == 'tag'
+    needs: [version, build]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VERSION: ${{ needs.version.outputs.version }}
+      PRERELEASE: ${{ needs.version.outputs.prerelease }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # tags and history for the notes
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release-files
+
+      - name: Checksums
+        working-directory: release-files
+        run: |
+          sha256sum ColomboSync-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      # Commits since the previous v* tag (all history for the first tag), feat and fix only.
+      - name: Release notes
+        run: |
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "$TAG^" 2>/dev/null || true)
+          git log --no-merges --pretty='- %s' "${prev:+$prev..}$TAG" > commits.txt
+          {
+            echo "## Novità"
+            grep -E '^- feat(\([^)]*\))?!?:' commits.txt || echo "- nessuna"
+            echo
+            echo "## Correzioni"
+            grep -E '^- fix(\([^)]*\))?!?:' commits.txt || echo "- nessuna"
+            echo
+            cat .github/release-notes-it.md
+          } > notes.md
+          cat notes.md
+
+      - name: Draft release
+        run: |
+          flags=(--draft)
+          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
+          gh release create "$TAG" "${flags[@]}" \
+            --title "ColomboSync $VERSION" \
+            --notes-file notes.md \
+            release-files/*

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
+  import { tick } from "svelte";
   import Icon from "./Icon.svelte";
   import { browseFolders } from "./api";
   import type { FolderListing } from "./types";
@@ -20,7 +20,7 @@
     onenter: () => void;
   } = $props();
 
-  let listing = $state<FolderListing>({ parent: "", folders: [] });
+  let listing = $state<FolderListing>({ parent: "", folders: [], error: null });
   let manualOpen = $state(false);
   let head: HTMLElement;
   let input: HTMLInputElement;
@@ -34,18 +34,20 @@
     try {
       result = await browseFolders(path);
     } catch {
-      result = { parent: "", folders: [] };
+      result = { parent: "", folders: [], error: "Non riesco ad aprire questa cartella. Il disco o la rete sono collegati?" };
     }
     if (seq === lastLoad) listing = result;
   }
 
-  async function pick(path: string) {
+  function pick(path: string) {
     value = path;
-    await load(path);
-    head.focus();
+    head?.focus();
   }
 
-  onMount(() => load(chosen));
+  // The rows and the parent always follow the chosen path, however it got there (click or typing).
+  $effect(() => {
+    load(chosen);
+  });
 
   $effect(() => {
     if (error) {
@@ -58,9 +60,15 @@
 <p class="f">{label}</p>
 <p class="help intro">Ogni clic entra nella cartella e la sceglie. Quando sei in quella giusta, premi Avanti.</p>
 <div class="pick">
-  <div class="pickhead" class:chosen bind:this={head} tabindex="-1">
+  <div class="pickhead" class:chosen={chosen && !listing.error} bind:this={head} tabindex="-1">
     <span>
-      {#if chosen}<Icon name="tick" />Cartella scelta: <b>{chosen}</b>{:else}Dischi del computer: scegline uno{/if}
+      {#if !chosen}
+        Dischi del computer: scegline uno
+      {:else if listing.error}
+        <b>{chosen}</b>
+      {:else}
+        <Icon name="tick" />Cartella scelta: <b>{chosen}</b>
+      {/if}
     </span>
     {#if chosen}
       <button type="button" class="btn small" onclick={() => pick(listing.parent)}><Icon name="up" /> Livello superiore</button>
@@ -72,7 +80,11 @@
         <Icon name={chosen ? "folder" : "disk"} /><span>{folder.name}</span>
       </button>
     {:else}
-      {#if chosen}<p class="muted">Qui dentro non ci sono altre cartelle.</p>{/if}
+      {#if listing.error}
+        <div class="err-msg" role="alert">{listing.error}</div>
+      {:else if chosen}
+        <p class="muted">Qui dentro non ci sono altre cartelle.</p>
+      {/if}
     {/each}
   </div>
 </div>
@@ -92,7 +104,7 @@
       aria-invalid={error ? "true" : "false"}
       onkeydown={(e) => e.key === "Enter" && onenter()}
     />
-    <p class="help">Per esempio D:\Foto oppure \NAS\Condivisa. Premi Invio per andare avanti.</p>
+    <p class="help">Per esempio D:\Foto oppure \\NAS\Condivisa. Premi Invio per andare avanti.</p>
   </div>
 </details>
 

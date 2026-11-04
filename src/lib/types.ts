@@ -47,4 +47,6 @@ interface Folder {
 export interface FolderListing {
   parent: string;
   folders: Folder[];
+  /** Plain Italian message when the folder could not be opened. */
+  error: string | null;
 }

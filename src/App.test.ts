@@ -32,7 +32,7 @@ const doneRun: Run = {
 /** Answers the Rust commands the wizard uses; the folder picker always sees an empty computer. */
 function backend(handlers: { preview_sync?: () => unknown; run_sync?: () => unknown }) {
   invokeMock.mockImplementation(async (cmd) => {
-    if (cmd === "browse_folders") return { parent: "", folders: [] };
+    if (cmd === "browse_folders") return { parent: "", folders: [], error: null };
     const handler = handlers[cmd as keyof typeof handlers];
     if (!handler) throw new Error(`unexpected command ${cmd}`);
     return handler();

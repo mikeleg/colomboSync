@@ -173,6 +173,7 @@ Wizard (Da dove → Dove → Opzioni → Anteprima), `SchemaView`, robocopy runn
 ---
 
 ## S7 · Build and run on macOS and Linux with rsync
+**Status:** done (2026-11-04, merged on main; CI green on Windows, macOS, Linux; apps not opened by hand yet)
 **Why:** the user wants the same app on Mac and Linux; robocopy only exists on Windows.
 **Size:** L → split while implementing if needed (engine first, then platform details, then CI bundles)
 **Blocked by:** S6

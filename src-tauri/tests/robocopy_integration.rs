@@ -99,8 +99,12 @@ fn robocopy_failure_is_recorded_as_error() {
     let b = temp.path().join("B");
     let storage = Storage::at(temp.path().join("ColomboSync"));
 
-    let preview = runner::preview(path_str(&missing), path_str(&b), SyncMode::Copy);
-    assert!(preview.is_err());
+    let a = path_str(&missing);
+    let preview = runner::preview(a, path_str(&b), SyncMode::Copy);
+    assert_eq!(
+        preview.unwrap_err(),
+        format!("Non trovo la cartella A ({a}). Il disco è collegato?")
+    );
 
     let run = runner::run(
         &storage,
@@ -112,7 +116,19 @@ fn robocopy_failure_is_recorded_as_error() {
     .unwrap();
 
     assert_eq!(run.outcome, Outcome::Error);
-    assert!(run.error.is_some());
+    // The real log of this robocopy (any Windows language) is read by error code.
+    assert_eq!(
+        run.error,
+        Some(format!(
+            "Non completato: non trovo la cartella A ({a}). Il disco è collegato?"
+        ))
+    );
+    assert_eq!(
+        run.error_note,
+        Some(format!(
+            "Non trovo la cartella A ({a}). Il disco è collegato?"
+        ))
+    );
     assert_eq!(run.partial, Some(0), "an Error run keeps a partial count");
     assert_eq!(
         fs::read_to_string(storage.history_file())

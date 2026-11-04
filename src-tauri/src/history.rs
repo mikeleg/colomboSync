@@ -32,12 +32,15 @@ pub struct Run {
     /// Local start time, RFC 3339.
     pub started_at: String,
     pub log_path: String,
-    /// Raw robocopy message when the outcome is `Error` (plain language comes in S6).
+    /// Why an `Error` run failed, in plain Italian (runs from before S6 hold the raw robocopy text).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     /// Files copied before an `Error` or `Cancelled` run stopped (no new/updated split).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub partial: Option<usize>,
+    /// The reason of `error` as the short note under the sync's card on the home screen.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_note: Option<String>,
 }
 
 pub fn append(file: &Path, run: &Run) -> io::Result<()> {
@@ -126,6 +129,7 @@ mod tests {
             log_path: r"C:\L\logs\x.log".into(),
             error: None,
             partial: None,
+            error_note: None,
         }
     }
 
@@ -294,5 +298,18 @@ mod tests {
         let json = serde_json::to_string(&partial).unwrap();
         assert!(json.ends_with(r#","partial":40}"#));
         assert_eq!(serde_json::from_str::<Run>(&json).unwrap(), partial);
+    }
+
+    #[test]
+    fn error_note_is_stored_only_when_set() {
+        let failed = Run {
+            error_note: Some("Il disco D: non era raggiungibile.".into()),
+            ..run("n", Outcome::Error)
+        };
+        let json = serde_json::to_string(&failed).unwrap();
+        assert!(json.ends_with(r#","errorNote":"Il disco D: non era raggiungibile."}"#));
+        assert_eq!(serde_json::from_str::<Run>(&json).unwrap(), failed);
+        let ok = serde_json::to_string(&run("n", Outcome::Ok)).unwrap();
+        assert!(!ok.contains("errorNote"));
     }
 }

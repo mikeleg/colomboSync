@@ -1,5 +1,6 @@
 //! `syncs.json`: the saved syncs, and what the home screen shows about each.
 
+use crate::error_messages;
 use crate::history::{self, Outcome};
 use crate::robocopy::SyncMode;
 use crate::storage::Storage;
@@ -27,6 +28,8 @@ pub struct SavedSync {
 pub struct LastRun {
     pub started_at: String,
     pub outcome: Outcome,
+    /// What to tell under the card: why it failed, or that it was stopped by hand.
+    pub note: Option<String>,
 }
 
 /// A saved sync as the home screen lists it.
@@ -94,9 +97,18 @@ pub fn list(storage: &Storage) -> io::Result<Vec<SyncSummary>> {
     // Newest first: the first run seen for a sync is its latest.
     for run in history::read(&storage.history_file()).unwrap_or_default() {
         if let Some(id) = run.sync_id {
+            let note = match run.outcome {
+                Outcome::Ok => None,
+                Outcome::Cancelled => Some(error_messages::STOPPED_NOTE.to_string()),
+                Outcome::Error => Some(
+                    run.error_note
+                        .unwrap_or_else(|| error_messages::GENERIC_NOTE.to_string()),
+                ),
+            };
             last_runs.entry(id).or_insert(LastRun {
                 started_at: run.started_at,
                 outcome: run.outcome,
+                note,
             });
         }
     }
@@ -246,6 +258,7 @@ mod tests {
             log_path: String::new(),
             error: None,
             partial: None,
+            error_note: None,
         }
     }
 
@@ -275,11 +288,56 @@ mod tests {
             listed[1].last_run,
             Some(LastRun {
                 started_at: "2026-11-02T21:30:00+01:00".into(),
-                outcome: Outcome::Ok
+                outcome: Outcome::Ok,
+                note: None
             })
         );
     }
 
+    #[test]
+    fn the_card_note_says_why_the_last_run_failed_or_that_it_was_stopped() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::at(dir.path());
+        let (failed, stopped, plain, done) = (
+            sync(1, "Rete"),
+            sync(2, "Fermata"),
+            sync(3, "Vecchia"),
+            sync(4, "Fatta"),
+        );
+        save(
+            &storage.syncs_file(),
+            &[failed.clone(), stopped.clone(), plain.clone(), done.clone()],
+        )
+        .unwrap();
+        let at = "2026-11-02T21:30:00+01:00";
+        for r in [
+            Run {
+                error_note: Some("Il disco D: non era raggiungibile.".into()),
+                ..run(&failed, Outcome::Error, at)
+            },
+            run(&stopped, Outcome::Cancelled, at),
+            run(&plain, Outcome::Error, at), // written before S6: no note stored
+            run(&done, Outcome::Ok, at),
+        ] {
+            history::append(&storage.history_file(), &r).unwrap();
+        }
+
+        let notes: Vec<Option<String>> = list(&storage)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.last_run.unwrap().note)
+            .collect();
+
+        assert_eq!(
+            notes,
+            [
+                Some("Il disco D: non era raggiungibile.".to_string()),
+                Some(error_messages::STOPPED_NOTE.to_string()),
+                Some(error_messages::GENERIC_NOTE.to_string()),
+                None
+            ]
+        );
+    }
     #[test]
     fn a_run_is_matched_by_sync_id_not_by_name_and_paths() {
         let dir = tempfile::tempdir().unwrap();
@@ -321,11 +379,12 @@ mod tests {
             last_run: Some(LastRun {
                 started_at: "2026-11-02T21:30:00+01:00".into(),
                 outcome: Outcome::Error,
+                note: None,
             }),
         };
         assert_eq!(
             serde_json::to_string(&summary).unwrap(),
-            r#"{"id":1,"name":"Foto","source":"D:\\Foto","destination":"\\\\NAS\\Backup","mode":"Copy","lastRun":{"startedAt":"2026-11-02T21:30:00+01:00","outcome":"Error"}}"#
+            r#"{"id":1,"name":"Foto","source":"D:\\Foto","destination":"\\\\NAS\\Backup","mode":"Copy","lastRun":{"startedAt":"2026-11-02T21:30:00+01:00","outcome":"Error","note":null}}"#
         );
     }
 }

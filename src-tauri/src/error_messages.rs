@@ -11,9 +11,9 @@ pub struct Explanation {
 }
 
 pub const STOPPED_NOTE: &str = "La copia era stata fermata a mano: puoi riprenderla quando vuoi.";
-pub const GENERIC_NOTE: &str = "L’ultima copia non è stata completata. Nel registro trovi i dettagli.";
-const GENERIC_MESSAGE: &str =
-    "Non completato: la copia si è fermata per un problema. Apri il registro per vedere i dettagli.";
+pub const GENERIC_NOTE: &str =
+    "L’ultima copia non è stata completata. Nel registro trovi i dettagli.";
+const GENERIC_MESSAGE: &str = "Non completato: la copia si è fermata per un problema. Apri il registro per vedere i dettagli.";
 
 /// Explains the first mapped error in a robocopy log. `source` (A) and `destination` (B) tell
 /// which folder the error is about.
@@ -32,7 +32,9 @@ pub fn explain(log: &str, source: &str, destination: &str) -> Explanation {
                 message: format!(
                     "Non completato: {lower} non è raggiungibile. Controlla la connessione e riprova."
                 ),
-                note: format!("{upper} non era raggiungibile. Controlla che sia collegato e riprova."),
+                note: format!(
+                    "{upper} non era raggiungibile. Controlla che sia collegato e riprova."
+                ),
             }
         }
         2 | 3 => from_sentence(missing_folder(folder.name, folder.path)),
@@ -116,7 +118,10 @@ fn folder_of<'a>(line: &str, source: &'a str, destination: &'a str) -> Folder<'a
 
 /// `line` (lower case, `\` separators) holds `path` as a whole folder name: not `D:\Foto2` for `D:\Foto`.
 fn mentions(line: &str, path: &str) -> bool {
-    let path = path.replace('/', "\\").trim_end_matches('\\').to_lowercase();
+    let path = path
+        .replace('/', "\\")
+        .trim_end_matches('\\')
+        .to_lowercase();
     !path.is_empty()
         && line.match_indices(&path).any(|(at, _)| {
             line[at + path.len()..]
@@ -133,7 +138,11 @@ fn is_network(path: &str) -> bool {
 /// "la cartella di rete \\NAS" or "il disco D:", lower case and capitalized.
 fn unreachable_name(path: &str) -> (String, String) {
     if is_network(path) {
-        let server = path.trim_start_matches('\\').split('\\').next().unwrap_or("");
+        let server = path
+            .trim_start_matches('\\')
+            .split('\\')
+            .next()
+            .unwrap_or("");
         let tag = format!(r"\\{server}");
         (
             format!("la cartella di rete {tag}"),
@@ -164,15 +173,17 @@ mod tests {
     }
 
     fn italian(code: u32, path: &str) -> String {
-        log(code, "ERRORE", "Accesso alla directory di destinazione", path)
+        log(
+            code,
+            "ERRORE",
+            "Accesso alla directory di destinazione",
+            path,
+        )
     }
 
     #[test]
     fn error_53_is_an_unreachable_share() {
-        for text in [
-            english(53, r"\\NAS\Backup\"),
-            italian(53, r"\\NAS\Backup\"),
-        ] {
+        for text in [english(53, r"\\NAS\Backup\"), italian(53, r"\\NAS\Backup\")] {
             let e = explain(&text, A, NAS_B);
             assert_eq!(
                 e.message,
@@ -212,14 +223,22 @@ mod tests {
         for code in [2, 3] {
             for text in [
                 log(code, "ERROR", "Accessing Source Directory", r"D:\Foto\"),
-                log(code, "ERRORE", "Accesso alla directory di origine", r"D:\Foto\"),
+                log(
+                    code,
+                    "ERRORE",
+                    "Accesso alla directory di origine",
+                    r"D:\Foto\",
+                ),
             ] {
                 let e = explain(&text, A, r"E:\Backup");
                 assert_eq!(
                     e.message,
                     r"Non completato: non trovo la cartella A (D:\Foto). Il disco è collegato?"
                 );
-                assert_eq!(e.note, r"Non trovo la cartella A (D:\Foto). Il disco è collegato?");
+                assert_eq!(
+                    e.note,
+                    r"Non trovo la cartella A (D:\Foto). Il disco è collegato?"
+                );
             }
         }
     }
@@ -268,7 +287,11 @@ mod tests {
     fn the_folder_is_found_by_path_not_by_a_folder_with_the_same_start() {
         // `D:\Foto2` is a different folder than A (`D:\Foto`): the error is about B.
         let e = explain(&english(5, r"D:\Foto2\a.jpg"), A, r"D:\Foto2");
-        assert!(e.message.contains(r"cartella B (D:\Foto2)"), "{}", e.message);
+        assert!(
+            e.message.contains(r"cartella B (D:\Foto2)"),
+            "{}",
+            e.message
+        );
         let e = explain(&english(5, r"d:/foto/a.jpg"), A, r"D:\Foto2");
         assert!(e.message.contains(r"cartella A (D:\Foto)"), "{}", e.message);
     }
@@ -277,8 +300,16 @@ mod tests {
     fn a_line_without_a_known_path_blames_the_share_then_b() {
         let line = english(53, r"\\ALTRO\x\");
         assert!(explain(&line, A, NAS_B).message.contains(r"\\NAS"));
-        assert!(explain(&line, NAS_B, r"E:\Backup").message.contains(r"\\NAS"));
-        assert!(explain(&english(3, "x"), A, r"E:\Backup").message.contains("cartella B"));
+        assert!(
+            explain(&line, NAS_B, r"E:\Backup")
+                .message
+                .contains(r"\\NAS")
+        );
+        assert!(
+            explain(&english(3, "x"), A, r"E:\Backup")
+                .message
+                .contains("cartella B")
+        );
     }
 
     #[test]

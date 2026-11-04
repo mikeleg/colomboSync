@@ -9,7 +9,7 @@ use crate::preview_parser::{Counts, Preview};
 use crate::robocopy::SyncMode;
 use crate::runner::{self, ActiveRun, PreviewMemo};
 use crate::storage::Storage;
-use crate::sync_store::{self, SavedSync, SyncSummary};
+use crate::sync_store::{self, ListedSyncs, SavedSync};
 use serde::Serialize;
 use std::path::Path;
 use tauri::async_runtime::spawn_blocking;
@@ -119,7 +119,7 @@ pub fn cancel_run(app: AppHandle, active: State<'_, ActiveRun>, exit_when_done: 
 }
 
 #[tauri::command]
-pub async fn list_syncs() -> Result<Vec<SyncSummary>, String> {
+pub async fn list_syncs() -> Result<ListedSyncs, String> {
     let storage = Storage::from_env()?;
     spawn_blocking(move || {
         sync_store::list(&storage)

@@ -85,3 +85,9 @@ export interface Sync {
 export interface SyncSummary extends Sync {
   lastRun: { startedAt: string; outcome: Outcome; note: string | null } | null;
 }
+
+/** What the home lists; `setAside`: a damaged syncs.json was renamed aside and the list starts empty. */
+export interface ListedSyncs {
+  syncs: SyncSummary[];
+  setAside: boolean;
+}

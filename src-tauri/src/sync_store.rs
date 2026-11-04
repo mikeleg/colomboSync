@@ -4,6 +4,7 @@ use crate::error_messages;
 use crate::history::{self, Outcome};
 use crate::robocopy::SyncMode;
 use crate::storage::Storage;
+use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -46,7 +47,8 @@ pub struct SyncSummary {
 static WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 /// A missing file is no syncs yet. Any other problem (unreadable, corrupt) is an error: the file
-/// may still hold the user's syncs, so nobody may treat it as empty and write over it.
+/// may still hold the user's syncs, so nobody may treat it as empty and write over it (see
+/// `load_or_set_aside`).
 pub fn load(file: &Path) -> io::Result<Vec<SavedSync>> {
     let text = match fs::read_to_string(file) {
         Ok(text) => text,
@@ -69,7 +71,24 @@ fn save(file: &Path, syncs: &[SavedSync]) -> io::Result<()> {
     })
 }
 
-/// Saves a new sync at the top of the list. Fails, writing nothing, when the file cannot be read.
+/// Like `load`, but a file that exists and cannot be read is renamed to
+/// `syncs.json.corrotto-<yyyyMMdd-HHmmss>` and the list is empty (`true`: it was set aside).
+/// The damaged content is never overwritten; if it cannot be moved aside, that is the error.
+fn load_or_set_aside(file: &Path) -> io::Result<(Vec<SavedSync>, bool)> {
+    if let Ok(syncs) = load(file) {
+        return Ok((syncs, false));
+    }
+    let name = file.file_name().unwrap_or_default().to_string_lossy();
+    let stamp = Local::now().format("%Y%m%d-%H%M%S");
+    fs::rename(
+        file,
+        file.with_file_name(format!("{name}.corrotto-{stamp}")),
+    )?;
+    Ok((Vec::new(), true))
+}
+
+/// Saves a new sync at the top of the list. A damaged file is set aside first (see
+/// `load_or_set_aside`); fails, writing nothing, when that is not possible.
 pub fn add(
     file: &Path,
     name: &str,
@@ -78,7 +97,7 @@ pub fn add(
     mode: SyncMode,
 ) -> io::Result<SavedSync> {
     let _one_writer = WRITE_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
-    let mut syncs = load(file)?;
+    let (mut syncs, _) = load_or_set_aside(file)?;
     let sync = SavedSync {
         id: syncs.iter().map(|s| s.id).max().map_or(1, |id| id + 1),
         name: name.trim().to_string(),
@@ -91,9 +110,18 @@ pub fn add(
     Ok(sync)
 }
 
+/// What the home screen lists.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListedSyncs {
+    pub syncs: Vec<SyncSummary>,
+    /// `syncs.json` was damaged and has been renamed aside: the list starts again from empty.
+    pub set_aside: bool,
+}
+
 /// Every saved sync with the outcome of its latest Run in the history (an unreadable history
 /// just means no last run).
-pub fn list(storage: &Storage) -> io::Result<Vec<SyncSummary>> {
+pub fn list(storage: &Storage) -> io::Result<ListedSyncs> {
     let mut last_runs: HashMap<u64, LastRun> = HashMap::new();
     // Newest first: the first run seen for a sync is its latest.
     for run in history::read(&storage.history_file()).unwrap_or_default() {
@@ -107,13 +135,18 @@ pub fn list(storage: &Storage) -> io::Result<Vec<SyncSummary>> {
             });
         }
     }
-    Ok(load(&storage.syncs_file())?
+    let (saved, set_aside) = {
+        let _one_writer = WRITE_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        load_or_set_aside(&storage.syncs_file())?
+    };
+    let syncs = saved
         .into_iter()
         .map(|sync| SyncSummary {
             last_run: last_runs.get(&sync.id).cloned(),
             sync,
         })
-        .collect())
+        .collect();
+    Ok(ListedSyncs { syncs, set_aside })
 }
 
 #[cfg(test)]
@@ -180,19 +213,38 @@ mod tests {
         assert!(load(&file).is_err(), "unreadable");
     }
 
+    /// The damaged copies set aside next to `syncs.json`, with their content.
+    fn damaged_copies(dir: &Path) -> Vec<(String, String)> {
+        fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .filter(|p| {
+                p.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("syncs.json.corrotto-")
+            })
+            .map(|p| {
+                (
+                    p.file_name().unwrap().to_string_lossy().into_owned(),
+                    fs::read_to_string(&p).unwrap(),
+                )
+            })
+            .collect()
+    }
+
     #[test]
-    fn add_never_overwrites_a_file_it_cannot_read() {
+    fn add_after_a_corrupt_file_keeps_the_damaged_copy() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("syncs.json");
         fs::write(&file, "[ { \"id\": 1, rovinato").unwrap();
 
-        let added = add(&file, "Foto", r"D:\Foto", r"E:\B", SyncMode::Copy);
+        let added = add(&file, "Foto", r"D:\Foto", r"E:\B", SyncMode::Copy).unwrap();
 
-        assert!(added.is_err());
-        assert_eq!(
-            fs::read_to_string(&file).unwrap(),
-            "[ { \"id\": 1, rovinato"
-        );
+        assert_eq!(load(&file).unwrap(), vec![added]);
+        let copies = damaged_copies(dir.path());
+        assert_eq!(copies.len(), 1);
+        assert_eq!(copies[0].1, "[ { \"id\": 1, rovinato");
     }
 
     #[test]
@@ -274,7 +326,7 @@ mod tests {
         )
         .unwrap();
 
-        let listed = list(&storage).unwrap();
+        let listed = list(&storage).unwrap().syncs;
 
         assert_eq!(listed.len(), 2);
         assert_eq!(listed[0].sync, doc);
@@ -322,6 +374,7 @@ mod tests {
 
         let notes: Vec<Option<String>> = list(&storage)
             .unwrap()
+            .syncs
             .into_iter()
             .map(|s| s.last_run.unwrap().note)
             .collect();
@@ -353,7 +406,7 @@ mod tests {
         )
         .unwrap();
 
-        let listed = list(&storage).unwrap();
+        let listed = list(&storage).unwrap().syncs;
 
         assert_eq!(listed[0].sync, twin);
         assert_eq!(listed[0].last_run, None, "the twin was never run");
@@ -361,13 +414,33 @@ mod tests {
     }
 
     #[test]
-    fn list_without_files_is_empty_and_with_an_unreadable_file_an_error() {
+    fn list_without_files_is_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let listed = list(&Storage::at(dir.path())).unwrap();
+
+        assert!(listed.syncs.is_empty());
+        assert!(!listed.set_aside);
+    }
+
+    #[test]
+    fn corrupt_file_is_set_aside_and_the_list_is_empty() {
         let dir = tempfile::tempdir().unwrap();
         let storage = Storage::at(dir.path());
-        assert!(list(&storage).unwrap().is_empty());
-
         fs::write(storage.syncs_file(), "rovinato").unwrap();
-        assert!(list(&storage).is_err());
+
+        let listed = list(&storage).unwrap();
+
+        assert!(listed.syncs.is_empty());
+        assert!(listed.set_aside);
+        assert!(!storage.syncs_file().exists());
+        let copies = damaged_copies(dir.path());
+        assert_eq!(copies.len(), 1);
+        assert_eq!(copies[0].1, "rovinato");
+        // Named after the moment, yyyyMMdd-HHmmss.
+        let stamp = copies[0].0.strip_prefix("syncs.json.corrotto-").unwrap();
+        assert!(chrono::NaiveDateTime::parse_from_str(stamp, "%Y%m%d-%H%M%S").is_ok());
+        // The next listing finds nothing damaged any more.
+        assert!(!list(&storage).unwrap().set_aside);
     }
 
     #[test]

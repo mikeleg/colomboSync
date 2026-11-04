@@ -1,7 +1,7 @@
 // The only place that talks to Rust: Tauri commands.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Counts, Explanation, FolderListing, Preview, Run, RunProgress, RunReport, Sync, SyncMode, SyncSummary } from "./types";
+import type { Counts, Explanation, FolderListing, ListedSyncs, Preview, Run, RunProgress, RunReport, Sync, SyncMode } from "./types";
 
 /** Rejects with an `Explanation`; anything that is not one (the call itself failed) becomes a title. */
 export const previewSync = (source: string, destination: string, mode: SyncMode) =>
@@ -13,7 +13,7 @@ export const previewSync = (source: string, destination: string, mode: SyncMode)
 export const runSync = (sync: Sync, counts: Counts) => invoke<RunReport>("run_sync", { sync, counts });
 
 /** Saved syncs, newest first, each with how its latest Run ended. */
-export const listSyncs = () => invoke<SyncSummary[]>("list_syncs");
+export const listSyncs = () => invoke<ListedSyncs>("list_syncs");
 
 export const saveSync = (name: string, source: string, destination: string, mode: SyncMode) =>
   invoke<Sync>("save_sync", { name, source, destination, mode });

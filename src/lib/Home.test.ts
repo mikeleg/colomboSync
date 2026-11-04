@@ -37,7 +37,7 @@ beforeEach(() => {
 const card = (name: string) => screen.getByRole("heading", { name }).closest("li") as HTMLElement;
 
 test("lists one card per sync: A → B, mode chip, last time with outcome, or Mai avviata", async () => {
-  invokeMock.mockResolvedValue([foto, documenti]);
+  invokeMock.mockResolvedValue({ syncs: [foto, documenti], setAside: false });
   render(Home, props);
 
   expect(await screen.findByRole("heading", { name: "Copia di Foto" })).toBeTruthy();
@@ -63,7 +63,7 @@ test("lists one card per sync: A → B, mode chip, last time with outcome, or Ma
 });
 
 test("when the last outcome is Errore the button reads Riprova and the chip says Errore", async () => {
-  invokeMock.mockResolvedValue([{ ...foto, lastRun: { startedAt: "2026-11-01T18:05:00+01:00", outcome: "Error", note: unreachable } }]);
+  invokeMock.mockResolvedValue({ syncs: [{ ...foto, lastRun: { startedAt: "2026-11-01T18:05:00+01:00", outcome: "Error", note: unreachable } }], setAside: false });
   render(Home, props);
 
   await screen.findByRole("heading", { name: "Copia di Foto" });
@@ -76,7 +76,7 @@ test("when the last outcome is Errore the button reads Riprova and the chip says
 });
 
 test("a stopped run shows the Annullato chip and keeps Controlla e avvia", async () => {
-  invokeMock.mockResolvedValue([{ ...foto, lastRun: { startedAt: "2026-11-01T18:05:00+01:00", outcome: "Cancelled", note: stopped } }]);
+  invokeMock.mockResolvedValue({ syncs: [{ ...foto, lastRun: { startedAt: "2026-11-01T18:05:00+01:00", outcome: "Cancelled", note: stopped } }], setAside: false });
   render(Home, props);
 
   await screen.findByRole("heading", { name: "Copia di Foto" });
@@ -86,7 +86,7 @@ test("a stopped run shows the Annullato chip and keeps Controlla e avvia", async
 });
 
 test("no syncs yet: empty state with the dashed Nuova sincronizzazione card", async () => {
-  invokeMock.mockResolvedValue([]);
+  invokeMock.mockResolvedValue({ syncs: [], setAside: false });
   const onnew = vi.fn();
   render(Home, { ...props, onnew });
 
@@ -97,7 +97,21 @@ test("no syncs yet: empty state with the dashed Nuova sincronizzazione card", as
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
-test("an unreadable store: a message, no list, and a new sync cannot be started", async () => {
+test("a damaged store set aside by Rust: empty state with a note and the new sync card still enabled", async () => {
+  invokeMock.mockResolvedValue({ syncs: [], setAside: true });
+  const onnew = vi.fn();
+  render(Home, { ...props, onnew });
+
+  expect(await screen.findByText("Le sincronizzazioni salvate non erano leggibili: ne ho messo da parte una copia.")).toBeTruthy();
+  const newCard = screen.getByRole("button", { name: "Nuova sincronizzazione" }) as HTMLButtonElement;
+  expect(newCard.disabled).toBe(false);
+  await fireEvent.click(newCard);
+  expect(onnew).toHaveBeenCalledOnce();
+  expect(screen.queryByRole("listitem")).toBeNull();
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("a store that could not even be set aside: a message, no list, and a new sync cannot be started", async () => {
   invokeMock.mockImplementation(async () => {
     throw "Non riesco a leggere le sincronizzazioni salvate.";
   });
@@ -109,7 +123,7 @@ test("an unreadable store: a message, no list, and a new sync cannot be started"
 });
 
 test("the first card is shown in the schema; selecting another shows its A and B with the caption", async () => {
-  invokeMock.mockResolvedValue([foto, documenti]);
+  invokeMock.mockResolvedValue({ syncs: [foto, documenti], setAside: false });
   const onschema = vi.fn();
   render(Home, { ...props, onschema });
   await screen.findByRole("heading", { name: "Copia di Foto" });
@@ -137,7 +151,7 @@ test("the first card is shown in the schema; selecting another shows its A and B
 });
 
 test("Controlla e avvia hands the sync to the app, which opens the preview", async () => {
-  invokeMock.mockResolvedValue([foto, documenti]);
+  invokeMock.mockResolvedValue({ syncs: [foto, documenti], setAside: false });
   const onrun = vi.fn();
   render(Home, { ...props, onrun });
   await screen.findByRole("heading", { name: "Copia di Foto" });

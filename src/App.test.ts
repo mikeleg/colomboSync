@@ -61,7 +61,7 @@ type Handlers = Partial<
 function backend(handlers: Handlers = {}) {
   const defaults: Record<string, (args: Args) => unknown> = {
     browse_folders: () => ({ parent: "", folders: [], error: null }),
-    list_syncs: () => [],
+    list_syncs: () => ({ syncs: [], setAside: false }),
     default_sync_name: () => "Copia di Foto",
     check_destination: () => undefined, // B is fine
     is_elevated: () => false,
@@ -334,7 +334,7 @@ test("a sync that cannot be saved says so and does not leave the preview", async
 });
 
 test("Controlla e avvia on a saved sync goes straight to a fresh preview, never running by itself", async () => {
-  backend({ list_syncs: () => [savedSync], preview_sync: () => preview(3, 0), run_sync: () => doneRun });
+  backend({ list_syncs: () => ({ syncs: [savedSync], setAside: false }), preview_sync: () => preview(3, 0), run_sync: () => doneRun });
   render(App);
 
   await click(await screen.findByRole("button", { name: "Controlla e avvia Foto di Anna" }));
@@ -351,7 +351,7 @@ test("Controlla e avvia on a saved sync goes straight to a fresh preview, never 
 });
 
 test("running a saved sync again does not save it twice and runs that sync by its id", async () => {
-  backend({ list_syncs: () => [savedSync], preview_sync: () => preview(3, 0), run_sync: () => doneRun });
+  backend({ list_syncs: () => ({ syncs: [savedSync], setAside: false }), preview_sync: () => preview(3, 0), run_sync: () => doneRun });
   render(App);
   await click(await screen.findByRole("button", { name: "Controlla e avvia Foto di Anna" }));
 
@@ -368,7 +368,7 @@ test("running a saved sync again does not save it twice and runs that sync by it
 });
 
 test("No, torna all’elenco leaves a saved sync as it is and shows the list again", async () => {
-  backend({ list_syncs: () => [savedSync], preview_sync: () => preview(3, 0) });
+  backend({ list_syncs: () => ({ syncs: [savedSync], setAside: false }), preview_sync: () => preview(3, 0) });
   render(App);
   await click(await screen.findByRole("button", { name: "Controlla e avvia Foto di Anna" }));
 
@@ -381,7 +381,7 @@ test("No, torna all’elenco leaves a saved sync as it is and shows the list aga
 test("Controlla e avvia on a saved Mirror sync still shows the red group and asks for the consent before running", async () => {
   const mirrorSync: SyncSummary = { ...savedSync, mode: "Mirror" };
   backend({
-    list_syncs: () => [mirrorSync],
+    list_syncs: () => ({ syncs: [mirrorSync], setAside: false }),
     preview_sync: () => ({ ...preview(20, 1), deleted: { count: 3, files: ["vecchio.txt"] } }),
     run_sync: () => doneRun,
   });
@@ -414,7 +414,7 @@ test("Controlla e avvia on a saved Mirror sync still shows the red group and ask
   expect(calls("save_sync")).toHaveLength(0);
 });
 
-test("an unreadable syncs.json says so, shows no list and does not let a new sync be started over it", async () => {
+test("a syncs.json that cannot be read nor set aside says so, shows no list and does not let a new sync be started over it", async () => {
   backend({
     list_syncs: () => {
       throw "Non riesco a leggere le sincronizzazioni salvate.";
@@ -506,7 +506,7 @@ test("an older suggested name arriving late does not replace the newer one", asy
 });
 
 test("home: a saved sync's A and B are in the schema with the caption", async () => {
-  backend({ list_syncs: () => [savedSync] });
+  backend({ list_syncs: () => ({ syncs: [savedSync], setAside: false }) });
   render(App);
 
   await screen.findByRole("heading", { name: "Foto di Anna" });

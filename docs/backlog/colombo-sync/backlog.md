@@ -7,7 +7,7 @@ Order is dependency order. Checkpoints are not slices: they are a real non-techn
 ```
 S1 (done) ── S1b (new look + wizard details) ──┬── [checkpoint 1: Copy mode] ── S2 (mirror) ── [checkpoint 2: mirror]
      │                                         └── S3 (saved syncs) ──┐
-     ├── S4 (history) ───────────────────────────────────────────────┴── S6 (plain-language errors) ──► S7 (macOS + Linux with rsync)
+     ├── S4 (history) ───────────────────────────────────────────────┴── S6 (plain-language errors) ──► S7 (macOS + Linux with rsync) ──► S8 (release pipeline)
      └── S5 (progress + stop)
 ```
 
@@ -193,6 +193,23 @@ Wizard (Da dove → Dove → Opzioni → Anteprima), `SchemaView`, robocopy runn
 - `cfg(windows)` gating for the Windows-only parts: `MetadataExt` in folder_browser, `MultiByteToWideChar` in progress, token elevation, `CREATE_NO_WINDOW`, `%LOCALAPPDATA%`, A:–Z: drive probing. Unix counterparts: folder browser roots `/Volumes` (macOS) and `/media/$USER`, `/mnt`, home (Linux); elevation = effective uid 0; path_rules for `/`-rooted, case-sensitive paths (macOS default volumes are case-insensitive: compare case-insensitively there).
 - Bundles: macOS `tauri build --bundles app,dmg` with `bundle.macOS.signingIdentity = "-"`; Linux `--bundles appimage` (CI deps: libwebkit2gtk-4.1-dev, libappindicator3-dev, librsvg2-dev, patchelf).
 - UI copy that is Windows wording ("Esegui come amministratore", "Cestino", drive letters in examples): flag per platform; new Italian copy must be listed in the report for the user.
+
+---
+
+## S8 · Release pipeline
+**Why:** one tag gives tested, checksummed binaries the owner can hand out to users.
+**Size:** M
+**Blocked by:** S7
+**Spec:** `docs/release-plan.md` (decisions taken by the owner: distribution by hand, universal macOS dmg, Linux AppImage only).
+
+### Acceptance criteria
+- Given a `v0.1.0-rc.1` tag, then `.github/workflows/release.yml` creates a **draft** release (pre-release because the version starts with `0.` or has a `-` suffix) with `ColomboSync-<ver>-windows-x64.exe`, `ColomboSync-<ver>-macos-universal.dmg`, `ColomboSync-<ver>-linux-x86_64.AppImage`, `SHA256SUMS.txt` and notes (commits since the previous tag grouped feat/fix + the Italian install notes).
+- Given the tag does not match `package.json`, `tauri.conf.json` and `Cargo.toml`, or those three differ from each other, then the run fails before any build.
+- Given any test/lint job red on any OS, then no release is created.
+- Given the macOS build, then the dmg contains a universal binary (`lipo -info` shows arm64 and x86_64, asserted in CI); the AppImage is built on ubuntu-22.04.
+- Given a manual run (`workflow_dispatch`), then the three files are built and uploaded as workflow artifacts and **no release** is created.
+- Actions in both workflows run on Node 24; the CI Linux job also uses ubuntu-22.04.
+- `docs/agents/github.md` has a "Releasing" section (bump, tag, watch, smoke checklist, publish by hand).
 
 ---
 

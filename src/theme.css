@@ -94,36 +94,6 @@
   color-scheme: dark;
 }
 
-/* Names used by components written before the new look: aliases of the tokens above, so they follow light/dark too. */
-:root {
-  --surface-container-lowest: var(--card);
-  --surface-container-low: var(--card-2);
-  --surface-container: var(--card-2);
-  --surface-container-high: var(--card-3);
-  --surface-container-highest: var(--card-3);
-  --on-surface: var(--fg);
-  --on-surface-variant: var(--fg-2);
-  --outline: var(--fg-2);
-  --primary: var(--accent);
-  --on-primary: var(--on-accent);
-  --primary-container: var(--accent-soft);
-  --on-primary-container: var(--on-accent-soft);
-  --secondary-container: var(--card-3);
-  --on-secondary-container: var(--fg);
-  --success: var(--ok);
-  --on-success: var(--card);
-  --success-container: var(--ok-soft);
-  --on-success-container: var(--on-ok-soft);
-  --error: var(--danger);
-  --on-error: var(--card);
-  --error-container: var(--danger-soft);
-  --on-error-container: var(--on-danger-soft);
-  --warning-container: var(--warn-soft);
-  --on-warning-container: var(--on-warn-soft);
-  --shadow-1: var(--shadow);
-  --shadow-2: var(--shadow);
-}
-
 * {
   box-sizing: border-box;
 }

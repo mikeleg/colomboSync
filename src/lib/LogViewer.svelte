@@ -66,9 +66,9 @@
     max-height: 90vh;
     display: flex;
     flex-direction: column;
-    background: var(--surface-container-lowest);
-    color: var(--on-surface);
-    box-shadow: var(--shadow-2);
+    background: var(--card);
+    color: var(--fg);
+    box-shadow: var(--shadow);
     overflow: hidden;
   }
   header {
@@ -88,12 +88,12 @@
     padding: 16px 18px;
     overflow: auto;
     font: 13.5px/1.45 Consolas, "Cascadia Mono", monospace;
-    background: var(--surface-container-low);
+    background: var(--card-2);
     flex: 1;
     tab-size: 4;
   }
   .gone {
     margin: 0 22px 22px;
-    color: var(--on-surface-variant);
+    color: var(--fg-2);
   }
 </style>

@@ -68,26 +68,26 @@
     align-items: flex-start;
     padding: 24px;
     border-radius: var(--r);
-    background: var(--success-container);
-    color: var(--on-success-container);
+    background: var(--ok-soft);
+    color: var(--on-ok-soft);
     margin-bottom: 22px;
   }
   .res.err {
-    background: var(--error-container);
-    color: var(--on-error-container);
+    background: var(--danger-soft);
+    color: var(--on-danger-soft);
   }
   .res.ann {
-    background: var(--warning-container);
-    color: var(--on-warning-container);
+    background: var(--warn-soft);
+    color: var(--on-warn-soft);
   }
   .res :global(svg) {
     width: 52px;
     height: 52px;
     flex: none;
-    color: var(--success);
+    color: var(--ok);
   }
   .res.err :global(svg) {
-    color: var(--error);
+    color: var(--danger);
   }
   .res.ann :global(svg) {
     color: var(--warning);

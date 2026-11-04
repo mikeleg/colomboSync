@@ -67,12 +67,12 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--on-surface-variant);
+    color: var(--fg-2);
     margin-bottom: 12px;
   }
   .node {
-    background: var(--surface-container-lowest);
-    color: var(--on-surface);
+    background: var(--card);
+    color: var(--fg);
     padding: 14px 16px;
     border-radius: var(--r);
     box-shadow: var(--shadow);
@@ -93,15 +93,15 @@
     padding: 10px;
     border-radius: 14px;
     flex: none;
-    background: var(--primary-container);
-    color: var(--on-primary-container);
+    background: var(--accent-soft);
+    color: var(--on-accent-soft);
   }
   .nb > div {
     min-width: 0;
   }
   .dl {
     font-size: 15px;
-    color: var(--on-surface-variant);
+    color: var(--fg-2);
   }
   .pth {
     font-weight: 600;
@@ -121,18 +121,18 @@
     color: var(--card);
   }
   .empty-n {
-    background: var(--surface-container-high);
+    background: var(--card-3);
     box-shadow: none;
     border: 2px dashed var(--line);
   }
   .empty-n .pth {
-    color: var(--on-surface-variant);
+    color: var(--fg-2);
     font-weight: 500;
     font-style: italic;
   }
   .empty-n .nb > :global(svg) {
-    background: var(--surface-container-highest);
-    color: var(--on-surface-variant);
+    background: var(--card-3);
+    color: var(--fg-2);
   }
   .mid {
     display: flex;
@@ -144,7 +144,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    color: var(--primary);
+    color: var(--accent);
   }
   .arr svg {
     width: 44px;
@@ -182,8 +182,8 @@
     text-align: center;
     padding: 10px 4px;
     border-radius: 16px;
-    background: var(--surface-container-lowest);
-    color: var(--on-surface);
+    background: var(--card);
+    color: var(--fg);
     min-width: 0;
   }
   .cnt b {
@@ -194,7 +194,7 @@
   }
   .cnt span {
     font-size: 14px;
-    color: var(--on-surface-variant);
+    color: var(--fg-2);
     display: block;
     line-height: 1.2;
   }
@@ -213,8 +213,8 @@
     margin-top: 12px;
     padding: 10px 14px;
     border-radius: 999px;
-    background: var(--success-container);
-    color: var(--on-success-container);
+    background: var(--ok-soft);
+    color: var(--on-ok-soft);
     font-size: 16px;
     font-weight: 600;
     text-align: left;
@@ -228,7 +228,7 @@
     margin-top: 14px;
     font-size: 16px;
     text-align: center;
-    color: var(--on-surface-variant);
+    color: var(--fg-2);
   }
   .cap.mir {
     background: var(--danger-soft);

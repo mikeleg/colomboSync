@@ -104,7 +104,7 @@
 <style>
   .runprog {
     padding: 20px 22px;
-    background: var(--surface-container);
+    background: var(--card-2);
     margin-bottom: 14px;
   }
   .rp-top {
@@ -117,28 +117,28 @@
     font-size: 44px;
     line-height: 1;
     font-weight: 600;
-    color: var(--primary);
+    color: var(--accent);
   }
   .rp-top span {
     font-size: 17px;
     font-weight: 600;
-    color: var(--on-surface-variant);
+    color: var(--fg-2);
   }
   .bar {
     height: 18px;
     margin-top: 14px;
-    background: var(--surface-container-highest);
+    background: var(--card-3);
     overflow: hidden;
   }
   .bar i {
     display: block;
     height: 100%;
-    background: var(--primary);
+    background: var(--accent);
     transition: width 0.1s linear;
   }
   .rp-eta {
     margin-top: 10px;
-    color: var(--on-surface-variant);
+    color: var(--fg-2);
     font-weight: 600;
   }
   .sr {
@@ -152,28 +152,28 @@
   .curfile {
     font-family: ui-monospace, Consolas, monospace;
     font-size: 15px;
-    color: var(--on-surface-variant);
+    color: var(--fg-2);
     overflow-wrap: anywhere;
     margin: 0 0 22px;
     min-height: 24px;
     padding: 12px 16px;
-    background: var(--surface-container);
+    background: var(--card-2);
   }
   .confirm {
     padding: 20px 22px;
-    background: var(--warning-container);
-    color: var(--on-warning-container);
+    background: var(--warn-soft);
+    color: var(--on-warn-soft);
   }
   .confirm p {
     font-weight: 700;
     margin-bottom: 12px;
   }
   .btn.danger {
-    background: var(--error);
-    color: var(--on-error);
+    background: var(--danger);
+    color: var(--card);
   }
   .btn.danger:not(:disabled):hover {
-    background: color-mix(in srgb, var(--on-error) 10%, var(--error));
+    background: color-mix(in srgb, var(--card) 10%, var(--danger));
   }
   @media (prefers-reduced-motion: reduce) {
     .bar i {

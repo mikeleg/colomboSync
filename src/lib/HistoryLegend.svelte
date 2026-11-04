@@ -37,7 +37,7 @@
   .cnt {
     text-align: center;
     padding: 12px 4px;
-    background: var(--surface-container-lowest);
+    background: var(--card);
     min-width: 0;
   }
   .cnt b {
@@ -49,7 +49,7 @@
   .cnt span {
     display: block;
     font-size: 14px;
-    color: var(--on-surface-variant);
+    color: var(--fg-2);
     font-weight: 600;
     margin-top: 2px;
   }
@@ -57,7 +57,7 @@
     display: grid;
     gap: 10px;
     font-size: 15px;
-    color: var(--on-surface-variant);
+    color: var(--fg-2);
   }
   .legend p {
     display: flex;
@@ -73,7 +73,7 @@
     margin-top: 14px;
     font-size: 15.5px;
     text-align: center;
-    color: var(--on-surface-variant);
+    color: var(--fg-2);
     font-weight: 600;
   }
 </style>

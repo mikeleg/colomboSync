@@ -54,7 +54,7 @@
     gap: 12px;
   }
   .run {
-    background: var(--surface-container-low);
+    background: var(--card-2);
     padding: 18px 22px;
     min-width: 0;
   }
@@ -72,7 +72,7 @@
     font-size: 17.5px;
   }
   .when {
-    color: var(--on-surface-variant);
+    color: var(--fg-2);
     font-size: 15px;
   }
   .chips {
@@ -92,7 +92,7 @@
   }
   dt {
     display: inline;
-    color: var(--on-surface-variant);
+    color: var(--fg-2);
     font-size: 15px;
   }
   dt::after {
@@ -104,7 +104,7 @@
     font-weight: 800;
   }
   .d dd {
-    color: var(--error);
+    color: var(--danger);
   }
   .lg {
     margin-left: auto;

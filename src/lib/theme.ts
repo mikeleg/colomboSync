@@ -12,9 +12,19 @@ export function loadTheme(): Theme {
   }
 }
 
-export function applyTheme(theme: Theme) {
+function applyTheme(theme: Theme) {
   if (theme === "auto") document.documentElement.removeAttribute("data-theme");
   else document.documentElement.setAttribute("data-theme", theme);
+}
+
+/** At startup, before the app is mounted: applies the saved choice without writing anything. */
+export function initTheme() {
+  applyTheme(loadTheme());
+}
+
+/** The user chose: apply it now and remember it. */
+export function setTheme(theme: Theme) {
+  applyTheme(theme);
   try {
     localStorage.setItem(KEY, theme);
   } catch {

@@ -3,12 +3,17 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import ThemeSwitch from "./ThemeSwitch.svelte";
 
 const store = new Map<string, string>();
+let setItemCalls = 0;
 
 beforeEach(() => {
   store.clear();
+  setItemCalls = 0;
   vi.stubGlobal("localStorage", {
     getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => void store.set(k, v),
+    setItem: (k: string, v: string) => {
+      setItemCalls++;
+      store.set(k, v);
+    },
   });
   document.documentElement.removeAttribute("data-theme");
 });
@@ -33,13 +38,13 @@ test("Scuro applies the dark tokens at once and is remembered", async () => {
   expect(store.get("cs-theme")).toBe("dark");
 });
 
-test("after a restart the saved choice is applied", () => {
+test("after a restart the saved choice is the pressed one", () => {
   store.set("cs-theme", "dark");
 
   render(ThemeSwitch);
 
   expect(pressed("Scuro")).toBeTruthy();
-  expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+  expect(setItemCalls).toBe(0);
 });
 
 test("Chiaro forces light; going back to Auto removes the override", async () => {

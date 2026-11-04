@@ -37,3 +37,14 @@ export interface Run {
   logPath: string;
   error?: string;
 }
+
+export interface Folder {
+  name: string;
+  path: string;
+}
+
+/** Drives (path "") or the subfolders of a path; `parent` is "" when the level above is the list of drives. */
+export interface FolderListing {
+  parent: string;
+  folders: Folder[];
+}

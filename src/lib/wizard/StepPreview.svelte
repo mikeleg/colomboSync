@@ -9,12 +9,14 @@
     error,
     onstart,
     onstop,
+    onback,
   }: {
     scanning: boolean;
     preview: Preview | null;
     error: string;
     onstart: () => void;
     onstop: () => void;
+    onback: () => void;
   } = $props();
 
   const total = $derived(preview ? preview.new.count + preview.updated.count + preview.deleted.count : 0);
@@ -42,6 +44,7 @@
   </div>
 {:else if error}
   <div class="err-msg" role="alert">{error}</div>
+  <div class="btns back"><button type="button" class="link" onclick={onback}>Indietro</button></div>
 {:else if preview && total === 0}
   <div class="empty">
     <Icon name="check" />
@@ -49,7 +52,10 @@
     <p>Non c’è niente da copiare: B ha già tutto quello che c’è in A.</p>
   </div>
   <div class="final">
-    <div class="btns"><button type="button" class="btn primary" onclick={onstop}>Torna all’inizio</button></div>
+    <div class="btns">
+      <button type="button" class="btn primary" onclick={onstop}>Torna all’inizio</button>
+      <button type="button" class="link" onclick={onback}>Indietro</button>
+    </div>
   </div>
 {:else if preview}
   <p class="sum">
@@ -63,7 +69,8 @@
     <h2 id="fq">Avviare adesso?</h2>
     <div class="btns">
       <button type="button" class="btn primary big" onclick={onstart}>Sì, avvia</button>
-      <button type="button" class="btn big" onclick={onstop}>No, torna all’inizio</button>
+      <button type="button" class="btn big" onclick={onstop}>No, salva e basta</button>
+      <button type="button" class="link" onclick={onback}>Indietro, cambio qualcosa</button>
     </div>
   </section>
 {/if}
@@ -71,17 +78,19 @@
 <style>
   .scan {
     display: flex;
-    gap: 14px;
+    gap: 16px;
     align-items: center;
-    padding: 22px;
-    background: var(--surface-container-low);
+    padding: 26px;
+    border-radius: var(--r);
+    background: var(--card-2);
     font-size: 18px;
+    font-weight: 600;
   }
   .spin {
-    width: 28px;
-    height: 28px;
-    border: 4px solid var(--surface-container-highest);
-    border-top-color: var(--primary);
+    width: 30px;
+    height: 30px;
+    border: 4px solid var(--card-3);
+    border-top-color: var(--accent);
     border-radius: 50%;
     flex: none;
   }
@@ -97,68 +106,87 @@
   }
   .sum {
     font-size: 18px;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
+    line-height: 1.5;
+  }
+  .sum b {
+    color: var(--accent);
   }
   .grp {
+    border-radius: var(--r);
     margin-bottom: 12px;
-    background: var(--surface-container-low);
+    background: var(--card-2);
   }
   .grp > summary {
     display: flex;
     gap: 12px;
     align-items: center;
     justify-content: space-between;
-    min-height: 56px;
+    min-height: 58px;
     padding: 8px 20px;
     font-weight: 700;
     cursor: pointer;
+    border-radius: var(--r);
+    list-style: none;
+  }
+  .grp > summary::-webkit-details-marker {
+    display: none;
   }
   .grp > summary:hover {
-    background: color-mix(in srgb, var(--on-surface) 6%, transparent);
+    background: color-mix(in srgb, var(--fg) 5%, transparent);
   }
   .grp > summary b {
-    font-size: 20px;
+    font-size: 22px;
+    font-weight: 800;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: var(--card);
   }
   .why {
     padding: 0 20px;
-    color: var(--on-surface-variant);
+    color: var(--fg-2);
     font-size: 15px;
   }
   .files {
-    margin: 8px 0 0;
-    padding: 0 20px 14px 40px;
-    font-family: Consolas, "Cascadia Mono", monospace;
+    margin: 10px 0 0;
+    padding: 0 20px 16px 40px;
+    font-family: var(--mono);
     font-size: 14.5px;
     overflow-wrap: anywhere;
   }
   .more {
     padding: 0 20px 14px;
-    color: var(--on-surface-variant);
+    color: var(--fg-2);
     font-size: 15px;
   }
   .empty {
     text-align: center;
-    padding: 32px 16px;
-    background: var(--success-container);
-    color: var(--on-success-container);
+    padding: 36px 16px;
+    background: var(--ok-soft);
+    color: var(--on-ok-soft);
+    border-radius: var(--r);
     margin-bottom: 12px;
   }
   .empty :global(svg) {
-    width: 56px;
-    height: 56px;
-    color: var(--success);
+    width: 60px;
+    height: 60px;
+    color: var(--ok);
   }
   .empty h2 {
     font-size: 24px;
-    margin: 6px 0;
+    margin: 8px 0 4px;
   }
   .final {
-    margin-top: 22px;
-    padding: 20px;
-    background: var(--surface-container-low);
+    margin-top: 24px;
+    padding: 22px;
+    border-radius: var(--r);
+    background: var(--card-2);
   }
   .final h2 {
     font-size: 24px;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
+  }
+  .back {
+    margin-top: 12px;
   }
 </style>

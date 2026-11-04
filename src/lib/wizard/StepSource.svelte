@@ -6,7 +6,7 @@
 
 <FolderPicker
   id="path-a"
-  label="Cartella da copiare (A)"
+  label="Clicca sulla cartella da copiare (A)"
   placeholder="Per esempio: D:\Foto"
   bind:value={path}
   {error}

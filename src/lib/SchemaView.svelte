@@ -72,6 +72,8 @@
     background: var(--surface-container-lowest);
     color: var(--on-surface);
     padding: 14px 16px;
+    border-radius: var(--r);
+    box-shadow: var(--shadow);
   }
   .tag {
     font-weight: 700;
@@ -87,6 +89,7 @@
     width: 48px;
     height: 48px;
     padding: 10px;
+    border-radius: 14px;
     flex: none;
     background: var(--primary-container);
     color: var(--on-primary-container);
@@ -105,6 +108,8 @@
   }
   .empty-n {
     background: var(--surface-container-high);
+    box-shadow: none;
+    border: 2px dashed var(--line);
   }
   .empty-n .pth {
     color: var(--on-surface-variant);
@@ -145,6 +150,7 @@
   .cnt {
     text-align: center;
     padding: 10px 4px;
+    border-radius: 16px;
     background: var(--surface-container-lowest);
     color: var(--on-surface);
     min-width: 0;
@@ -168,6 +174,7 @@
     justify-content: center;
     margin-top: 12px;
     padding: 10px 14px;
+    border-radius: 999px;
     background: var(--success-container);
     color: var(--on-success-container);
     font-size: 16px;

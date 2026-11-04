@@ -143,68 +143,78 @@
     {:else if stepId === "options"}
       <StepOptions />
     {:else if stepId === "preview"}
-      <StepPreview {scanning} {preview} error={previewError} onstart={start} onstop={onexit} />
+      <StepPreview {scanning} {preview} error={previewError} onstart={start} onstop={onexit} onback={back} />
     {/if}
   </div>
-  <div class="nav">
-    <button type="button" class="btn" onclick={back}>{step === 0 ? "Annulla" : "Indietro"}</button>
-    {#if step < STEPS.length - 1}
-      <button type="button" class="btn primary" onclick={next}>Avanti</button>
-    {/if}
-  </div>
+  <!-- After the scan the preview has its own choices (see StepPreview). -->
+  {#if stepId !== "preview" || scanning}
+    <div class="nav">
+      <button type="button" class="btn" onclick={back}>{step === 0 ? "Annulla" : "Indietro"}</button>
+      {#if step < STEPS.length - 1}
+        <button type="button" class="btn primary" onclick={next}>Avanti</button>
+      {/if}
+    </div>
+  {/if}
 {/if}
 
 <style>
   .steps {
     display: flex;
-    gap: 6px;
+    gap: 4px;
     list-style: none;
     padding: 0;
-    margin: 0 0 22px;
+    margin: 0 0 24px;
     flex-wrap: wrap;
+    align-items: center;
   }
   .steps li {
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 4px 14px 4px 4px;
-    color: var(--on-surface-variant);
-    font-weight: 600;
-    font-size: 15px;
+    border-radius: 999px;
+    color: var(--fg-2);
+    font-weight: 700;
+    font-size: 14.5px;
   }
   .n {
     width: 30px;
     height: 30px;
+    border-radius: 50%;
     display: grid;
     place-items: center;
-    background: var(--surface-container-highest);
-    color: var(--on-surface-variant);
-    font-size: 15px;
+    background: var(--card-3);
+    color: var(--fg-2);
+    font-size: 14px;
+    font-weight: 800;
   }
   .n :global(svg) {
     width: 16px;
     height: 16px;
   }
+  .steps li.done {
+    color: var(--fg);
+  }
   .steps li.done .n {
-    background: var(--success-container);
-    color: var(--on-success-container);
+    background: var(--ok-soft);
+    color: var(--on-ok-soft);
   }
   .steps li.cur {
-    background: var(--primary-container);
-    color: var(--on-primary-container);
+    background: var(--accent-soft);
+    color: var(--on-accent-soft);
   }
   .steps li.cur .n {
-    background: var(--primary);
-    color: var(--on-primary);
+    background: var(--accent);
+    color: var(--on-accent);
   }
   .content {
-    margin-top: 12px;
+    margin-top: 14px;
   }
   .nav {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
     justify-content: space-between;
-    margin-top: 28px;
+    margin-top: 30px;
   }
 </style>

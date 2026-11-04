@@ -1,12 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App.svelte";
 import type { Preview, Run } from "./lib/types";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 
 const invokeMock = vi.mocked(invoke);
 
@@ -31,6 +29,16 @@ const doneRun: Run = {
   logPath: "C:\\L\\logs\\x.log",
 };
 
+/** Answers the Rust commands the wizard uses; the folder picker always sees an empty computer. */
+function backend(handlers: { preview_sync?: () => unknown; run_sync?: () => unknown }) {
+  invokeMock.mockImplementation(async (cmd) => {
+    if (cmd === "browse_folders") return { parent: "", folders: [] };
+    const handler = handlers[cmd as keyof typeof handlers];
+    if (!handler) throw new Error(`unexpected command ${cmd}`);
+    return handler();
+  });
+}
+
 const click = (target: string | RegExp | HTMLElement) =>
   fireEvent.click(typeof target === "object" && "tagName" in target ? target : screen.getByRole("button", { name: target }));
 const typeInto = (label: RegExp, value: string) =>
@@ -38,21 +46,24 @@ const typeInto = (label: RegExp, value: string) =>
 
 async function goToPreview() {
   await click("+ Nuova sincronizzazione");
-  await typeInto(/Cartella da copiare/, "D:\\Foto");
+  await typeInto(/Percorso/, "D:\\Foto");
   await click("Avanti");
-  await typeInto(/Cartella dove metto la copia/, "E:\\Backup");
+  await typeInto(/Percorso/, "E:\\Backup");
   await click("Avanti");
   await click("Avanti"); // Opzioni
 }
 
 beforeEach(() => {
   invokeMock.mockReset();
-  vi.mocked(open).mockReset();
 });
 
-test("shell: sections, a way to start, and the schema docked on the side", () => {
+test("shell: brand, theme switch, sections, a way to start, and the schema docked on the side", () => {
+  backend({});
   render(App);
 
+  expect(screen.getByText("ColomboSync")).toBeTruthy();
+  expect(screen.getByText("Copie di sicurezza senza sorprese")).toBeTruthy();
+  expect(screen.getByRole("group", { name: "Tema" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Sincronizzazioni" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Storico" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "+ Nuova sincronizzazione" })).toBeTruthy();
@@ -60,7 +71,7 @@ test("shell: sections, a way to start, and the schema docked on the side", () =>
 });
 
 test("A and B through Opzioni: the preview and the schema show the same counts", async () => {
-  invokeMock.mockResolvedValueOnce(preview(148, 3));
+  backend({ preview_sync: () => preview(148, 3) });
   render(App);
 
   await goToPreview();
@@ -83,7 +94,7 @@ test("A and B through Opzioni: the preview and the schema show the same counts",
 });
 
 test("Sì, avvia runs with the previewed counts and says Fatto", async () => {
-  invokeMock.mockResolvedValueOnce(preview(2, 1)).mockResolvedValueOnce(doneRun);
+  backend({ preview_sync: () => preview(2, 1), run_sync: () => doneRun });
   render(App);
   await goToPreview();
 
@@ -99,7 +110,7 @@ test("Sì, avvia runs with the previewed counts and says Fatto", async () => {
 });
 
 test("while the copy runs the UI says Sto copiando…", async () => {
-  invokeMock.mockResolvedValueOnce(preview(2, 1)).mockReturnValueOnce(new Promise(() => {}));
+  backend({ preview_sync: () => preview(2, 1), run_sync: () => new Promise(() => {}) });
   render(App);
   await goToPreview();
 
@@ -109,9 +120,10 @@ test("while the copy runs the UI says Sto copiando…", async () => {
 });
 
 test("a run that ends in Error says Non completato with the raw message", async () => {
-  invokeMock
-    .mockResolvedValueOnce(preview(2, 1))
-    .mockResolvedValueOnce({ ...doneRun, outcome: "Error", error: "robocopy ha restituito il codice 16." });
+  backend({
+    preview_sync: () => preview(2, 1),
+    run_sync: () => ({ ...doneRun, outcome: "Error", error: "robocopy ha restituito il codice 16." }),
+  });
   render(App);
   await goToPreview();
 
@@ -121,68 +133,75 @@ test("a run that ends in Error says Non completato with the raw message", async 
   expect(screen.getByText("robocopy ha restituito il codice 16.")).toBeTruthy();
 });
 
-test("nothing to do: B è già aggiornato and no Sì, avvia", async () => {
-  invokeMock.mockResolvedValueOnce(preview(0, 0));
+test("nothing to do: B è già aggiornato, an Indietro link and no Sì, avvia", async () => {
+  backend({ preview_sync: () => preview(0, 0) });
   render(App);
 
   await goToPreview();
 
   expect(await screen.findByText("B è già aggiornato")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Sì, avvia" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Indietro" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Avanti" })).toBeNull();
 });
 
-test("a failed preview shows the error and no Sì, avvia", async () => {
-  invokeMock.mockRejectedValueOnce("robocopy ha restituito il codice 16.");
+test("a failed preview shows the error, a way back and no Sì, avvia", async () => {
+  backend({
+    preview_sync: () => {
+      throw "robocopy ha restituito il codice 16.";
+    },
+  });
   render(App);
 
   await goToPreview();
 
   expect((await screen.findByRole("alert")).textContent).toContain("robocopy ha restituito il codice 16.");
   expect(screen.queryByRole("button", { name: "Sì, avvia" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Indietro" })).toBeTruthy();
 });
 
-test("an empty folder blocks Avanti with a message", async () => {
+test("an empty folder blocks Avanti with a message and opens the manual input", async () => {
+  backend({});
   render(App);
   await click("+ Nuova sincronizzazione");
 
   await click("Avanti");
 
   expect(screen.getByRole("alert").textContent).toContain("Scegli prima la cartella da copiare.");
-  expect(screen.getByLabelText(/Cartella da copiare/)).toBeTruthy();
+  expect(screen.getByText("Preferisci scrivere il percorso a mano?").closest("details")?.open).toBe(true);
 });
 
-test("Indietro goes back keeping what was typed; No, torna all’inizio returns to the start", async () => {
-  invokeMock.mockResolvedValueOnce(preview(1, 0));
+test("Enter in the manual input behaves as Avanti", async () => {
+  backend({});
+  render(App);
+  await click("+ Nuova sincronizzazione");
+  await typeInto(/Percorso/, "D:\\Foto");
+
+  await fireEvent.keyDown(screen.getByLabelText(/Percorso/), { key: "Enter" });
+
+  expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();
+});
+
+test("Indietro, cambio qualcosa goes back to Opzioni keeping what was typed; No, salva e basta returns to the start", async () => {
+  backend({ preview_sync: () => preview(1, 0) });
   render(App);
   await goToPreview();
   await screen.findByText("Da copiare (nuovi)");
+  expect(screen.queryByRole("button", { name: "Avanti" })).toBeNull();
 
-  await click("Indietro"); // to Opzioni
+  await click("Indietro, cambio qualcosa"); // to Opzioni
   await click("Indietro"); // to Dove
-  expect((screen.getByLabelText(/Cartella dove metto la copia/) as HTMLInputElement).value).toBe("E:\\Backup");
+  expect((screen.getByLabelText(/Percorso/) as HTMLInputElement).value).toBe("E:\\Backup");
 
-  invokeMock.mockResolvedValueOnce(preview(1, 0));
   await click("Avanti");
   await click("Avanti");
-  await click(await screen.findByRole("button", { name: "No, torna all’inizio" }));
+  await click(await screen.findByRole("button", { name: "No, salva e basta" }));
 
   expect(screen.getByRole("button", { name: "+ Nuova sincronizzazione" })).toBeTruthy();
 });
 
-test("Sfoglia… fills the path with the folder chosen in the dialog", async () => {
-  vi.mocked(open).mockResolvedValueOnce("D:\\Musica");
-  render(App);
-  await click("+ Nuova sincronizzazione");
-
-  await click("Sfoglia…");
-
-  expect(open).toHaveBeenCalledWith({ directory: true });
-  await vi.waitFor(() =>
-    expect((screen.getByLabelText(/Cartella da copiare/) as HTMLInputElement).value).toBe("D:\\Musica"),
-  );
-});
-
 test("the Storico tab is there for S4 to fill", async () => {
+  backend({});
   render(App);
 
   await click("Storico");

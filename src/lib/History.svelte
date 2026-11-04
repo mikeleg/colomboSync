@@ -1,13 +1,17 @@
 <script lang="ts">
   import { formatDuration, formatNumber, formatWhen } from "./format";
   import LogViewer from "./LogViewer.svelte";
-  import type { Outcome, Run } from "./types";
+  import type { Outcome, Run, SyncMode } from "./types";
 
   /** Newest first, as returned by `list_runs`. */
   let { runs }: { runs: Run[] } = $props();
 
   let viewing = $state<Run | null>(null);
 
+  const modeChip: Record<SyncMode, { cls: string; label: string }> = {
+    Copy: { cls: "copy", label: "Copia" },
+    Mirror: { cls: "mirror", label: "Specchio" },
+  };
   const outcomeChip: Record<Outcome, { cls: string; label: string }> = {
     Ok: { cls: "ok", label: "OK" },
     Error: { cls: "err", label: "Errore" },
@@ -24,7 +28,7 @@
         <strong>{run.syncName}</strong>
         <span class="when">{formatWhen(run.startedAt)}</span>
         <span class="chips">
-          <span class="chip {run.mode === 'Mirror' ? 'mirror' : 'copy'}">{run.mode === "Mirror" ? "Specchio" : "Copia"}</span>
+          <span class="chip {modeChip[run.mode].cls}">{modeChip[run.mode].label}</span>
           <span class="chip {outcomeChip[run.outcome].cls}">{outcomeChip[run.outcome].label}</span>
         </span>
       </div>

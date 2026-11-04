@@ -16,15 +16,19 @@
   let {
     onschema,
     onexit,
+    onhistory,
     sync: syncToRerun,
   }: {
     onschema: (model: SchemaModel) => void;
     onexit: () => void;
+    /** "Vai allo storico" on the result. */
+    onhistory: () => void;
     /** A saved sync to run again: the wizard opens straight on a fresh preview. */
     sync?: Sync;
   } = $props();
-  // Fixed for the life of the wizard: the app mounts a new one per sync.
-  const sync = untrack(() => syncToRerun);
+  // The sync to run again, or the one saved when this wizard started its first run.
+  const rerun = untrack(() => syncToRerun);
+  let sync = $state.raw(rerun);
 
   // Step order lives here: add a step by adding an entry and its branch in the markup.
   const STEPS = [
@@ -35,15 +39,15 @@
     { id: "preview", label: "Anteprima", title: "Anteprima" },
   ];
   let phase = $state<"steps" | "running" | "result">("steps");
-  let step = $state(sync ? STEPS.length - 1 : 0);
-  let source = $state(sync?.source ?? "");
-  let destination = $state(sync?.destination ?? "");
-  let mirror = $state(sync?.mode === "Mirror");
-  let name = $state(sync?.name ?? "");
-  let nameTouched = $state(!!sync);
+  let step = $state(rerun ? STEPS.length - 1 : 0);
+  let source = $state(rerun?.source ?? "");
+  let destination = $state(rerun?.destination ?? "");
+  let mirror = $state(rerun?.mode === "Mirror");
+  let name = $state(rerun?.name ?? "");
+  let nameTouched = $state(!!rerun);
   let error = $state("");
   let preview = $state<Preview | null>(null);
-  let scanning = $state(!!sync);
+  let scanning = $state(!!rerun);
   let previewError = $state("");
   let run = $state<Run | null>(null);
   let failure = $state("");
@@ -55,7 +59,7 @@
   let closeRequests = $state(0);
 
   onMount(() => {
-    if (sync) scan();
+    if (rerun) scan();
     const unlisten = onCloseRequested(() => closeRequests++);
     return () => {
       unlisten.then((stop) => stop());
@@ -190,7 +194,7 @@
 
   /** A new sync is saved when its first run starts or on "No, salva e basta"; a saved one already is. */
   const saveIfNew = async (): Promise<Sync> =>
-    sync ?? (await saveSync(name.trim(), source.trim(), destination.trim(), mode));
+    (sync ??= await saveSync(name.trim(), source.trim(), destination.trim(), mode));
 
   async function start() {
     if (!previewCounts || saving) return;
@@ -203,6 +207,16 @@
       failure = String(e);
     }
     phase = "result";
+  }
+
+  /** "Riprova" on the result: back to a fresh preview of the same sync, never straight to a run. */
+  function retry() {
+    run = null;
+    failure = "";
+    saving = false;
+    phase = "steps";
+    step = STEPS.length - 1;
+    scan();
   }
 
   async function stop() {
@@ -221,7 +235,7 @@
 {#if phase === "running"}
   <StepRunning total={runTotal} {closeRequests} />
 {:else if phase === "result"}
-  <StepResult {run} {failure} onhome={onexit} />
+  <StepResult {run} {failure} onhome={onexit} onretry={retry} {onhistory} />
 {:else}
   <ol class="steps" aria-label="Passi">
     {#each STEPS as s, i (s.id)}

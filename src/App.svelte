@@ -1,13 +1,24 @@
 <script lang="ts">
-  import { listRuns } from "./lib/api";
+  import { onMount } from "svelte";
+  import { isElevated, listRuns } from "./lib/api";
   import History from "./lib/History.svelte";
   import HistoryLegend from "./lib/HistoryLegend.svelte";
   import Home from "./lib/Home.svelte";
+  import Icon from "./lib/Icon.svelte";
   import { emptySchema, type SchemaModel } from "./lib/schema";
   import SchemaView from "./lib/SchemaView.svelte";
   import ThemeSwitch from "./lib/ThemeSwitch.svelte";
   import type { Run, Sync } from "./lib/types";
   import Wizard from "./lib/wizard/Wizard.svelte";
+
+  /** Started as administrator: mapped network drives are not visible then. */
+  let elevated = $state(false);
+  onMount(() => {
+    isElevated().then(
+      (yes) => (elevated = yes),
+      () => {}, // only a hint: no answer, no banner
+    );
+  });
 
   let view = $state<"home" | "history" | "wizard">("home");
   let schema = $state<SchemaModel>(emptySchema);
@@ -56,6 +67,11 @@
     </div>
     <ThemeSwitch />
   </header>
+  {#if elevated}
+    <p class="elevated" role="alert">
+      <Icon name="warn" />Le unità di rete potrebbero non essere visibili: apri ColomboSync senza 'Esegui come amministratore'.
+    </p>
+  {/if}
   <div class="layout">
     <main class="screen">
       {#if view !== "wizard"}
@@ -73,7 +89,15 @@
       {:else if view === "history"}
         <History {runs} status={historyStatus} />
       {:else}
-        <Wizard sync={rerun} onschema={(model) => (schema = model)} onexit={leaveWizard} />
+        <Wizard
+          sync={rerun}
+          onschema={(model) => (schema = model)}
+          onexit={leaveWizard}
+          onhistory={() => {
+            leaveWizard();
+            openHistory();
+          }}
+        />
       {/if}
     </main>
     <aside class="schema" aria-label={view === "history" ? "Come leggere lo storico" : "Schema di cosa succede"}>
@@ -129,6 +153,22 @@
     color: var(--fg-2);
     display: block;
     line-height: 1.2;
+  }
+  .elevated {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin: 0 18px 6px;
+    padding: 12px 18px;
+    border-radius: var(--r-s);
+    background: var(--warn-soft);
+    color: var(--on-warn-soft);
+    font-weight: 700;
+  }
+  .elevated :global(svg) {
+    width: 24px;
+    height: 24px;
+    flex: none;
   }
   .layout {
     display: grid;

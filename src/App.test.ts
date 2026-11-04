@@ -38,7 +38,7 @@ const savedSync: SyncSummary = {
   source: "D:\\Foto",
   destination: "E:\\Backup",
   mode: "Copy",
-  lastRun: { startedAt: "2026-11-02T21:30:00+01:00", outcome: "Ok" },
+  lastRun: { startedAt: "2026-11-02T21:30:00+01:00", outcome: "Ok", note: null },
 };
 
 type Args = Record<string, unknown> | undefined;
@@ -51,7 +51,8 @@ type Handlers = Partial<
     | "default_sync_name"
     | "check_destination"
     | "list_runs"
-    | "read_run_log",
+    | "read_run_log"
+    | "is_elevated",
     (args: Args) => unknown
   >
 >;
@@ -63,6 +64,7 @@ function backend(handlers: Handlers = {}) {
     list_syncs: () => [],
     default_sync_name: () => "Copia di Foto",
     check_destination: () => undefined, // B is fine
+    is_elevated: () => false,
     save_sync: (args) => ({ id: 7, ...args }),
   };
   invokeMock.mockImplementation(async (cmd, args) => {
@@ -154,7 +156,7 @@ test("while the copy runs the UI says Sto copiando…", async () => {
   expect(screen.getByRole("heading", { name: /^Sto copiando/ })).toBeTruthy();
 });
 
-test("a run that ends in Error says Non completato with the raw message", async () => {
+test("a run from before the plain-language messages still says Non completato with its raw message", async () => {
   backend({
     preview_sync: () => preview(2, 1),
     run_sync: () => ({ ...doneRun, outcome: "Error", error: "robocopy ha restituito il codice 16." }),
@@ -758,4 +760,99 @@ test("Dove: if the paths change while they are being checked, the new ones are c
   });
   await vi.waitFor(() => expect(screen.getByRole("alert").textContent).toContain("non può stare dentro"));
   expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();
+});
+
+const unreachable = String.raw`Non completato: la cartella di rete \NAS non è raggiungibile. Controlla la connessione e riprova.`;
+const failedRun: Run = { ...doneRun, outcome: "Error", error: unreachable, partial: 0 };
+
+test("a run that fails says why in plain Italian, with Riprova and the log link", async () => {
+  backend({ preview_sync: () => preview(2, 1), run_sync: () => failedRun });
+  render(App);
+  await goToPreview();
+
+  await click(await screen.findByRole("button", { name: "Sì, avvia" }));
+
+  expect(
+    await screen.findByRole("heading", { name: String.raw`Non completato: la cartella di rete \NAS non è raggiungibile.` }),
+  ).toBeTruthy();
+  expect(screen.getByText("Controlla la connessione e riprova.")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Riprova" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Apri il registro" })).toBeTruthy();
+});
+
+test("Riprova opens a fresh preview of the same saved sync and never runs by itself", async () => {
+  backend({ preview_sync: () => preview(2, 1), run_sync: () => failedRun });
+  render(App);
+  await goToPreview();
+  await click(await screen.findByRole("button", { name: "Sì, avvia" }));
+
+  await click(await screen.findByRole("button", { name: "Riprova" }));
+
+  expect(await screen.findByRole("heading", { name: "Anteprima: Copia di Foto" })).toBeTruthy();
+  expect(calls("preview_sync")).toHaveLength(2);
+  expect(calls("preview_sync")[1]).toEqual(calls("preview_sync")[0]);
+  expect(calls("run_sync")).toHaveLength(1);
+  expect(await screen.findByText("Da copiare (nuovi)")).toBeTruthy();
+
+  await click(await screen.findByRole("button", { name: "Sì, avvia" }));
+
+  await screen.findByRole("button", { name: "Riprova" });
+  expect(calls("save_sync")).toHaveLength(1);
+  expect(calls("run_sync")).toHaveLength(2);
+  expect(calls("run_sync")[1]).toEqual(
+    expect.arrayContaining([expect.objectContaining({ sync: expect.objectContaining({ id: 7 }) })]),
+  );
+});
+
+test("Torna all’elenco and Vai allo storico leave the result", async () => {
+  backend({ preview_sync: () => preview(2, 1), run_sync: () => failedRun, list_runs: () => [failedRun] });
+  render(App);
+  await goToPreview();
+  await click(await screen.findByRole("button", { name: "Sì, avvia" }));
+
+  await click(await screen.findByRole("button", { name: "Vai allo storico" }));
+
+  expect(await screen.findByRole("heading", { name: "Storico" })).toBeTruthy();
+  expect(invokeMock).toHaveBeenCalledWith("list_runs");
+});
+
+test("Riprova after a stopped run shows the preview again", async () => {
+  backend({
+    preview_sync: () => preview(2, 1),
+    run_sync: () => ({ ...doneRun, outcome: "Cancelled", partial: 1 }),
+  });
+  render(App);
+  await goToPreview();
+  await click(await screen.findByRole("button", { name: "Sì, avvia" }));
+
+  await click(await screen.findByRole("button", { name: "Riprova" }));
+
+  expect(await screen.findByText("Da copiare (nuovi)")).toBeTruthy();
+});
+
+test("running as administrator shows the banner about network drives", async () => {
+  backend({ is_elevated: () => true });
+  render(App);
+
+  expect(
+    await screen.findByText("Le unità di rete potrebbero non essere visibili: apri ColomboSync senza 'Esegui come amministratore'."),
+  ).toBeTruthy();
+});
+
+test("a normal user, or an unknown answer, sees no banner", async () => {
+  backend({ is_elevated: () => false });
+  const { unmount } = render(App);
+  await screen.findByRole("button", { name: "Nuova sincronizzazione" });
+  expect(calls("is_elevated")).toHaveLength(1);
+  expect(screen.queryByText(/Esegui come amministratore/)).toBeNull();
+  unmount();
+
+  backend({
+    is_elevated: () => {
+      throw "boom";
+    },
+  });
+  render(App);
+  await screen.findByRole("button", { name: "Nuova sincronizzazione" });
+  expect(screen.queryByText(/Esegui come amministratore/)).toBeNull();
 });

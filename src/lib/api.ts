@@ -39,3 +39,6 @@ export const onRunProgress = (handler: (progress: RunProgress) => void) =>
 
 /** The user tried to close the window while a run is going; the window stays open. */
 export const onCloseRequested = (handler: () => void) => listen("close-requested", () => handler());
+
+/** The app was started as administrator: mapped network drives are then not visible. */
+export const isElevated = () => invoke<boolean>("is_elevated");

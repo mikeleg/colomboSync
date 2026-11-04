@@ -75,5 +75,5 @@ export interface Sync {
 
 /** A saved sync as the home lists it, with how its latest Run ended (null: never run). */
 export interface SyncSummary extends Sync {
-  lastRun: { startedAt: string; outcome: Outcome } | null;
+  lastRun: { startedAt: string; outcome: Outcome; note: string | null } | null;
 }

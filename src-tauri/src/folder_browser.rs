@@ -1,10 +1,12 @@
 //! Lists drives and subfolders for the click-first folder picker.
-//! Nothing here can fail: an unreadable or missing folder is shown as empty.
+//! A folder that cannot be opened is reported in the listing (never a panic or a failed command).
 
 use serde::Serialize;
 use std::os::windows::fs::MetadataExt;
 use std::path::Path;
 
+const CANNOT_OPEN: &str =
+    "Non riesco ad aprire questa cartella. Il disco o la rete sono collegati?";
 const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
 const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
 const FILE_ATTRIBUTE_SYSTEM: u32 = 0x4;
@@ -20,6 +22,8 @@ pub struct FolderListing {
     /// The folder one level up; empty when that is the list of drives.
     pub parent: String,
     pub folders: Vec<Folder>,
+    /// Plain Italian message when `path` could not be opened (disconnected disk or network, no access).
+    pub error: Option<String>,
 }
 
 /// Empty `path` lists the drives of the computer, otherwise the subfolders of `path`.
@@ -29,15 +33,21 @@ pub fn browse(path: &str) -> FolderListing {
         return FolderListing {
             parent: String::new(),
             folders: drives(),
+            error: None,
         };
     }
     let parent = Path::new(path)
         .parent()
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_default();
+    let (folders, error) = match subfolders(Path::new(path)) {
+        Ok(folders) => (folders, None),
+        Err(_) => (Vec::new(), Some(CANNOT_OPEN.to_string())),
+    };
     FolderListing {
         parent,
-        folders: subfolders(Path::new(path)),
+        folders,
+        error,
     }
 }
 
@@ -55,10 +65,8 @@ fn drives() -> Vec<Folder> {
 }
 
 /// Visible directories directly inside `path`, sorted by name.
-fn subfolders(path: &Path) -> Vec<Folder> {
-    let Ok(entries) = std::fs::read_dir(path) else {
-        return Vec::new();
-    };
+fn subfolders(path: &Path) -> std::io::Result<Vec<Folder>> {
+    let entries = std::fs::read_dir(path)?;
     let mut folders: Vec<Folder> = entries
         .flatten()
         // One stat-free read per entry: on Windows `DirEntry::metadata` comes with the directory listing.
@@ -74,7 +82,7 @@ fn subfolders(path: &Path) -> Vec<Folder> {
         })
         .collect();
     folders.sort_by_key(|f| f.name.to_lowercase());
-    folders
+    Ok(folders)
 }
 
 fn is_visible_folder(attributes: u32) -> bool {
@@ -93,16 +101,35 @@ mod tests {
         std::fs::create_dir(dir.path().join("Alfa")).unwrap();
         std::fs::write(dir.path().join("file.txt"), "x").unwrap();
 
-        let names: Vec<_> = subfolders(dir.path()).into_iter().map(|f| f.name).collect();
+        let names: Vec<_> = subfolders(dir.path())
+            .unwrap()
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
 
         assert_eq!(names, ["Alfa", "beta"]);
     }
 
     #[test]
-    fn missing_path_lists_nothing() {
+    fn a_folder_that_cannot_be_opened_is_an_error_not_an_empty_list() {
         let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("non-esiste");
 
-        assert!(subfolders(&dir.path().join("non-esiste")).is_empty());
+        let listing = browse(missing.to_str().unwrap());
+
+        assert!(listing.folders.is_empty());
+        assert!(listing.error.is_some());
+    }
+
+    #[test]
+    fn a_folder_with_no_subfolders_is_empty_without_error() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("file.txt"), "x").unwrap();
+
+        let listing = browse(dir.path().to_str().unwrap());
+
+        assert!(listing.folders.is_empty());
+        assert_eq!(listing.error, None);
     }
 
     #[test]

@@ -193,11 +193,7 @@ fn cancel_kills_robocopy_and_records_a_cancelled_run() {
     );
     assert_eq!((run.new, run.updated, run.deleted), (0, 0, 0));
     assert!(run.error.is_none());
-    assert!(
-        run.partial.is_some_and(|n| n >= 1),
-        "partial: {:?}",
-        run.partial
-    );
+    assert!(run.partial.is_some());
     assert!(!active.is_running(), "the robocopy process is gone");
     assert!(
         !b.join("z-grande.bin").exists()

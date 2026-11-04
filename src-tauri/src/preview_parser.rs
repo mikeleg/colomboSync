@@ -65,10 +65,7 @@ pub fn parse(
         let Some((size, path)) = size_and_path(line, &[&source_prefix, &destination_prefix]) else {
             continue;
         };
-        let under_source = starts_with_ci(path, &source_prefix);
-        let under_destination = starts_with_ci(path, &destination_prefix);
-        // A inside B: the longer root wins.
-        if under_destination && (!under_source || destination_prefix.len() > source_prefix.len()) {
+        if is_in_destination(path, &source_prefix, &destination_prefix) {
             preview.deleted.add(&path[destination_prefix.len()..]);
         } else {
             let relative = &path[source_prefix.len()..];
@@ -86,11 +83,19 @@ pub fn parse(
 
 /// Files of A that a run's own log lists. Unlike `parse` it does not classify: after a copy every
 /// file exists in B, so "Updated" would be meaningless.
-pub fn count_source_files(log: &str, source: &str) -> usize {
+pub fn count_source_files(log: &str, source: &str, destination: &str) -> usize {
     let source_prefix = prefix_of(source);
+    let destination_prefix = prefix_of(destination);
     log.lines()
-        .filter(|line| size_and_path(line, &[&source_prefix]).is_some())
+        .filter_map(|line| size_and_path(line, &[&source_prefix, &destination_prefix]))
+        .filter(|(_, path)| !is_in_destination(path, &source_prefix, &destination_prefix))
         .count()
+}
+
+/// Path under B rather than A; with B inside A (or A inside B) the longer root wins.
+fn is_in_destination(path: &str, source_prefix: &str, destination_prefix: &str) -> bool {
+    starts_with_ci(path, destination_prefix)
+        && (!starts_with_ci(path, source_prefix) || destination_prefix.len() > source_prefix.len())
 }
 
 /// Root with `\` separators and exactly one trailing `\`, so `D:\Foto` never matches `D:\Foto2`.
@@ -181,8 +186,14 @@ mod tests {
     #[test]
     fn counts_file_lines_in_run_log() {
         let log = "\u{feff}\r\n\t  \t\t 5\tD:\\Foto\\a.txt\r\n\t  \t\t 6\td:\\foto\\sub\\è.txt\r\n2026/11/03 12:00:00 ERROR 5 (0x00000005) Copying File D:\\Foto\\b.txt\r\nAccess is denied.\r\n\t  \t\t 7\tE:\\Backup\\extra.txt\r\n";
-        assert_eq!(count_source_files(log, r"D:\Foto"), 2);
-        assert_eq!(count_source_files("", r"D:\Foto"), 0);
+        assert_eq!(count_source_files(log, r"D:\Foto", r"E:\Backup"), 2);
+        assert_eq!(count_source_files("", r"D:\Foto", r"E:\Backup"), 0);
+    }
+
+    #[test]
+    fn lines_under_b_are_not_counted_when_b_is_inside_a() {
+        let log = "\t\t 5\tD:\\Foto\\a.txt\r\n\t\t 6\tD:\\Foto\\Backup\\a.txt\r\n\t\t 7\tD:\\Foto\\Backup\\sub\\b.txt\r\n";
+        assert_eq!(count_source_files(log, r"D:\Foto", r"D:\Foto\Backup"), 1);
     }
 
     #[test]

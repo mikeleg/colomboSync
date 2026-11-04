@@ -169,10 +169,16 @@ pub fn run(
         started_at: started.to_rfc3339(),
         log_path: log.to_string_lossy().into_owned(),
         error: (!ok && !cancelled).then(|| failure_message(code, &log_text)),
-        partial: (!ok).then(|| preview_parser::count_source_files(&log_text, source)),
+        partial: (!ok).then(|| partial_count(&log_text, source, destination)),
     };
     history::append(&storage.history_file(), &run).map_err(|e| e.to_string())?;
     Ok(run)
+}
+
+/// Files copied before a failed or stopped run ended. The last file line is the file in flight
+/// (possibly cut short), so it is not counted.
+fn partial_count(log: &str, source: &str, destination: &str) -> usize {
+    preview_parser::count_source_files(log, source, destination).saturating_sub(1)
 }
 
 /// "Copia di <last folder of A>"; for a drive root, "Copia di disco D:".
@@ -215,6 +221,15 @@ mod tests {
         assert_eq!(default_sync_name(r"D:\Foto\2024\"), "Copia di 2024");
         assert_eq!(default_sync_name(r"\\NAS\Condivisa\Foto"), "Copia di Foto");
         assert_eq!(default_sync_name(r"D:\"), "Copia di disco D:");
+    }
+
+    #[test]
+    fn partial_count_skips_the_file_in_flight() {
+        let line = |name: &str| format!("\t  \t\t 5\tD:\\Foto\\{name}\r\n");
+        let log = line("a.txt") + &line("b.txt") + &line("c.txt");
+        assert_eq!(partial_count(&log, r"D:\Foto", r"E:\Backup"), 2);
+        assert_eq!(partial_count(&line("a.txt"), r"D:\Foto", r"E:\Backup"), 0);
+        assert_eq!(partial_count("", r"D:\Foto", r"E:\Backup"), 0);
     }
 
     #[test]

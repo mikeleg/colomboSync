@@ -84,6 +84,15 @@ pub fn parse(
     preview
 }
 
+/// Files of A that a run's own log lists. Unlike `parse` it does not classify: after a copy every
+/// file exists in B, so "Updated" would be meaningless.
+pub fn count_source_files(log: &str, source: &str) -> usize {
+    let source_prefix = prefix_of(source);
+    log.lines()
+        .filter(|line| size_and_path(line, &[&source_prefix]).is_some())
+        .count()
+}
+
 /// Root with `\` separators and exactly one trailing `\`, so `D:\Foto` never matches `D:\Foto2`.
 fn prefix_of(root: &str) -> String {
     let mut prefix = root.trim().replace('/', "\\");
@@ -167,6 +176,13 @@ mod tests {
         let log = "\r\n2026/11/03 12:00:00 ERROR 5 (0x00000005) Copying File D:\\Foto\\a.txt\r\nAccess is denied.\r\n";
         let preview = parse(log, r"D:\Foto", r"E:\Backup", |_| false);
         assert_eq!(preview, Preview::default());
+    }
+
+    #[test]
+    fn counts_file_lines_in_run_log() {
+        let log = "\u{feff}\r\n\t  \t\t 5\tD:\\Foto\\a.txt\r\n\t  \t\t 6\td:\\foto\\sub\\è.txt\r\n2026/11/03 12:00:00 ERROR 5 (0x00000005) Copying File D:\\Foto\\b.txt\r\nAccess is denied.\r\n\t  \t\t 7\tE:\\Backup\\extra.txt\r\n";
+        assert_eq!(count_source_files(log, r"D:\Foto"), 2);
+        assert_eq!(count_source_files("", r"D:\Foto"), 0);
     }
 
     #[test]

@@ -18,3 +18,10 @@ Source: spike of 2026-11-03 (see `docs/backlog/colombo-sync/scope.md`, Decisions
 - Windows errors appear in the log as `ERROR <n> (0x…)`: 2, 3 (not found), 5 (access denied), 53, 67 (network) → plain Italian messages (S6).
 - Large trees (100k+ files): stream the log, keep counts, don't send every line to the UI.
 - The app must not run elevated: mapped drives disappear under an elevated token.
+
+## Real run and live progress (S5)
+- Run = `robocopy "<A>" "<B>" /E /XX /R:1 /W:1 /NJH /NJS /NDL /NC /BYTES /FP /NP /TEE /UNILOG:<log>` (Mirror: `/MIR`, no `/XX`). `/XX` keeps extras in B out of the output, so every file line is a file of A. `/TEE` streams the same lines to stdout, which the app reads through a pipe; `/UNILOG` stays the history log.
+- Stdout is **not** UTF-16: it is the console OEM code page (also with `/UNICODE`), decoded with `MultiByteToWideChar(CP_OEMCP)`. It starts with a ` Log File : <path>` header (localized, even with `/NJH`) and blank lines.
+- Count progress without reading labels: a **file line is the only line that starts with a tab**. `ERROR` lines start with a date.
+- `Child::kill()` is `TerminateProcess(…, 1)`: the exit code of a stopped run is **1**, which reads as success. The Run is `Cancelled` because the app asked for the stop, never because of the exit code.
+- A partial count (Error/Cancelled) counts the file lines of the run's own `/UNILOG` under A. Never classify them like a preview: after a copy every file exists in B.

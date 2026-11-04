@@ -32,6 +32,9 @@ pub struct Run {
     /// Raw robocopy message when the outcome is `Error` (plain language comes in S6).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Files copied before an `Error` or `Cancelled` run stopped (no new/updated split).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub partial: Option<usize>,
 }
 
 pub fn append(file: &Path, run: &Run) -> io::Result<()> {
@@ -65,6 +68,7 @@ mod tests {
             started_at: "2026-11-02T21:30:00+01:00".into(),
             log_path: r"C:\L\logs\x.log".into(),
             error: None,
+            partial: None,
         }
     }
 
@@ -93,5 +97,20 @@ mod tests {
             json,
             r#"{"syncName":"n","source":"D:\\Foto","destination":"E:\\Backup","mode":"Copy","new":12,"updated":1,"deleted":0,"durationMs":61000,"outcome":"Cancelled","startedAt":"2026-11-02T21:30:00+01:00","logPath":"C:\\L\\logs\\x.log"}"#
         );
+    }
+
+    #[test]
+    fn run_without_partial_field_still_loads() {
+        let old = r#"{"syncName":"n","source":"D:\\Foto","destination":"E:\\Backup","mode":"Copy","new":12,"updated":1,"deleted":0,"durationMs":61000,"outcome":"Cancelled","startedAt":"2026-11-02T21:30:00+01:00","logPath":"C:\\L\\logs\\x.log"}"#;
+        let loaded: Run = serde_json::from_str(old).unwrap();
+        assert_eq!(loaded, run("n", Outcome::Cancelled));
+
+        let partial = Run {
+            partial: Some(40),
+            ..loaded
+        };
+        let json = serde_json::to_string(&partial).unwrap();
+        assert!(json.ends_with(r#","partial":40}"#));
+        assert_eq!(serde_json::from_str::<Run>(&json).unwrap(), partial);
     }
 }

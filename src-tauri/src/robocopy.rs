@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::io;
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
@@ -27,8 +27,17 @@ pub fn preview_args(mode: SyncMode, source: &str, destination: &str, log: &str) 
 }
 
 /// Arguments of the real run. `log` is the per-run log kept in `logs\`.
+///
+/// `/TEE` also streams every file line to stdout, in the console OEM code page (the UI follows
+/// the copy from there; `/UNICODE` does not change that on a pipe). Copy adds `/XX` so extras
+/// in B are not listed:
+/// every file line on stdout is then a file of A.
 pub fn run_args(mode: SyncMode, source: &str, destination: &str, log: &str) -> Vec<String> {
     let mut args = base_args(mode, source, destination);
+    if mode == SyncMode::Copy {
+        args.push("/XX".into());
+    }
+    args.push("/TEE".into());
     args.extend(output_args(log));
     args
 }
@@ -65,15 +74,27 @@ fn robocopy_exe() -> PathBuf {
     PathBuf::from(root).join("System32").join("robocopy.exe")
 }
 
-/// Runs robocopy hidden and blocks until it exits; returns its exit code.
-pub fn execute(args: &[String]) -> io::Result<i32> {
-    let status = Command::new(robocopy_exe())
+fn command(args: &[String]) -> Command {
+    let mut command = Command::new(robocopy_exe());
+    command
         .args(args)
         .creation_flags(CREATE_NO_WINDOW)
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()?;
+        .stderr(Stdio::null());
+    command
+}
+
+/// Runs robocopy hidden and blocks until it exits; returns its exit code.
+pub fn execute(args: &[String]) -> io::Result<i32> {
+    exit_code(command(args).stdout(Stdio::null()).status()?)
+}
+
+/// Starts robocopy hidden with stdout piped; the caller reads the pipe, so it never blocks.
+pub fn spawn(args: &[String]) -> io::Result<Child> {
+    command(args).stdout(Stdio::piped()).spawn()
+}
+
+pub fn exit_code(status: ExitStatus) -> io::Result<i32> {
     status
         .code()
         .ok_or_else(|| io::Error::other("robocopy terminated without an exit code"))
@@ -129,6 +150,18 @@ mod tests {
         let run = run_args(SyncMode::Copy, "A", "B", "r.log");
         assert!(!run.contains(&"/L".to_string()));
         assert_eq!(run.last().unwrap(), "/UNILOG:r.log");
+    }
+
+    #[test]
+    fn run_streams_stdout_with_tee_and_never_lists_extras_in_copy() {
+        let run = run_args(SyncMode::Copy, "A", "B", "r.log");
+        assert!(run.contains(&"/TEE".to_string()));
+        assert!(run.contains(&"/XX".to_string()));
+        let mirror = run_args(SyncMode::Mirror, "A", "B", "r.log");
+        assert!(mirror.contains(&"/TEE".to_string()));
+        assert!(!mirror.contains(&"/XX".to_string()));
+        let preview = preview_args(SyncMode::Copy, "A", "B", "p.log");
+        assert!(!preview.contains(&"/TEE".to_string()));
     }
 
     #[test]

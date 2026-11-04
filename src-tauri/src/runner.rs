@@ -2,13 +2,18 @@
 
 use crate::history::{self, Outcome, Run};
 use crate::preview_parser::{self, Counts, Preview};
+use crate::progress::{Progress, StdoutFollower};
 use crate::robocopy::{self, SyncMode};
 use crate::storage::Storage;
 use chrono::Local;
 use std::fs;
+use std::io::{self, Read};
 use std::path::Path;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::Instant;
+use std::process::{Child, ChildStdout, ExitStatus};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::thread;
+use std::time::{Duration, Instant};
 
 /// Dry run (`/L`): lists what a Run would do, touches nothing. Blocks until robocopy exits.
 pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Preview, String> {
@@ -33,15 +38,84 @@ pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Previe
     }))
 }
 
-/// Real run. Always returns the recorded `Run` (outcome `Ok` or `Error`); `Err` only when
-/// robocopy cannot be started or the history cannot be written. `counts` come from the preview
-/// the user just confirmed.
+/// The robocopy process of the Run in progress, shared so another thread can stop it.
+#[derive(Default)]
+pub struct ActiveRun {
+    child: Mutex<Option<Child>>,
+    cancelled: AtomicBool,
+    exit_when_done: AtomicBool,
+}
+
+impl ActiveRun {
+    pub fn is_running(&self) -> bool {
+        self.slot().is_some()
+    }
+
+    /// Kills robocopy; the Run then ends as `Cancelled`. `false` when nothing is running.
+    /// `exit_when_done` tells the caller of `run` that the app is closing: the history line is
+    /// written first.
+    pub fn cancel(&self, exit_when_done: bool) -> bool {
+        let mut slot = self.slot();
+        let Some(child) = slot.as_mut() else {
+            return false;
+        };
+        self.exit_when_done.store(exit_when_done, Ordering::SeqCst);
+        self.cancelled.store(true, Ordering::SeqCst);
+        let _ = child.kill();
+        true
+    }
+
+    pub fn exit_when_done(&self) -> bool {
+        self.exit_when_done.load(Ordering::SeqCst)
+    }
+
+    fn slot(&self) -> MutexGuard<'_, Option<Child>> {
+        self.child.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn start(&self, args: &[String]) -> Result<ChildStdout, String> {
+        let mut slot = self.slot();
+        if slot.is_some() {
+            return Err("C’è già una copia in corso.".into());
+        }
+        let mut child = robocopy::spawn(args).map_err(|e| e.to_string())?;
+        let stdout = child.stdout.take().ok_or("robocopy senza stdout")?;
+        self.cancelled.store(false, Ordering::SeqCst);
+        self.exit_when_done.store(false, Ordering::SeqCst);
+        *slot = Some(child);
+        Ok(stdout)
+    }
+
+    /// Waits for robocopy to exit without holding the lock, so `cancel` stays possible.
+    fn wait(&self) -> io::Result<ExitStatus> {
+        loop {
+            {
+                let mut slot = self.slot();
+                let child = slot
+                    .as_mut()
+                    .ok_or_else(|| io::Error::other("no robocopy process"))?;
+                if let Some(status) = child.try_wait()? {
+                    *slot = None;
+                    return Ok(status);
+                }
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
+    }
+}
+
+/// Real run. Always returns the recorded `Run` (outcome `Ok`, `Error` or `Cancelled`); `Err` only
+/// when robocopy cannot be started or the history cannot be written. `counts` come from the
+/// preview the user just confirmed and give the total of `on_progress`, which is called for
+/// every chunk robocopy writes to stdout.
 pub fn run(
     storage: &Storage,
     source: &str,
     destination: &str,
     mode: SyncMode,
     counts: Counts,
+    active: &ActiveRun,
+    mut on_progress: impl FnMut(&Progress),
 ) -> Result<Run, String> {
     let started = Local::now();
     let sync_name = default_sync_name(source);
@@ -49,16 +123,34 @@ pub fn run(
     fs::create_dir_all(storage.logs_dir()).map_err(|e| e.to_string())?;
 
     let clock = Instant::now();
-    let code = robocopy::execute(&robocopy::run_args(
+    let mut stdout = active.start(&robocopy::run_args(
         mode,
         source,
         destination,
         &log.to_string_lossy(),
-    ))
-    .map_err(|e| e.to_string())?;
+    ))?;
+    let total = counts.new + counts.updated + counts.deleted;
+    let mut follower = StdoutFollower::default();
+    let mut chunk = [0u8; 8192];
+    // Ends at EOF: robocopy exited or was killed.
+    while let Ok(n @ 1..) = stdout.read(&mut chunk) {
+        follower.feed(&chunk[..n]);
+        on_progress(&Progress {
+            sync_name: sync_name.clone(),
+            done: follower.done().min(total),
+            total,
+            elapsed_ms: clock.elapsed().as_millis() as u64,
+            current_file: follower.current_file().to_string(),
+        });
+    }
+    let status = active.wait().map_err(|e| e.to_string())?;
     let duration_ms = clock.elapsed().as_millis() as u64;
 
-    let ok = robocopy::is_success(code);
+    // A killed robocopy exits with code 1, which alone would read as success.
+    let cancelled = active.cancelled.load(Ordering::SeqCst);
+    let code = robocopy::exit_code(status).map_err(|e| e.to_string())?;
+    let ok = !cancelled && robocopy::is_success(code);
+    let log_text = read_log(&log);
     let run = Run {
         sync_name,
         source: source.to_string(),
@@ -68,10 +160,15 @@ pub fn run(
         updated: if ok { counts.updated } else { 0 },
         deleted: if ok { counts.deleted } else { 0 },
         duration_ms,
-        outcome: if ok { Outcome::Ok } else { Outcome::Error },
+        outcome: match (ok, cancelled) {
+            (true, _) => Outcome::Ok,
+            (false, true) => Outcome::Cancelled,
+            (false, false) => Outcome::Error,
+        },
         started_at: started.to_rfc3339(),
         log_path: log.to_string_lossy().into_owned(),
-        error: (!ok).then(|| failure_message(code, &read_log(&log))),
+        error: (!ok && !cancelled).then(|| failure_message(code, &log_text)),
+        partial: (!ok).then(|| preview_parser::count_source_files(&log_text, source)),
     };
     history::append(&storage.history_file(), &run).map_err(|e| e.to_string())?;
     Ok(run)

@@ -11,7 +11,7 @@ const preview = (n: number, u: number, files = { n: ["a.jpg", "b.jpg"], u: ["c.p
   bytes: 5_000_000,
 });
 
-const props = { scanning: false, error: "", onstart: () => {}, onstop: () => {} };
+const props = { scanning: false, error: "", onstart: () => {}, onstop: () => {}, onback: () => {} };
 
 test("shows new and updated groups with counts, the files, and the start button", () => {
   render(StepPreview, { ...props, preview: preview(148, 1) });
@@ -31,11 +31,15 @@ test("hides a group that has nothing in it", () => {
   expect(screen.queryByText("Da aggiornare")).toBeNull();
 });
 
-test("B è già aggiornato: says so and offers no start button", () => {
-  render(StepPreview, { ...props, preview: preview(0, 0) });
+test("B è già aggiornato: says so, offers no start button and a way back", async () => {
+  const onback = vi.fn();
+  render(StepPreview, { ...props, preview: preview(0, 0), onback });
 
   expect(screen.getByText("B è già aggiornato")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Sì, avvia" })).toBeNull();
+
+  await fireEvent.click(screen.getByRole("button", { name: "Indietro" }));
+  expect(onback).toHaveBeenCalledOnce();
 });
 
 test("while scanning it reassures that nothing is copied yet and offers no start", () => {
@@ -45,21 +49,28 @@ test("while scanning it reassures that nothing is copied yet and offers no start
   expect(screen.queryByRole("button", { name: "Sì, avvia" })).toBeNull();
 });
 
-test("a failed preview shows the message and offers no start button", () => {
-  render(StepPreview, { ...props, preview: null, error: "robocopy ha restituito il codice 16." });
+test("a failed preview shows the message, no start button and a way back", async () => {
+  const onback = vi.fn();
+  render(StepPreview, { ...props, preview: null, error: "robocopy ha restituito il codice 16.", onback });
 
   expect(screen.getByRole("alert").textContent).toContain("robocopy ha restituito il codice 16.");
   expect(screen.queryByRole("button", { name: "Sì, avvia" })).toBeNull();
+
+  await fireEvent.click(screen.getByRole("button", { name: "Indietro" }));
+  expect(onback).toHaveBeenCalledOnce();
 });
 
-test("the buttons call back", async () => {
+test("the three choices after the preview call back: Sì, avvia / No, salva e basta / Indietro, cambio qualcosa", async () => {
   const onstart = vi.fn();
   const onstop = vi.fn();
-  render(StepPreview, { ...props, preview: preview(1, 0), onstart, onstop });
+  const onback = vi.fn();
+  render(StepPreview, { ...props, preview: preview(1, 0), onstart, onstop, onback });
 
   await fireEvent.click(screen.getByRole("button", { name: "Sì, avvia" }));
-  await fireEvent.click(screen.getByRole("button", { name: "No, torna all’inizio" }));
+  await fireEvent.click(screen.getByRole("button", { name: "No, salva e basta" }));
+  await fireEvent.click(screen.getByRole("button", { name: "Indietro, cambio qualcosa" }));
 
   expect(onstart).toHaveBeenCalledOnce();
   expect(onstop).toHaveBeenCalledOnce();
+  expect(onback).toHaveBeenCalledOnce();
 });

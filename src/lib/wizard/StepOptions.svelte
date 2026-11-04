@@ -5,22 +5,24 @@
     display: flex;
     gap: 12px;
     align-items: center;
-    padding: 16px 18px;
+    padding: 18px 20px;
+    border-radius: var(--r);
     background: var(--success-container);
     color: var(--on-success-container);
-    font-weight: 500;
+    font-weight: 600;
     margin-bottom: 18px;
-    font-size: 18px;
+    font-size: 17.5px;
   }
   .callout::before {
     content: "\2713";
     flex: none;
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
     display: grid;
     place-items: center;
-    background: var(--success);
-    color: var(--on-success);
-    font-weight: 700;
+    background: var(--ok);
+    color: var(--card);
+    font-weight: 800;
   }
 </style>

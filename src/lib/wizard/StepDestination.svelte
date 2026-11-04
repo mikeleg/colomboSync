@@ -6,7 +6,7 @@
 
 <FolderPicker
   id="path-b"
-  label="Cartella dove metto la copia (B)"
+  label="Clicca sulla cartella dove mettere la copia (B)"
   placeholder="Per esempio: E:\Backup"
   bind:value={path}
   {error}

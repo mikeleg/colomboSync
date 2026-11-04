@@ -18,6 +18,7 @@
     padding: 20px;
     border-radius: var(--r);
     background: var(--danger-soft);
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--danger) 50%, transparent);
     color: var(--on-danger-soft);
   }
   .warnbox :global(svg) {
@@ -26,7 +27,7 @@
     padding: 12px;
     border-radius: 50%;
     background: var(--danger);
-    color: var(--card);
+    color: var(--on-danger);
     flex: none;
   }
   .warnbox > div {

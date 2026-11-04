@@ -30,7 +30,7 @@
     display: inline-flex;
     padding: 4px;
     border-radius: 999px;
-    background: var(--card-2);
+    background: color-mix(in srgb, var(--fg) 8%, transparent);
     gap: 2px;
   }
   button {
@@ -55,8 +55,7 @@
     color: var(--fg);
   }
   button[aria-pressed="true"] {
-    background: var(--card);
-    color: var(--fg);
-    box-shadow: var(--shadow);
+    background: var(--fg);
+    color: var(--bg);
   }
 </style>

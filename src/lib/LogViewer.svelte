@@ -68,7 +68,8 @@
     flex-direction: column;
     background: var(--card);
     color: var(--fg);
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-win);
+    border-radius: var(--r);
     overflow: hidden;
   }
   header {
@@ -76,24 +77,25 @@
     gap: 12px;
     align-items: center;
     justify-content: space-between;
-    padding: 18px 22px;
+    padding: 22px 26px;
   }
   h2 {
     min-width: 0;
     overflow-wrap: anywhere;
-    font-size: 19px;
+    font-size: 20px;
   }
   pre {
-    margin: 0 16px 16px;
+    margin: 0 20px 20px;
     padding: 16px 18px;
     overflow: auto;
     font: 13.5px/1.45 Consolas, "Cascadia Mono", monospace;
     background: var(--card-2);
+    border-radius: var(--r-s);
     flex: 1;
     tab-size: 4;
   }
   .gone {
-    margin: 0 22px 22px;
+    margin: 0 26px 26px;
     color: var(--fg-2);
   }
 </style>

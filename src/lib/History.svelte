@@ -51,11 +51,13 @@
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 12px;
+    gap: 14px;
   }
   .run {
-    background: var(--card-2);
-    padding: 18px 22px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+    border-radius: var(--r);
+    padding: 22px 26px;
     min-width: 0;
   }
   .top {
@@ -68,8 +70,9 @@
   .top strong {
     min-width: 0;
     overflow-wrap: anywhere;
-    font-weight: 800;
-    font-size: 17.5px;
+    font-weight: 700;
+    font-size: 20px;
+    letter-spacing: -0.02em;
   }
   .when {
     color: var(--fg-2);
@@ -101,7 +104,7 @@
   dd {
     display: inline;
     margin: 0;
-    font-weight: 800;
+    font-weight: 700;
   }
   .d dd {
     color: var(--danger);

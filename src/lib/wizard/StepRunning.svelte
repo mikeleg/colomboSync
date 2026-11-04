@@ -102,43 +102,57 @@
 {/if}
 
 <style>
+  h1 {
+    font-size: clamp(32px, 4vw, 44px);
+    line-height: 1.05;
+    letter-spacing: -0.035em;
+  }
+  .hn {
+    color: var(--accent);
+  }
   .runprog {
-    padding: 20px 22px;
-    background: var(--card-2);
-    margin-bottom: 14px;
+    margin: 28px 0 22px;
   }
   .rp-top {
     display: flex;
     align-items: baseline;
-    gap: 14px;
+    gap: 8px 24px;
     flex-wrap: wrap;
   }
   .rp-top b {
-    font-size: 44px;
-    line-height: 1;
-    font-weight: 600;
-    color: var(--accent);
+    font-size: clamp(96px, 15vw, 180px);
+    line-height: 0.9;
+    font-weight: 700;
+    letter-spacing: -0.06em;
+    background: var(--grad-text);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
   .rp-top span {
-    font-size: 17px;
+    font-size: 24px;
     font-weight: 600;
     color: var(--fg-2);
   }
   .bar {
-    height: 18px;
-    margin-top: 14px;
-    background: var(--card-3);
+    height: 8px;
+    margin-top: 22px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--fg) 10%, transparent);
     overflow: hidden;
   }
   .bar i {
     display: block;
     height: 100%;
-    background: var(--accent);
+    border-radius: 999px;
+    background: var(--grad);
+    box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 70%, transparent);
     transition: width 0.1s linear;
   }
   .rp-eta {
-    margin-top: 10px;
-    color: var(--fg-2);
+    margin-top: 14px;
+    color: var(--fg);
+    font-size: 17px;
     font-weight: 600;
   }
   .sr {
@@ -151,29 +165,32 @@
   }
   .curfile {
     font-family: ui-monospace, Consolas, monospace;
-    font-size: 15px;
+    font-size: 14px;
     color: var(--fg-2);
     overflow-wrap: anywhere;
     margin: 0 0 22px;
     min-height: 24px;
     padding: 12px 16px;
-    background: var(--card-2);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--fg) 5%, transparent);
   }
   .confirm {
-    padding: 20px 22px;
+    padding: 22px 24px;
+    border-radius: var(--r-s);
     background: var(--warn-soft);
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--warn) 45%, transparent);
     color: var(--on-warn-soft);
   }
   .confirm p {
     font-weight: 700;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
   }
   .btn.danger {
     background: var(--danger);
-    color: var(--card);
+    color: var(--on-danger);
   }
   .btn.danger:not(:disabled):hover {
-    background: color-mix(in srgb, var(--card) 10%, var(--danger));
+    background: color-mix(in srgb, var(--on-danger) 12%, var(--danger));
   }
   @media (prefers-reduced-motion: reduce) {
     .bar i {

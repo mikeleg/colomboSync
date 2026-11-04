@@ -286,61 +286,49 @@
 <style>
   .steps {
     display: flex;
-    gap: 4px;
+    gap: 6px;
     list-style: none;
     padding: 0;
-    margin: 0 0 24px;
+    margin: 0 0 28px;
     flex-wrap: wrap;
     align-items: center;
   }
   .steps li {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 14px 4px 4px;
+    gap: 6px;
+    padding: 6px 14px;
     border-radius: 999px;
+    background: color-mix(in srgb, var(--fg) 6%, transparent);
     color: var(--fg-2);
-    font-weight: 700;
-    font-size: 14.5px;
+    font-weight: 600;
+    font-size: 14px;
   }
   .n {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    display: grid;
+    display: inline-grid;
     place-items: center;
-    background: var(--card-3);
-    color: var(--fg-2);
-    font-size: 14px;
-    font-weight: 800;
+    font-weight: 700;
   }
   .n :global(svg) {
-    width: 16px;
-    height: 16px;
-  }
-  .steps li.done {
-    color: var(--fg);
+    width: 14px;
+    height: 14px;
+    stroke-width: 3;
   }
   .steps li.done .n {
-    background: var(--ok-soft);
-    color: var(--on-ok-soft);
+    color: var(--accent);
   }
   .steps li.cur {
-    background: var(--accent-soft);
-    color: var(--on-accent-soft);
-  }
-  .steps li.cur .n {
-    background: var(--accent);
-    color: var(--on-accent);
+    background: var(--fg);
+    color: var(--bg);
   }
   .content {
-    margin-top: 14px;
+    margin-top: 18px;
   }
   .nav {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
     justify-content: space-between;
-    margin-top: 30px;
+    margin-top: 32px;
   }
 </style>

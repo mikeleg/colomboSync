@@ -90,13 +90,13 @@
     color: var(--danger);
   }
   .res.ann :global(svg) {
-    color: var(--warning);
+    color: var(--warn);
   }
   .res > div {
     min-width: 0;
   }
   .res h1 {
-    font-size: 26px;
+    font-size: 34px;
   }
   .res p {
     overflow-wrap: anywhere;

@@ -1,6 +1,6 @@
 ---
 name: parallel-slices
-description: Orchestrate several ColomboSync backlog slices in parallel with plain git worktrees and subagents, then merge them one by one with the full suite green. Use when asked to parallelize the backlog, run slices in parallel, or merge slice branches.
+description: Orchestrate several ColomboSync backlog slices in parallel with plain git worktrees and subagents, review each branch, then merge them one at a time with the full suite and CI green on all three OS. Use when asked to parallelize the backlog, run slices in parallel, or merge slice branches.
 ---
 
 # Parallel slices
@@ -8,34 +8,39 @@ description: Orchestrate several ColomboSync backlog slices in parallel with pla
 The orchestrator (main thread) plans, delegates and verifies. Subagents write code.
 
 ## 1. Pick the wave
-From the dependency graph at the top of `docs/backlog/colombo-sync/backlog.md`: every slice whose "Blocked by" is merged on `main`. S1 always alone first.
+From the dependency graph at the top of `docs/backlog/colombo-sync/backlog.md`: every slice whose "Blocked by" is merged on `main`. Slices that touch the same files (see hot spots) are **not** parallel – sequence them.
+
+Conflict hot spots: `src/App.svelte`, `src/lib/wizard/Wizard.svelte`, `StepPreview.svelte`, `src-tauri/src/lib.rs` (handler list and managed state), `commands.rs`, `runner.rs`, `engine.rs`.
 
 ## 2. One worktree per slice (never Claude's `isolation: "worktree"`)
 ```
-git worktree add ../colomboSync-s3 -b slice/s3 main
-cd ../colomboSync-s3 && npm ci
+git worktree add ../colomboSync-s8 -b slice/s8 main
+cd ../colomboSync-s8 && npm ci
 ```
 
 ## 3. Brief each subagent
-Use the `Agent` tool, all in one message. Model: `sonnet` for M slices, `haiku` only for S slices that are pure logic. Prompt must include:
-- worktree absolute path – work and commit only there;
-- "Use the `xp-slice` skill for slice `Sx`" (path `.claude/skills/xp-slice/SKILL.md`);
-- the slice's "Do not touch" and the hot spots (`lib.rs` handler list, `App.svelte`, wizard steps) – minimal additive edits;
-- the report format of `xp-slice`.
+Use the `Agent` tool, all in one message. Model: `sonnet` for M slices, `haiku` only for S slices that are pure logic. Give each the **parallel context**, since it knows nothing else:
+- worktree absolute path – work and commit only there; branch `slice/sx`;
+- "Use the `xp-slice` skill for slice `Sx`" (path `.claude/skills/xp-slice/SKILL.md`) and to read `CLAUDE.md` and `docs/agents/github.md`;
+- which other slices run at the same time, which files they will touch, and that edits to the hot spots must be minimal and additive (one line in the handler list, one state registration, one tab/step);
+- the slice's "Do not touch";
+- to push the branch with the owner-token recipe (`docs/agents/github.md`) so CI runs on Windows, macOS and Linux, and to report the run id and result per OS; never to push `main`;
+- the report format of `xp-slice` (incl. the list of new Italian copy).
 
 ## 4. Verify, don't trust
-For each finished branch, in its worktree: run `cargo test`, `npm test`, `npm run check`; read the diff (`git diff main...slice/sx`); run `/code-review` on it.
+For each finished branch, in its worktree: `cargo test`, `npm test`, `npm run check`; CI green on all three OS (`gh run watch <id> -R mikeleg/colomboSync --exit-status`, with `export GH_TOKEN=$(gh auth token -u mikeleg)`); read the diff (`git diff main...slice/sx`); run **`/code-review` on every branch before merge**. It has found real data-loss bugs in every slice so far (path rules, links/aliases, normalization, MirrorGuard trusting the UI, overwriting unreadable files, non-atomic writes). Send findings back to the subagent (or fix them) with a test each; re-review until clean.
 
 ## 5. Merge one at a time
-Merge first the branch others depend on (S3 before S5).
+Merge first the branch others depend on. After **each** merge re-run the full suite before the next one:
 ```
-git checkout main && git merge --no-ff slice/s3
+git checkout main && git merge --no-ff slice/s8
 cd src-tauri && cargo test && cd .. && npm test && npm run check
 ```
-Resolve conflicts in hot spots by keeping both sides (both commands registered, both steps present). Suite red after merge → fix on main before the next merge.
+Rebase or merge `main` into the next slice branch, push it again and wait for CI before merging it. Resolve hot-spot conflicts by keeping both sides (both commands registered, both states managed, both steps/tabs present). Suite red after a merge → fix on `main` before the next merge. Push `main` only with everything green; check CI on `main` afterwards.
 
-## 6. Clean up
+## 6. Clean up and record
 ```
-git worktree remove ../colomboSync-s3 && git branch -d slice/s3
+git worktree remove ../colomboSync-s8 && git branch -d slice/s8
+git push origin --delete slice/s8        # with the token recipe's credential helper
 ```
-Then start the next wave (e.g. S5 after S3).
+Record each slice's new Italian copy in `scope.md` "Decisions during implementation" and mark the slice done in `backlog.md`. Then start the next wave.

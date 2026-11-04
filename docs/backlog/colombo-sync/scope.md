@@ -17,11 +17,11 @@ Prototype: **approved**, updated version 2026-11-04 – `./prototype.html`. It i
 Technical spike on robocopy output: **done** (see Decisions).
 
 ## In scope (this round)
-- Windows desktop app, as small and light as possible.
+- Desktop app for Windows, macOS and Linux, as small and light as possible.
 - Wizard: pick A (source) → pick B (destination) → name → advanced options → preview → "Start now?".
-- A and B: local disks or network drives (mapped letter or UNC `\\server\share`).
-- Default mode: copy A → B (robocopy `/E`), never deletes on B.
-- Mirror (`/MIR`) as an **advanced option** with a prominent warning; explicit confirmation when the preview shows deletions.
+- A and B: local disks or network drives (Windows: mapped letter or UNC `\\server\share`; macOS/Linux: mounted folders, e.g. `/Volumes/...`).
+- Default mode: copy A → B (robocopy `/E` / rsync `-rt`), never deletes on B.
+- Mirror (robocopy `/MIR` / rsync `--delete`) as an **advanced option** with a prominent warning; explicit confirmation when the preview shows deletions.
 - A schema visible on home and in the wizard/run/result (Storico shows the history legend instead): A → B with counts of new / updated / deleted files, before and after the run.
 - Mandatory preview (`/L`) before every run.
 - Saved syncs, re-runnable from the list.
@@ -37,10 +37,10 @@ Technical spike on robocopy output: **done** (see Decisions).
 - Multilanguage – Italian only.
 
 ## Constraints
-- **Stack: Tauri 2 + Svelte 5 (TypeScript)** – single portable `.exe`, no installer; WebView2 (preinstalled on Windows 10/11). Schema drawn as inline SVG.
-- Engine: `robocopy.exe` from `%SystemRoot%\System32`, launched as a child process.
-- Storage: one JSON file for saved syncs, one JSON-lines file for history, one robocopy log per run – all in `%LOCALAPPDATA%\ColomboSync\`.
-- App must **not** require elevation (mapped drives disappear under an elevated token).
+- **Stack: Tauri 2 + Svelte 5 (TypeScript)**, no installer. Deliverables: Windows portable `.exe` (WebView2, preinstalled on Windows 10/11); macOS `.app`/`.dmg`, ad-hoc signed, not notarized (first launch: right-click → Apri); Linux AppImage. macOS/Linux bundles are built by GitHub Actions. Schema drawn as inline SVG.
+- Engine, launched as a child process and picked by `cfg(target_os)`: `robocopy.exe` from `%SystemRoot%\System32` on Windows; `rsync` from `PATH` on macOS (openrsync) and Linux (GNU rsync).
+- Storage: one JSON file for saved syncs, one JSON-lines file for history, one engine log per run – in `%LOCALAPPDATA%\ColomboSync\` (Windows), `~/Library/Application Support/ColomboSync` (macOS), `$XDG_DATA_HOME/ColomboSync` or `~/.local/share/ColomboSync` (Linux).
+- App must **not** require elevation on any OS (on Windows mapped drives disappear under an elevated token).
 
 ## Decisions taken during scoping
 - Robocopy instead of rsync; A/B are disks or network drives; wizard ends with preview + "start?"; history required; smallest possible app (user, 2026-11-03).

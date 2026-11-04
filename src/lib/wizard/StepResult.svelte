@@ -6,9 +6,14 @@
   let { run, failure, onhome }: { run: Run | null; failure: string; onhome: () => void } = $props();
 
   const ok = $derived(run?.outcome === "Ok");
+  const deletedText = $derived(
+    run && run.mode === "Mirror" && run.deleted > 0
+      ? `, ${formatNumber(run.deleted)} ${run.deleted === 1 ? "cancellato" : "cancellati"} da B`
+      : "",
+  );
   const title = $derived(
     run && ok
-      ? `Fatto: ${formatNumber(run.new)} ${run.new === 1 ? "file copiato" : "file copiati"}, ${formatNumber(run.updated)} ${run.updated === 1 ? "aggiornato" : "aggiornati"} in ${formatDuration(run.durationMs)}`
+      ? `Fatto: ${formatNumber(run.new)} ${run.new === 1 ? "file copiato" : "file copiati"}, ${formatNumber(run.updated)} ${run.updated === 1 ? "aggiornato" : "aggiornati"}${deletedText} in ${formatDuration(run.durationMs)}`
       : "Non completato",
   );
 </script>

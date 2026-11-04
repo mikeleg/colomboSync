@@ -12,13 +12,13 @@
       : /^[A-Za-z]:/.test(path)
         ? "Disco " + path.slice(0, 2).toUpperCase()
         : "Cartella";
-  const value = (key: "new" | "updated") =>
+  const value = (key: "new" | "updated" | "deleted") =>
     model.counts ? formatNumber(model.counts[key]) : "—";
 </script>
 
-{#snippet node(tag: string, path: string)}
+{#snippet node(tag: string, path: string, mir = false)}
   {#if path}
-    <div class="node">
+    <div class="node" class:mir>
       <div class="tag">{tag}</div>
       <div class="nb">
         <Icon name={isNetwork(path) ? "net" : "disk"} />
@@ -41,23 +41,26 @@
 
 <h2>Cosa succede</h2>
 {@render node("A · Da copiare", model.source)}
-<div class="mid">
+<div class="mid" class:mir={model.mirror}>
   <div class="arr">
     <svg viewBox="0 0 44 64" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path class="flow" d="M22 4v44" /><path d="M10 40l12 16 12-16" />
     </svg>
-    <span class="chip copy">Copia</span>
+    <span class="chip" class:copy={!model.mirror} class:mirror={model.mirror}>{model.mirror ? "Specchio" : "Copia"}</span>
   </div>
   <div class="counts">
     <div class="cnt"><b>{value("new")}</b><span>Nuovi</span></div>
     <div class="cnt"><b>{value("updated")}</b><span>Aggiornati</span></div>
+    {#if model.mirror}
+      <div class="cnt d"><b>{value("deleted")}</b><span>Eliminati da B</span></div>
+    {/if}
   </div>
 </div>
-{@render node("B · Copia", model.destination)}
-{#if model.source && model.destination}
+{@render node("B · Copia", model.destination, model.mirror)}
+{#if !model.mirror && model.source && model.destination}
   <p class="safe"><Icon name="tick" />Nessun file viene cancellato in B</p>
 {/if}
-<p class="cap">{model.caption}</p>
+<p class="cap" class:mir={model.warnCaption}>{model.caption}</p>
 
 <style>
   h2 {
@@ -106,6 +109,18 @@
     overflow-wrap: anywhere;
     line-height: 1.3;
   }
+  .node.mir {
+    background: var(--danger-soft);
+    color: var(--on-danger-soft);
+  }
+  .node.mir .dl,
+  .node.mir .tag {
+    color: var(--on-danger-soft);
+  }
+  .node.mir .nb > :global(svg) {
+    background: var(--danger);
+    color: var(--card);
+  }
   .empty-n {
     background: var(--surface-container-high);
     box-shadow: none;
@@ -135,6 +150,13 @@
   .arr svg {
     width: 44px;
     height: 64px;
+  }
+  .mid.mir .arr {
+    color: var(--danger);
+  }
+  .mid.mir .chip {
+    background: var(--danger);
+    color: var(--card);
   }
   .flow {
     stroke-dasharray: 7 7;
@@ -167,6 +189,13 @@
     display: block;
     line-height: 1.2;
   }
+  .cnt.d {
+    background: var(--danger-soft);
+  }
+  .cnt.d b,
+  .cnt.d span {
+    color: var(--on-danger-soft);
+  }
   .safe {
     display: flex;
     gap: 8px;
@@ -191,5 +220,13 @@
     font-size: 16px;
     text-align: center;
     color: var(--on-surface-variant);
+  }
+  .cap.mir {
+    background: var(--danger-soft);
+    color: var(--on-danger-soft);
+    font-weight: 700;
+    text-align: left;
+    padding: 12px 16px;
+    border-radius: var(--r-s);
   }
 </style>

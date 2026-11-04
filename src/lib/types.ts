@@ -15,6 +15,8 @@ export interface Preview {
   updated: FileGroup;
   deleted: FileGroup;
   bytes: number;
+  /** MirrorGuard: a mirror run must not start (A missing or empty, or too many files to delete). */
+  blocked: boolean;
 }
 
 export interface Counts {

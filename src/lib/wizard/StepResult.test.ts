@@ -49,3 +49,20 @@ test("a command failure before any Run exists is shown as not completed", () => 
   expect(screen.getByRole("heading").textContent).toBe("Non completato");
   expect(screen.getByText("spawn failed")).toBeTruthy();
 });
+
+test("a mirror run also says how many files were deleted from B", () => {
+  render(StepResult, { run: run({ mode: "Mirror", deleted: 12 }), failure: "", onhome: () => {} });
+
+  expect(screen.getByRole("heading").textContent).toBe(
+    "Fatto: 12 file copiati, 3 aggiornati, 12 cancellati da B in < 1 min",
+  );
+});
+
+test("a mirror run that deleted nothing, or one file, reads naturally", () => {
+  const { unmount } = render(StepResult, { run: run({ mode: "Mirror", deleted: 0 }), failure: "", onhome: () => {} });
+  expect(screen.getByRole("heading").textContent).toBe("Fatto: 12 file copiati, 3 aggiornati in < 1 min");
+  unmount();
+
+  render(StepResult, { run: run({ mode: "Mirror", deleted: 1 }), failure: "", onhome: () => {} });
+  expect(screen.getByRole("heading").textContent).toContain(", 1 cancellato da B in ");
+});

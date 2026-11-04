@@ -5,7 +5,7 @@ use crate::history::{self, Run};
 use crate::path_rules;
 use crate::preview_parser::{Counts, Preview};
 use crate::robocopy::SyncMode;
-use crate::runner::{self, ActiveRun};
+use crate::runner::{self, ActiveRun, PreviewMemo};
 use crate::storage::Storage;
 use std::path::Path;
 use tauri::async_runtime::spawn_blocking;
@@ -19,13 +19,20 @@ pub fn check_destination(source: String, destination: String) -> Result<(), Stri
 
 #[tauri::command]
 pub async fn preview_sync(
+    app: AppHandle,
     source: String,
     destination: String,
     mode: SyncMode,
 ) -> Result<Preview, String> {
-    spawn_blocking(move || runner::preview(&source, &destination, mode))
-        .await
-        .map_err(|e| e.to_string())?
+    let preview = spawn_blocking({
+        let (source, destination) = (source.clone(), destination.clone());
+        move || runner::preview(&source, &destination, mode)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    app.state::<PreviewMemo>()
+        .remember(&source, &destination, mode, preview.counts());
+    Ok(preview)
 }
 
 #[tauri::command]
@@ -56,6 +63,10 @@ pub async fn run_sync(
     counts: Counts,
 ) -> Result<Run, String> {
     let storage = Storage::from_env()?;
+    // The counts of the preview Rust measured count, not the ones the UI sends back.
+    let counts = app
+        .state::<PreviewMemo>()
+        .take_counts(&source, &destination, mode, counts)?;
     let run = spawn_blocking({
         let app = app.clone();
         move || {

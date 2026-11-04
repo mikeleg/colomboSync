@@ -14,6 +14,7 @@ pub fn run() {
     use tauri::{Emitter, Manager};
     tauri::Builder::default()
         .manage(runner::ActiveRun::default())
+        .manage(runner::PreviewMemo::default())
         .on_window_event(|window, event| {
             // Closing during a run: the UI asks first (same question as "Ferma la copia").
             if let tauri::WindowEvent::CloseRequested { api, .. } = event

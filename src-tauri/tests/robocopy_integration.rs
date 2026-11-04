@@ -1,6 +1,7 @@
 //! Runs the real `robocopy.exe` on temp folders.
 
 use colombo_sync_lib::history::{Outcome, Run};
+use colombo_sync_lib::mirror_guard;
 use colombo_sync_lib::robocopy::SyncMode;
 use colombo_sync_lib::runner::{self, ActiveRun};
 use colombo_sync_lib::storage::Storage;
@@ -255,7 +256,7 @@ fn extra_files_count_as_deleted_only_in_mirror() {
     let mirror = runner::preview(path_str(&a), path_str(&b), SyncMode::Mirror).unwrap();
 
     assert_eq!(copy.deleted.count, 0);
-    assert!(!copy.blocked);
+    assert!(copy.blocked.is_none());
     assert_eq!(mirror.new.files, ["new.txt"]);
     assert_eq!(mirror.deleted.count, 2);
     assert!(mirror.deleted.files.contains(&"only-in-b.txt".to_string()));
@@ -265,7 +266,10 @@ fn extra_files_count_as_deleted_only_in_mirror() {
             .files
             .contains(&r"old-dir\inside.txt".to_string())
     );
-    assert!(mirror.blocked, "2 deleted > 1 new");
+    assert_eq!(
+        mirror.blocked.as_deref(),
+        Some(mirror_guard::TOO_MANY_DELETES)
+    );
     assert!(
         b.join("only-in-b.txt").exists(),
         "a preview touches nothing"
@@ -287,7 +291,7 @@ fn mirror_deletes_extra_files_in_destination() {
 
     let preview = runner::preview(path_str(&a), path_str(&b), SyncMode::Mirror).unwrap();
     assert_eq!(preview.deleted.count, 2);
-    assert!(!preview.blocked);
+    assert!(preview.blocked.is_none());
 
     let run = run_mirror(&storage, &a, &b, preview.counts()).unwrap();
 
@@ -317,7 +321,11 @@ fn mirror_with_a_missing_or_empty_source_is_blocked_and_never_run() {
 
     for source in [&empty, &missing] {
         let preview = runner::preview(path_str(source), path_str(&b), SyncMode::Mirror).unwrap();
-        assert!(preview.blocked, "{source:?}");
+        assert_eq!(
+            preview.blocked.as_deref(),
+            Some(mirror_guard::SOURCE_EMPTY),
+            "{source:?}"
+        );
 
         assert!(run_mirror(&storage, source, &b, preview.counts()).is_err());
     }
@@ -337,5 +345,8 @@ fn mirror_with_more_deleted_than_new_plus_updated_is_blocked() {
     let preview = runner::preview(path_str(&a), path_str(&b), SyncMode::Mirror).unwrap();
 
     assert_eq!(preview.counts().deleted, 1);
-    assert!(preview.blocked);
+    assert_eq!(
+        preview.blocked.as_deref(),
+        Some(mirror_guard::TOO_MANY_DELETES)
+    );
 }

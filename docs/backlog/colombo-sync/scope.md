@@ -29,7 +29,6 @@ Technical spike on robocopy output: **done** (see Decisions).
 - UI in Italian.
 
 ## Out of scope / non-goals
-- macOS / Linux / rsync – user chose robocopy on Windows.
 - SSH / remote destinations – only disks and network shares.
 - Scheduling (nightly runs, Task Scheduler) – manual start only in this MVP.
 - Two-way sync, multiple sources to one destination – A → B only.
@@ -77,3 +76,8 @@ Copy and behaviour not in the prototype, decided while implementing; review with
 - S5: "Nessun file è stato copiato.", "Il file già copiato resta in B."; partial count excludes the file in flight; the schema shows only the animated arrow during a run (no bar/growing counters as in the prototype); ETA in seconds only.
 - S6: preview failures "Non riesco a controllare le cartelle: …" / "Non riesco a controllare le cartelle." + "Controlla che A e B siano raggiungibili e riprova." with "Riprova", no log link at preview; "Non trovo la cartella B (…). La cartella di rete è raggiungibile?"; "Non ho il permesso di usare la cartella B (…). Controlla i permessi e riprova."; generic "Non completato: la copia si è fermata per un problema. Apri il registro per vedere i dettagli." and card note "L'ultima copia non è stata completata. Nel registro trovi i dettagli."; history stores the cause (code + folder), messages derived on read; after "Riprova" the sync behaves as saved.
 - Not verified at runtime yet: offline Nunito, window close during a run, elevated-token banner, real network failures (53/67), manual flow on the exe. One vitest flake seen once (1 in ~8 runs) after the S2 merge, not reproduced since.
+
+## Decisions 2026-11-04 (afternoon)
+- Scope change (user): macOS and Linux builds too. Engine there is **rsync** (Windows keeps robocopy). macOS app is **not signed** with an Apple Developer ID (ad-hoc signature only; first launch needs right-click → Apri). Linux ships as AppImage.
+- Repo on GitHub: `mikeleg/colomboSync` (private). GitHub Actions build and test Windows, macOS and Linux.
+- Look (user): "Eclissi" logo in teal (origami colours), dark Apple-style screens – design canvas https://claude.ai/artifact/Re562wrVhSASbEL78RWg1D replaces prototype.html for look only; prototype.html stays the source for flow and Italian copy. Nunito dropped for the system font.

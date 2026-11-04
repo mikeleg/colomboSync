@@ -7,7 +7,7 @@ Order is dependency order. Checkpoints are not slices: they are a real non-techn
 ```
 S1 (done) ── S1b (new look + wizard details) ──┬── [checkpoint 1: Copy mode] ── S2 (mirror) ── [checkpoint 2: mirror]
      │                                         └── S3 (saved syncs) ──┐
-     ├── S4 (history) ───────────────────────────────────────────────┴── S6 (plain-language errors)
+     ├── S4 (history) ───────────────────────────────────────────────┴── S6 (plain-language errors) ──► S7 (macOS + Linux with rsync)
      └── S5 (progress + stop)
 ```
 
@@ -172,10 +172,31 @@ Wizard (Da dove → Dove → Opzioni → Anteprima), `SchemaView`, robocopy runn
 
 ---
 
+## S7 · Build and run on macOS and Linux with rsync
+**Why:** the user wants the same app on Mac and Linux; robocopy only exists on Windows.
+**Size:** L → split while implementing if needed (engine first, then platform details, then CI bundles)
+**Blocked by:** S6
+
+### Acceptance criteria
+- Given macOS or Linux, when the user previews A → B in Copy mode, then rsync runs as a dry run and the preview shows the same New / Updated counts and lists as on Windows; nothing in B is touched.
+- Given Mirror mode on macOS/Linux, then rsync uses `--delete` only in Mirror, files only in B are listed as "Da cancellare in B", and consent + MirrorGuard behave exactly as on Windows (integration test with temp dirs on the CI runners).
+- Given a run on macOS/Linux, then progress, "Ferma la copia" (kill rsync), partial counts, history and logs work as on Windows; data lives in `~/Library/Application Support/ColomboSync` (macOS) or `$XDG_DATA_HOME/ColomboSync` / `~/.local/share/ColomboSync` (Linux).
+- Given an rsync failure (exit 23, 24, 10–12, 3, 13…), then the plain-Italian messages of S6 are shown (mapped by exit code, never by English text).
+- Given a push to main, then GitHub Actions builds and tests on windows-latest, macos-latest and ubuntu-latest and uploads `colombo-sync.exe`, a zipped `.app`/`.dmg` (ad-hoc signed) and an AppImage.
+
+### Implementation notes
+- Riskiest assumption: recent macOS ships `openrsync`, not GNU rsync 3.x. Spike first on the macos runner: `rsync --version`, and whether `rsync -a --dry-run --itemize-changes [--delete] A/ B/` gives `>f+++++++++` (new), `>f.st……` (updated), `*deleting` (extra). Fallback: `--out-format='%i %n'`. Classify by itemize code, never by message text.
+- Engine: two real implementations now (robocopy, rsync) → one engine boundary (enum or trait) chosen by `cfg(target_os)`; the rest of the app (preview_parser output shape `Preview`, runner, MirrorGuard, PreviewMemo, history) stays shared.
+- `cfg(windows)` gating for the Windows-only parts: `MetadataExt` in folder_browser, `MultiByteToWideChar` in progress, token elevation, `CREATE_NO_WINDOW`, `%LOCALAPPDATA%`, A:–Z: drive probing. Unix counterparts: folder browser roots `/Volumes` (macOS) and `/media/$USER`, `/mnt`, home (Linux); elevation = effective uid 0; path_rules for `/`-rooted, case-sensitive paths (macOS default volumes are case-insensitive: compare case-insensitively there).
+- Bundles: macOS `tauri build --bundles app,dmg` with `bundle.macOS.signingIdentity = "-"`; Linux `--bundles appimage` (CI deps: libwebkit2gtk-4.1-dev, libappindicator3-dev, librsvg2-dev, patchelf).
+- UI copy that is Windows wording ("Esegui come amministratore", "Cestino", drive letters in examples): flag per platform; new Italian copy must be listed in the report for the user.
+
+---
+
 ## Later (cut from this round)
 - Scheduling (Task Scheduler) – manual start only for now.
 - Exclusion filters (file types, folders).
-- SSH / remote, macOS/Linux with rsync.
+- SSH / remote destinations.
 - Installer, auto-update, tray icon, notifications.
 - Protecting newer files in B (`/XO`) – today A always wins, as in a normal copy; revisit if users complain.
 - Two-way sync; several sources into one destination.

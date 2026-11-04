@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/svelte";
-import { expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { tick } from "svelte";
 import { emptySchema, type SchemaModel } from "./schema";
 import SchemaView from "./SchemaView.svelte";
 
@@ -57,4 +58,67 @@ test("the arrow is still when nothing runs", () => {
   const { container } = render(SchemaView, { model: picked });
 
   expect(container.querySelector(".mid.run")).toBeNull();
+});
+
+describe("motion", () => {
+  const frames: ((now: number) => void)[] = [];
+  const motion = (noPreference: boolean) =>
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: noPreference && query.includes("no-preference") }));
+
+  beforeEach(() => {
+    frames.length = 0;
+    vi.stubGlobal("requestAnimationFrame", (cb: (now: number) => void) => frames.push(cb));
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  test("counters count up from 0 and end on the exact value", async () => {
+    motion(true);
+    const { rerender } = render(SchemaView, { model: { ...picked, counts: null } });
+    await rerender({ model: picked });
+
+    frames.shift()!(0); // first frame: the count starts from 0
+    await tick();
+    expect(screen.queryByText("148")).toBeNull();
+    expect(screen.getAllByText("0").length).toBeGreaterThan(0);
+
+    for (let t = 100; frames.length && t < 5000; t += 100) {
+      frames.shift()!(t);
+      await tick();
+    }
+    expect(screen.getByText("148").nextElementSibling?.textContent).toBe("Nuovi");
+    expect(screen.getByText("3").nextElementSibling?.textContent).toBe("Aggiornati");
+  });
+
+  test("with reduced motion the values show at once", async () => {
+    motion(false);
+    const { rerender } = render(SchemaView, { model: { ...picked, counts: null } });
+    await rerender({ model: picked });
+
+    expect(frames).toHaveLength(0);
+    expect(screen.getByText("148")).toBeTruthy();
+  });
+});
+
+test("mirror adds the deleted-particles element, copy does not", () => {
+  const mirror = render(SchemaView, { model: { ...picked, mirror: true } });
+  expect(mirror.container.querySelector(".gone")?.getAttribute("aria-hidden")).toBe("true");
+  mirror.unmount();
+
+  const { container } = render(SchemaView, { model: picked });
+  expect(container.querySelector(".gone")).toBeNull();
+});
+
+test("the arrow has decorative drifting dots", () => {
+  const { container } = render(SchemaView, { model: picked });
+
+  expect(container.querySelectorAll(".dot")).toHaveLength(3);
+  expect(container.querySelector(".arr svg")?.getAttribute("aria-hidden")).toBe("true");
+});
+
+test("running adds the run class to the arrow and to both tiles", () => {
+  const { container } = render(SchemaView, { model: { ...picked, running: true } });
+
+  expect(container.querySelector(".mid.run")).toBeTruthy();
+  expect(container.querySelectorAll(".node.run")).toHaveLength(2);
 });

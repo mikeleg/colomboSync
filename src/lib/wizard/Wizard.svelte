@@ -83,7 +83,7 @@
       const ok = run?.outcome === "Ok";
       const counts = run && ok ? { new: run.new, updated: run.updated, deleted: run.deleted } : null;
       const caption = ok ? "Fatto." : run?.outcome === "Cancelled" ? "Annullato." : "Non completato.";
-      return { ...places, counts, caption, mirror, warnCaption: false };
+      return { ...places, counts, caption, mirror, warnCaption: false, outcome: run?.outcome };
     }
     if (phase === "running") {
       return { ...places, counts: previewCounts, caption: "Sto copiando…", running: true, mirror, warnCaption: mirror };

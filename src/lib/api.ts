@@ -10,3 +10,9 @@ export const runSync = (source: string, destination: string, mode: SyncMode, cou
 
 /** Drives when `path` is empty, otherwise the subfolders of `path`. */
 export const browseFolders = (path: string) => invoke<FolderListing>("browse_folders", { path });
+
+/** Past runs, newest first. */
+export const listRuns = () => invoke<Run[]>("list_runs");
+
+/** Text of a run's robocopy log; rejects when the file is gone. */
+export const readRunLog = (path: string) => invoke<string>("read_run_log", { path });

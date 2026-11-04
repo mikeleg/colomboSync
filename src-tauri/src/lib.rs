@@ -13,6 +13,8 @@ pub fn run() {
             commands::preview_sync,
             commands::run_sync,
             commands::browse_folders,
+            commands::list_runs,
+            commands::read_run_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

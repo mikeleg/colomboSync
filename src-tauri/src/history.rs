@@ -1,10 +1,10 @@
 //! `history.jsonl`: append-only, one `Run` per line.
 
-use crate::robocopy::SyncMode;
+use crate::robocopy::{SyncMode, decode_unilog};
 use serde::{Deserialize, Serialize};
-use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
-use std::path::Path;
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Outcome {
@@ -45,6 +45,59 @@ pub fn append(file: &Path, run: &Run) -> io::Result<()> {
         .append(true)
         .open(file)?
         .write_all(line.as_bytes())
+}
+
+/// Runs newest first. Lines that do not parse (also invalid UTF-8) are skipped one by one;
+/// a missing file is an empty history, any other read error is reported.
+pub fn read(file: &Path) -> io::Result<Vec<Run>> {
+    let bytes = match fs::read(file) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e),
+    };
+    let mut runs: Vec<Run> = bytes
+        .split(|&b| b == b'\n')
+        .filter_map(|line| serde_json::from_slice(line).ok())
+        .collect();
+    runs.reverse();
+    Ok(runs)
+}
+
+/// Longest log tail shown: 1 Mi characters of UTF-16.
+const MAX_LOG_BYTES: u64 = 2 * 1024 * 1024;
+const TRUNCATED_NOTICE: &str = "… (mostro solo l’ultima parte del registro)\n";
+
+/// A run's robocopy log (`/UNILOG`, UTF-16LE with BOM) as text, only if the file is inside
+/// `logs_dir`. Long logs are cut to their last part.
+pub fn read_log(logs_dir: &Path, file: &Path) -> io::Result<String> {
+    read_log_capped(logs_dir, file, MAX_LOG_BYTES)
+}
+
+fn read_log_capped(logs_dir: &Path, file: &Path, max_bytes: u64) -> io::Result<String> {
+    let lower = |p: &Path| PathBuf::from(p.to_string_lossy().to_lowercase());
+    let file = file.canonicalize()?;
+    if !lower(&file).starts_with(lower(&logs_dir.canonicalize()?)) {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Il file non è nella cartella dei registri.",
+        ));
+    }
+    let mut input = File::open(&file)?;
+    let len = input.metadata()?.len();
+    if len <= max_bytes {
+        let mut bytes = Vec::with_capacity(len as usize);
+        input.read_to_end(&mut bytes)?;
+        return Ok(decode_unilog(&bytes));
+    }
+    // Start on a UTF-16 unit boundary, then drop the cut line.
+    input.seek(SeekFrom::Start((len - max_bytes) & !1))?;
+    let mut tail = Vec::new();
+    input.read_to_end(&mut tail)?;
+    let text = decode_unilog(&tail);
+    let from_next_line = text
+        .split_once('\n')
+        .map_or(text.as_str(), |(_, rest)| rest);
+    Ok(format!("{TRUNCATED_NOTICE}{from_next_line}"))
 }
 
 #[cfg(test)]
@@ -93,5 +146,115 @@ mod tests {
             json,
             r#"{"syncName":"n","source":"D:\\Foto","destination":"E:\\Backup","mode":"Copy","new":12,"updated":1,"deleted":0,"durationMs":61000,"outcome":"Cancelled","startedAt":"2026-11-02T21:30:00+01:00","logPath":"C:\\L\\logs\\x.log"}"#
         );
+    }
+
+    fn names(file: &Path) -> Vec<String> {
+        read(file)
+            .unwrap()
+            .into_iter()
+            .map(|r| r.sync_name)
+            .collect()
+    }
+
+    fn good(name: &str) -> String {
+        serde_json::to_string(&run(name, Outcome::Ok)).unwrap()
+    }
+
+    #[test]
+    fn reads_newest_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("history.jsonl");
+        append(&file, &run("prima", Outcome::Ok)).unwrap();
+        append(&file, &run("seconda", Outcome::Error)).unwrap();
+        append(&file, &run("terza", Outcome::Cancelled)).unwrap();
+
+        assert_eq!(names(&file), ["terza", "seconda", "prima"]);
+    }
+
+    #[test]
+    fn skips_malformed_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("history.jsonl");
+        let text = format!(
+            "{}\nnot json\n{{\"syncName\":\"incompleta\"}}\n\n{}\n",
+            good("buona"),
+            good("ultima")
+        );
+        fs::write(&file, text).unwrap();
+
+        assert_eq!(names(&file), ["ultima", "buona"]);
+    }
+
+    #[test]
+    fn invalid_utf8_skips_only_that_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("history.jsonl");
+        let mut bytes = format!("{}\n", good("prima")).into_bytes();
+        bytes.extend_from_slice(b"{\"syncName\":\"rotta\xFF\"}\n");
+        bytes.extend_from_slice(format!("{}\n", good("ultima")).as_bytes());
+        fs::write(&file, bytes).unwrap();
+
+        assert_eq!(names(&file), ["ultima", "prima"]);
+    }
+
+    #[test]
+    fn missing_history_file_is_an_empty_list() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(read(&dir.path().join("history.jsonl")).unwrap().is_empty());
+    }
+
+    #[test]
+    fn other_read_errors_are_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        // A folder where the file should be: reading it fails, and it is not "not found".
+        assert!(read(dir.path()).is_err());
+    }
+
+    fn unilog(text: &str) -> Vec<u8> {
+        let mut bytes = vec![0xFF, 0xFE];
+        bytes.extend(text.encode_utf16().flat_map(u16::to_le_bytes));
+        bytes
+    }
+
+    #[test]
+    fn read_log_decodes_utf16le_and_fails_when_deleted() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("x.log");
+        fs::write(&file, unilog("è già\r\n")).unwrap();
+
+        assert_eq!(read_log(dir.path(), &file).unwrap(), "è già\r\n");
+        fs::remove_file(&file).unwrap();
+        assert!(read_log(dir.path(), &file).is_err());
+    }
+
+    #[test]
+    fn read_log_refuses_files_outside_the_logs_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let logs = dir.path().join("logs");
+        fs::create_dir(&logs).unwrap();
+        let outside = dir.path().join("secret.txt");
+        fs::write(&outside, unilog("segreto")).unwrap();
+        fs::write(logs.join("ok.log"), unilog("ok")).unwrap();
+
+        assert_eq!(read_log(&logs, &logs.join("ok.log")).unwrap(), "ok");
+        assert!(read_log(&logs, &outside).is_err());
+        assert!(read_log(&logs, &logs.join("..").join("secret.txt")).is_err());
+    }
+
+    #[test]
+    fn read_log_cuts_long_logs_to_the_last_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("long.log");
+        let text: String = (1..=100).map(|n| format!("riga {n:03}\r\n")).collect();
+        fs::write(&file, unilog(&text)).unwrap();
+
+        let shown = read_log_capped(dir.path(), &file, 200).unwrap();
+
+        assert!(shown.starts_with("… (mostro solo l’ultima parte del registro)\n"));
+        assert!(shown.ends_with("riga 100\r\n"));
+        assert!(!shown.contains("riga 001"));
+        assert!(shown.lines().count() < 20);
+        // No half line after the notice.
+        assert!(shown.lines().nth(1).unwrap().starts_with("riga "));
     }
 }

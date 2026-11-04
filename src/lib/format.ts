@@ -9,3 +9,9 @@ export function formatDuration(ms: number): string {
   const minutes = Math.round(ms / 60000);
   return minutes < 1 ? "< 1 min" : `${minutes} min`;
 }
+
+/** "2026-11-02T21:30:00+01:00" -> "02/11/2026 21:30": the local time as it was stored. */
+export function formatWhen(startedAt: string): string {
+  const [, year, month, day, time] = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2})/.exec(startedAt) ?? [];
+  return `${day}/${month}/${year} ${time}`;
+}

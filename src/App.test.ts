@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { fireEvent, render, screen } from "@testing-library/svelte";
+import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App.svelte";
 import type { Preview, Run } from "./lib/types";
@@ -182,10 +182,31 @@ test("Sfoglia… fills the path with the folder chosen in the dialog", async () 
   );
 });
 
-test("the Storico tab is there for S4 to fill", async () => {
+test("Storico lists the runs from Rust and swaps the schema for the legend", async () => {
+  invokeMock.mockResolvedValueOnce([
+    { ...doneRun, syncName: "Seconda", outcome: "Error" },
+    { ...doneRun, syncName: "Prima" },
+  ]);
   render(App);
 
   await click("Storico");
 
+  expect(invokeMock).toHaveBeenCalledWith("list_runs");
   expect(screen.getByRole("heading", { name: "Storico" })).toBeTruthy();
+  expect(await screen.findByText("Seconda")).toBeTruthy();
+  const aside = screen.getByRole("complementary");
+  expect(aside.textContent).toContain("Come leggere lo storico");
+  expect(aside.textContent).not.toContain("Cosa succede");
+  expect(within(aside).getByText("Copie fatte").previousElementSibling?.textContent).toBe("2");
+  expect(within(aside).getByText("Riuscite").previousElementSibling?.textContent).toBe("1");
+});
+
+test("a failed list_runs shows an empty history, not a crash", async () => {
+  invokeMock.mockRejectedValueOnce("boom");
+  render(App);
+
+  await click("Storico");
+
+  expect(await screen.findByText("Copie fatte")).toBeTruthy();
+  expect(screen.getByText("Copie fatte").previousElementSibling?.textContent).toBe("0");
 });

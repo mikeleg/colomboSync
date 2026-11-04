@@ -6,11 +6,19 @@
   import { emptySchema, type SchemaModel } from "./lib/schema";
   import SchemaView from "./lib/SchemaView.svelte";
   import ThemeSwitch from "./lib/ThemeSwitch.svelte";
-  import type { Run } from "./lib/types";
+  import type { Run, Sync } from "./lib/types";
   import Wizard from "./lib/wizard/Wizard.svelte";
 
   let view = $state<"home" | "history" | "wizard">("home");
   let schema = $state<SchemaModel>(emptySchema);
+  /** The saved sync the wizard re-runs from its preview; undefined when it creates a new one. */
+  let rerun = $state<Sync>();
+
+  function openWizard(sync?: Sync) {
+    rerun = sync;
+    view = "wizard";
+  }
+
   let runs = $state<Run[]>([]);
   let historyStatus = $state<"loading" | "ready" | "error">("ready");
   let historyLoads = 0;
@@ -61,11 +69,11 @@
         </nav>
       {/if}
       {#if view === "home"}
-        <Home onnew={() => (view = "wizard")} />
+        <Home onnew={() => openWizard()} onrun={openWizard} onschema={(model) => (schema = model)} />
       {:else if view === "history"}
         <History {runs} status={historyStatus} />
       {:else}
-        <Wizard onschema={(model) => (schema = model)} onexit={leaveWizard} />
+        <Wizard sync={rerun} onschema={(model) => (schema = model)} onexit={leaveWizard} />
       {/if}
     </main>
     <aside class="schema" aria-label={view === "history" ? "Come leggere lo storico" : "Schema di cosa succede"}>

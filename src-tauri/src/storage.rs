@@ -20,6 +20,10 @@ impl Storage {
         Self { root: root.into() }
     }
 
+    pub fn syncs_file(&self) -> PathBuf {
+        self.root.join("syncs.json")
+    }
+
     pub fn history_file(&self) -> PathBuf {
         self.root.join("history.jsonl")
     }
@@ -28,10 +32,12 @@ impl Storage {
         self.root.join("logs")
     }
 
-    /// `logs\<yyyyMMdd-HHmmss>-<sync>.log`, with characters Windows forbids in file names replaced.
+    /// `logs\<yyyyMMdd-HHmmss>-<sync>.log`: the sync part is cut to 60 characters, characters
+    /// Windows forbids in file names are replaced and it cannot end in a dot or a space.
     pub fn log_file(&self, sync_name: &str, started: NaiveDateTime) -> PathBuf {
         let safe: String = sync_name
             .chars()
+            .take(60)
             .map(|c| {
                 if "<>:\"/\\|?*".contains(c) || c.is_control() {
                     '_'
@@ -40,6 +46,7 @@ impl Storage {
                 }
             })
             .collect();
+        let safe = safe.trim_end_matches(['.', ' ']);
         self.logs_dir()
             .join(format!("{}-{}.log", started.format("%Y%m%d-%H%M%S"), safe))
     }
@@ -56,6 +63,10 @@ mod tests {
 
     #[test]
     fn files_live_under_the_root() {
+        assert_eq!(
+            storage().syncs_file(),
+            Path::new(r"C:\Users\Anna\AppData\Local\ColomboSync\syncs.json")
+        );
         assert_eq!(
             storage().history_file(),
             Path::new(r"C:\Users\Anna\AppData\Local\ColomboSync\history.jsonl")
@@ -78,5 +89,26 @@ mod tests {
             "20261102-213005-Copia di Foto_ 2024_25.log"
         );
         assert_eq!(log.parent().unwrap(), storage().logs_dir());
+    }
+
+    #[test]
+    fn log_file_name_replaces_every_forbidden_character_and_cannot_end_in_a_dot_or_space() {
+        let started = NaiveDate::from_ymd_opt(2026, 11, 2)
+            .unwrap()
+            .and_hms_opt(21, 30, 5)
+            .unwrap();
+        let log = storage().log_file(r#"a<>:"/\|?*b ."#, started);
+        assert_eq!(log.file_name().unwrap(), "20261102-213005-a_________b.log");
+    }
+
+    #[test]
+    fn a_very_long_sync_name_is_cut_in_the_log_file_name() {
+        let started = NaiveDate::from_ymd_opt(2026, 11, 2)
+            .unwrap()
+            .and_hms_opt(21, 30, 5)
+            .unwrap();
+        let log = storage().log_file(&"è".repeat(250), started);
+        let name = log.file_name().unwrap().to_string_lossy().into_owned();
+        assert_eq!(name, format!("20261102-213005-{}.log", "è".repeat(60)));
     }
 }

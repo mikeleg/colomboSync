@@ -76,6 +76,35 @@ test("the three choices after the preview call back: Sì, avvia / No, salva e ba
   expect(onback).toHaveBeenCalledOnce();
 });
 
+test("a new sync offers to save it: No, salva e basta, and Salva e chiudi when B is already up to date", async () => {
+  const onstop = vi.fn();
+  const { unmount } = render(StepPreview, { ...props, preview: preview(0, 0), onstop });
+
+  await fireEvent.click(screen.getByRole("button", { name: "Salva e chiudi" }));
+  expect(onstop).toHaveBeenCalledOnce();
+  expect(screen.queryByRole("button", { name: "Torna all’elenco" })).toBeNull();
+  unmount();
+
+  render(StepPreview, { ...props, preview: preview(1, 0) });
+  expect(screen.getByRole("button", { name: "No, salva e basta" })).toBeTruthy();
+});
+
+test("re-running a saved sync: No, torna all’elenco, no way to change things, Torna all’elenco when up to date", async () => {
+  const onstop = vi.fn();
+  const { unmount } = render(StepPreview, { ...props, saved: true, preview: preview(1, 0), onstop });
+
+  await fireEvent.click(screen.getByRole("button", { name: "No, torna all’elenco" }));
+  expect(onstop).toHaveBeenCalledOnce();
+  expect(screen.queryByRole("button", { name: "No, salva e basta" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Indietro, cambio qualcosa" })).toBeNull();
+  unmount();
+
+  render(StepPreview, { ...props, saved: true, preview: preview(0, 0) });
+  expect(screen.getByRole("button", { name: "Torna all’elenco" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Salva e chiudi" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Indietro" })).toBeNull();
+});
+
 const mirrorPreview = (deleted: number, over: Partial<Preview> = {}): Preview => ({
   ...preview(3, 1),
   deleted: group(deleted, ["vecchio.txt", String.raw`sub\altro.txt`].slice(0, deleted)),

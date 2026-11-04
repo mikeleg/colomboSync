@@ -9,6 +9,7 @@
     mirror,
     preview,
     error,
+    saved = false,
     onstart,
     onstop,
     onback,
@@ -17,6 +18,8 @@
     mirror: boolean;
     preview: Preview | null;
     error: string;
+    /** Re-running a saved sync: nothing to save, nothing to change, "No" just returns to the list. */
+    saved?: boolean;
     onstart: () => void;
     onstop: () => void;
     onback: () => void;
@@ -59,8 +62,8 @@
   </div>
   <div class="final">
     <div class="btns">
-      <button type="button" class="btn primary" onclick={onstop}>Torna all’inizio</button>
-      <button type="button" class="link" onclick={onback}>Indietro</button>
+      <button type="button" class="btn primary" onclick={onstop}>{saved ? "Torna all’elenco" : "Salva e chiudi"}</button>
+      {#if !saved}<button type="button" class="link" onclick={onback}>Indietro</button>{/if}
     </div>
   </div>
 {:else if preview}
@@ -102,8 +105,8 @@
       {#if !preview.blocked}
         <button type="button" class="btn primary big" disabled={needsConsent && !consent} onclick={onstart}>Sì, avvia</button>
       {/if}
-      <button type="button" class="btn big" onclick={onstop}>No, salva e basta</button>
-      <button type="button" class="link" onclick={onback}>Indietro, cambio qualcosa</button>
+      <button type="button" class="btn big" onclick={onstop}>{saved ? "No, torna all’elenco" : "No, salva e basta"}</button>
+      {#if !saved}<button type="button" class="link" onclick={onback}>Indietro, cambio qualcosa</button>{/if}
     </div>
   </section>
 {/if}

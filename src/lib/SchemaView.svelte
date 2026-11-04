@@ -1,13 +1,12 @@
 <script lang="ts">
   import Icon from "./Icon.svelte";
-  import { formatNumber } from "./format";
+  import { formatNumber, isNetworkPath } from "./format";
   import type { SchemaModel } from "./schema";
 
   let { model }: { model: SchemaModel } = $props();
 
-  const isNetwork = (path: string) => path.startsWith("\\\\");
   const place = (path: string) =>
-    isNetwork(path)
+    isNetworkPath(path)
       ? "Rete · " + path.slice(2).split("\\")[0]
       : /^[A-Za-z]:/.test(path)
         ? "Disco " + path.slice(0, 2).toUpperCase()
@@ -21,7 +20,7 @@
     <div class="node" class:mir>
       <div class="tag">{tag}</div>
       <div class="nb">
-        <Icon name={isNetwork(path) ? "net" : "disk"} />
+        <Icon name={isNetworkPath(path) ? "net" : "disk"} />
         <div>
           <div class="dl">{place(path)}</div>
           <div class="pth">{path}</div>

@@ -7,6 +7,7 @@ use crate::preview_parser::{Counts, Preview};
 use crate::robocopy::SyncMode;
 use crate::runner::{self, ActiveRun, PreviewMemo};
 use crate::storage::Storage;
+use crate::sync_store::{self, SavedSync, SyncSummary};
 use std::path::Path;
 use tauri::async_runtime::spawn_blocking;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -55,26 +56,21 @@ pub async fn read_run_log(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn run_sync(
-    app: AppHandle,
-    source: String,
-    destination: String,
-    mode: SyncMode,
-    counts: Counts,
-) -> Result<Run, String> {
+pub async fn run_sync(app: AppHandle, sync: SavedSync, counts: Counts) -> Result<Run, String> {
     let storage = Storage::from_env()?;
     // The counts of the preview Rust measured count, not the ones the UI sends back.
-    let counts = app
-        .state::<PreviewMemo>()
-        .take_counts(&source, &destination, mode, counts)?;
+    let counts = app.state::<PreviewMemo>().take_counts(
+        &sync.source,
+        &sync.destination,
+        sync.mode,
+        counts,
+    )?;
     let run = spawn_blocking({
         let app = app.clone();
         move || {
             runner::run(
                 &storage,
-                &source,
-                &destination,
-                mode,
+                &sync,
                 counts,
                 &app.state::<ActiveRun>(),
                 |progress| {
@@ -101,6 +97,38 @@ pub fn cancel_run(app: AppHandle, active: State<'_, ActiveRun>, exit_when_done: 
         app.exit(0);
     }
     stopped
+}
+
+#[tauri::command]
+pub async fn list_syncs() -> Result<Vec<SyncSummary>, String> {
+    let storage = Storage::from_env()?;
+    spawn_blocking(move || {
+        sync_store::list(&storage)
+            .map_err(|_| "Non riesco a leggere le sincronizzazioni salvate.".to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn save_sync(
+    name: String,
+    source: String,
+    destination: String,
+    mode: SyncMode,
+) -> Result<SavedSync, String> {
+    let storage = Storage::from_env()?;
+    spawn_blocking(move || {
+        sync_store::add(&storage.syncs_file(), &name, &source, &destination, mode)
+            .map_err(|e| format!("Non riesco a salvare la sincronizzazione: {e}"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn default_sync_name(source: String) -> String {
+    runner::default_sync_name(&source)
 }
 
 /// Drives (empty `path`) or the subfolders of `path`. On a blocking thread: a disconnected

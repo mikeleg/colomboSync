@@ -8,6 +8,7 @@ pub mod progress;
 pub mod robocopy;
 pub mod runner;
 pub mod storage;
+pub mod sync_store;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -29,6 +30,9 @@ pub fn run() {
             commands::run_sync,
             commands::cancel_run,
             commands::browse_folders,
+            commands::list_syncs,
+            commands::save_sync,
+            commands::default_sync_name,
             commands::list_runs,
             commands::read_run_log,
             commands::check_destination,

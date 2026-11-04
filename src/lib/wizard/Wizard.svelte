@@ -1,42 +1,61 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import Icon from "../Icon.svelte";
-  import { checkDestination, onCloseRequested, previewSync, runSync } from "../api";
+  import { checkDestination, defaultSyncName, onCloseRequested, previewSync, runSync, saveSync } from "../api";
   import { formatNumber } from "../format";
   import type { SchemaModel } from "../schema";
-  import type { Counts, Preview, Run, SyncMode } from "../types";
+  import type { Counts, Preview, Run, Sync, SyncMode } from "../types";
   import StepDestination from "./StepDestination.svelte";
+  import StepName from "./StepName.svelte";
   import StepOptions from "./StepOptions.svelte";
   import StepPreview from "./StepPreview.svelte";
   import StepResult from "./StepResult.svelte";
   import StepRunning from "./StepRunning.svelte";
   import StepSource from "./StepSource.svelte";
 
-  let { onschema, onexit }: { onschema: (model: SchemaModel) => void; onexit: () => void } = $props();
+  let {
+    onschema,
+    onexit,
+    sync: syncToRerun,
+  }: {
+    onschema: (model: SchemaModel) => void;
+    onexit: () => void;
+    /** A saved sync to run again: the wizard opens straight on a fresh preview. */
+    sync?: Sync;
+  } = $props();
+  // Fixed for the life of the wizard: the app mounts a new one per sync.
+  const sync = untrack(() => syncToRerun);
 
   // Step order lives here: add a step by adding an entry and its branch in the markup.
   const STEPS = [
     { id: "source", label: "Da dove", title: "Da dove copio?" },
     { id: "destination", label: "Dove", title: "Dove copio?" },
+    { id: "name", label: "Nome", title: "Come la chiamo?" },
     { id: "options", label: "Opzioni", title: "Opzioni" },
     { id: "preview", label: "Anteprima", title: "Anteprima" },
   ];
   let phase = $state<"steps" | "running" | "result">("steps");
-  let step = $state(0);
-  let source = $state("");
-  let destination = $state("");
-  let mirror = $state(false);
+  let step = $state(sync ? STEPS.length - 1 : 0);
+  let source = $state(sync?.source ?? "");
+  let destination = $state(sync?.destination ?? "");
+  let mirror = $state(sync?.mode === "Mirror");
+  let name = $state(sync?.name ?? "");
+  let nameTouched = $state(!!sync);
   let error = $state("");
   let preview = $state<Preview | null>(null);
-  let scanning = $state(false);
+  let scanning = $state(!!sync);
   let previewError = $state("");
   let run = $state<Run | null>(null);
   let failure = $state("");
   let scanId = 0;
+  let suggestionId = 0;
+  let suggesting = $state(false);
+  let saving = false; // a save (and run) is in flight: further clicks are ignored
   // Listen from the start: an X click right after "Sì, avvia" must not slip by the running view.
   let closeRequests = $state(0);
 
   onMount(() => {
+    if (sync) scan();
     const unlisten = onCloseRequested(() => closeRequests++);
     return () => {
       unlisten.then((stop) => stop());
@@ -100,6 +119,11 @@
       error = "Scegli prima dove mettere la copia.";
       return;
     }
+    if (stepId === "name" && suggesting) return;
+    if (stepId === "name" && !name.trim()) {
+      error = "Scrivi un nome per riconoscere questa sincronizzazione.";
+      return;
+    }
     if (stepId === "destination") {
       const here = step;
       let checked: string[];
@@ -117,14 +141,35 @@
     }
     error = "";
     step++;
+    if (STEPS[step].id === "name") suggestName();
     if (STEPS[step].id === "preview") scan();
+  }
+
+  /** Prefills "Copia di <last folder of A>" unless the user already chose a name. Avanti waits for it. */
+  async function suggestName() {
+    if (nameTouched) return;
+    const id = ++suggestionId;
+    suggesting = true;
+    try {
+      const suggestion = await defaultSyncName(source.trim());
+      if (id === suggestionId && !nameTouched) name = suggestion;
+    } catch {
+      // The user can type a name.
+    } finally {
+      if (id === suggestionId) suggesting = false;
+    }
+  }
+
+  function editName() {
+    nameTouched = true;
+    suggesting = false;
   }
 
   function back() {
     scanId++; // ignore a preview that is still running
     scanning = false;
     error = "";
-    if (step === 0) onexit();
+    if (step === 0 || sync) onexit();
     else step--;
   }
 
@@ -143,16 +188,33 @@
     }
   }
 
+  /** A new sync is saved when its first run starts or on "No, salva e basta"; a saved one already is. */
+  const saveIfNew = async (): Promise<Sync> =>
+    sync ?? (await saveSync(name.trim(), source.trim(), destination.trim(), mode));
+
   async function start() {
-    if (!previewCounts) return;
+    if (!previewCounts || saving) return;
+    saving = true;
     closeRequests = 0;
     phase = "running";
     try {
-      run = await runSync(source.trim(), destination.trim(), mode, previewCounts);
+      run = await runSync(await saveIfNew(), previewCounts);
     } catch (e) {
       failure = String(e);
     }
     phase = "result";
+  }
+
+  async function stop() {
+    if (saving) return;
+    saving = true;
+    try {
+      await saveIfNew();
+      onexit();
+    } catch (e) {
+      previewError = String(e);
+      saving = false;
+    }
   }
 </script>
 
@@ -170,24 +232,37 @@
     {/each}
   </ol>
   <div class="kicker">Passo {step + 1} di {STEPS.length}</div>
-  <h1 id="h">{STEPS[step].title}</h1>
+  <h1 id="h">{sync && stepId === "preview" ? `Anteprima: ${sync.name}` : STEPS[step].title}</h1>
   <div class="content">
     {#if stepId === "source"}
       <StepSource bind:path={source} {error} onenter={next} />
     {:else if stepId === "destination"}
       <StepDestination bind:path={destination} {error} onenter={next} />
+    {:else if stepId === "name"}
+      <StepName bind:name {error} onedit={editName} onenter={next} />
     {:else if stepId === "options"}
       <StepOptions bind:mirror />
     {:else if stepId === "preview"}
-      <StepPreview {scanning} {mirror} {preview} error={previewError} onstart={start} onstop={onexit} onback={back} />
+      <StepPreview
+        {scanning}
+        {mirror}
+        {preview}
+        error={previewError}
+        saved={!!sync}
+        onstart={start}
+        onstop={stop}
+        onback={back}
+      />
     {/if}
   </div>
   <!-- After the scan the preview has its own choices (see StepPreview). -->
   {#if stepId !== "preview" || scanning}
     <div class="nav">
-      <button type="button" class="btn" onclick={back}>{step === 0 ? "Annulla" : "Indietro"}</button>
+      <button type="button" class="btn" onclick={back}>{step === 0 || sync ? "Annulla" : "Indietro"}</button>
       {#if step < STEPS.length - 1}
-        <button type="button" class="btn primary" onclick={next}>Avanti</button>
+        <button type="button" class="btn primary" disabled={stepId === "name" && suggesting} onclick={next}>
+          Avanti
+        </button>
       {/if}
     </div>
   {/if}

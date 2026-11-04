@@ -1,9 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { fireEvent, render, screen, within } from "@testing-library/svelte";
+import { act, fireEvent, render, screen, within } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App.svelte";
-import type { Preview, Run } from "./lib/types";
+import type { Preview, Run, SyncSummary } from "./lib/types";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
@@ -32,22 +32,47 @@ const doneRun: Run = {
   logPath: "C:\\L\\logs\\x.log",
 };
 
-/** Answers the Rust commands the wizard uses; the folder picker always sees an empty computer. */
-function backend(handlers: {
-  preview_sync?: () => unknown;
-  run_sync?: () => unknown;
-  check_destination?: () => unknown;
-  list_runs?: () => unknown;
-  read_run_log?: () => unknown;
-}) {
-  invokeMock.mockImplementation(async (cmd) => {
-    if (cmd === "browse_folders") return { parent: "", folders: [], error: null };
-    if (cmd === "check_destination" && !handlers.check_destination) return undefined; // B is fine
-    const handler = handlers[cmd as keyof typeof handlers];
+const savedSync: SyncSummary = {
+  id: 7,
+  name: "Foto di Anna",
+  source: "D:\\Foto",
+  destination: "E:\\Backup",
+  mode: "Copy",
+  lastRun: { startedAt: "2026-11-02T21:30:00+01:00", outcome: "Ok" },
+};
+
+type Args = Record<string, unknown> | undefined;
+type Handlers = Partial<
+  Record<
+    | "preview_sync"
+    | "run_sync"
+    | "list_syncs"
+    | "save_sync"
+    | "default_sync_name"
+    | "check_destination"
+    | "list_runs"
+    | "read_run_log",
+    (args: Args) => unknown
+  >
+>;
+
+/** Answers the Rust commands the app uses; by default the computer has no folders and no saved syncs. */
+function backend(handlers: Handlers = {}) {
+  const defaults: Record<string, (args: Args) => unknown> = {
+    browse_folders: () => ({ parent: "", folders: [], error: null }),
+    list_syncs: () => [],
+    default_sync_name: () => "Copia di Foto",
+    check_destination: () => undefined, // B is fine
+    save_sync: (args) => ({ id: 7, ...args }),
+  };
+  invokeMock.mockImplementation(async (cmd, args) => {
+    const handler = (handlers as Record<string, (args: Args) => unknown>)[cmd] ?? defaults[cmd];
     if (!handler) throw new Error(`unexpected command ${cmd}`);
-    return handler();
+    return handler(args as Args);
   });
 }
+
+const calls = (cmd: string) => invokeMock.mock.calls.filter(([c]) => c === cmd);
 
 const click = (target: string | RegExp | HTMLElement) =>
   fireEvent.click(typeof target === "object" && "tagName" in target ? target : screen.getByRole("button", { name: target }));
@@ -55,11 +80,13 @@ const typeInto = (label: RegExp, value: string) =>
   fireEvent.input(screen.getByLabelText(label), { target: { value } });
 
 async function goToPreview() {
-  await click("+ Nuova sincronizzazione");
+  await click("Nuova sincronizzazione");
   await typeInto(/Percorso/, "D:\\Foto");
   await click("Avanti");
   await typeInto(/Percorso/, "E:\\Backup");
   await click("Avanti");
+  await screen.findByDisplayValue("Copia di Foto");
+  await click("Avanti"); // Come la chiamo?
   await click("Avanti"); // Opzioni
 }
 
@@ -76,7 +103,7 @@ test("shell: brand, theme switch, sections, a way to start, and the schema docke
   expect(screen.getByRole("group", { name: "Tema" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Sincronizzazioni" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Storico" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "+ Nuova sincronizzazione" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Nuova sincronizzazione" })).toBeTruthy();
   expect(screen.getByRole("complementary", { name: "Schema di cosa succede" })).toBeTruthy();
 });
 
@@ -112,9 +139,7 @@ test("Sì, avvia runs with the previewed counts and says Fatto", async () => {
 
   expect(await screen.findByText("Fatto: 2 file copiati, 1 aggiornato in < 1 min")).toBeTruthy();
   expect(invokeMock).toHaveBeenLastCalledWith("run_sync", {
-    source: "D:\\Foto",
-    destination: "E:\\Backup",
-    mode: "Copy",
+    sync: { id: 7, name: "Copia di Foto", source: "D:\\Foto", destination: "E:\\Backup", mode: "Copy" },
     counts: { new: 2, updated: 1, deleted: 0 },
   });
 });
@@ -173,7 +198,7 @@ test("a failed preview shows the error, a way back and no Sì, avvia", async () 
 test("an empty folder blocks Avanti with a message and opens the manual input", async () => {
   backend({});
   render(App);
-  await click("+ Nuova sincronizzazione");
+  await click("Nuova sincronizzazione");
 
   await click("Avanti");
 
@@ -184,7 +209,7 @@ test("an empty folder blocks Avanti with a message and opens the manual input", 
 test("Enter in the manual input behaves as Avanti", async () => {
   backend({});
   render(App);
-  await click("+ Nuova sincronizzazione");
+  await click("Nuova sincronizzazione");
   await typeInto(/Percorso/, "D:\\Foto");
 
   await fireEvent.keyDown(screen.getByLabelText(/Percorso/), { key: "Enter" });
@@ -200,14 +225,295 @@ test("Indietro, cambio qualcosa goes back to Opzioni keeping what was typed; No,
   expect(screen.queryByRole("button", { name: "Avanti" })).toBeNull();
 
   await click("Indietro, cambio qualcosa"); // to Opzioni
+  await click("Indietro"); // to Come la chiamo?
   await click("Indietro"); // to Dove
   expect((screen.getByLabelText(/Percorso/) as HTMLInputElement).value).toBe("E:\\Backup");
 
   await click("Avanti");
   await click("Avanti");
+  await click("Avanti");
   await click(await screen.findByRole("button", { name: "No, salva e basta" }));
 
-  expect(screen.getByRole("button", { name: "+ Nuova sincronizzazione" })).toBeTruthy();
+  expect(await screen.findByRole("heading", { name: "Le tue sincronizzazioni" })).toBeTruthy();
+});
+
+test("Come la chiamo? sits before Opzioni, is prefilled from A and an empty name blocks Avanti", async () => {
+  backend();
+  render(App);
+  await click("Nuova sincronizzazione");
+  await typeInto(/Percorso/, "D:\\Foto");
+  await click("Avanti");
+  await typeInto(/Percorso/, "E:\\Backup");
+  await click("Avanti");
+
+  expect(screen.getByRole("heading", { name: "Come la chiamo?" })).toBeTruthy();
+  expect(invokeMock).toHaveBeenCalledWith("default_sync_name", { source: "D:\\Foto" });
+  const name = (await screen.findByDisplayValue("Copia di Foto")) as HTMLInputElement;
+
+  await fireEvent.input(name, { target: { value: "  " } });
+  await click("Avanti");
+
+  expect(screen.getByRole("alert").textContent).toContain("Scrivi un nome per riconoscere questa sincronizzazione.");
+  expect(screen.getByRole("heading", { name: "Come la chiamo?" })).toBeTruthy();
+
+  await fireEvent.input(name, { target: { value: "Foto di Anna" } });
+  await click("Avanti");
+  expect(screen.getByRole("heading", { name: "Opzioni" })).toBeTruthy();
+});
+
+test("a name the user typed is not replaced when going back and forth", async () => {
+  backend();
+  render(App);
+  await click("Nuova sincronizzazione");
+  await typeInto(/Percorso/, "D:\\Foto");
+  await click("Avanti");
+  await typeInto(/Percorso/, "E:\\Backup");
+  await click("Avanti");
+  await fireEvent.input(await screen.findByDisplayValue("Copia di Foto"), { target: { value: "Foto di Anna" } });
+
+  await click("Indietro");
+  await click("Avanti");
+
+  expect((screen.getByLabelText("Nome della sincronizzazione") as HTMLInputElement).value).toBe("Foto di Anna");
+});
+
+test("the new sync is saved when the run starts, under the name typed, and the run is of the saved sync", async () => {
+  backend({ preview_sync: () => preview(2, 1), run_sync: () => doneRun });
+  render(App);
+  await goToPreview();
+
+  await click(await screen.findByRole("button", { name: "Sì, avvia" }));
+
+  await screen.findByText(/Fatto:/);
+  expect(calls("save_sync")).toEqual([
+    ["save_sync", { name: "Copia di Foto", source: "D:\\Foto", destination: "E:\\Backup", mode: "Copy" }],
+  ]);
+  expect(invokeMock).toHaveBeenLastCalledWith("run_sync", {
+    sync: { id: 7, name: "Copia di Foto", source: "D:\\Foto", destination: "E:\\Backup", mode: "Copy" },
+    counts: { new: 2, updated: 1, deleted: 0 },
+  });
+});
+
+test("No, salva e basta saves the sync without running it and returns to the list", async () => {
+  backend({ preview_sync: () => preview(2, 1) });
+  render(App);
+  await goToPreview();
+
+  await click(await screen.findByRole("button", { name: "No, salva e basta" }));
+
+  expect(await screen.findByRole("heading", { name: "Le tue sincronizzazioni" })).toBeTruthy();
+  expect(calls("save_sync")).toHaveLength(1);
+  expect(calls("run_sync")).toHaveLength(0);
+});
+
+test("B è già aggiornato: Salva e chiudi saves the new sync and returns to the list", async () => {
+  backend({ preview_sync: () => preview(0, 0) });
+  render(App);
+  await goToPreview();
+
+  await click(await screen.findByRole("button", { name: "Salva e chiudi" }));
+
+  expect(await screen.findByRole("heading", { name: "Le tue sincronizzazioni" })).toBeTruthy();
+  expect(calls("save_sync")).toHaveLength(1);
+});
+
+test("a sync that cannot be saved says so and does not leave the preview", async () => {
+  backend({
+    preview_sync: () => preview(2, 1),
+    save_sync: () => {
+      throw "Non riesco a salvare la sincronizzazione: disco pieno.";
+    },
+  });
+  render(App);
+  await goToPreview();
+
+  await click(await screen.findByRole("button", { name: "No, salva e basta" }));
+
+  expect((await screen.findByRole("alert")).textContent).toContain("Non riesco a salvare la sincronizzazione");
+});
+
+test("Controlla e avvia on a saved sync goes straight to a fresh preview, never running by itself", async () => {
+  backend({ list_syncs: () => [savedSync], preview_sync: () => preview(3, 0), run_sync: () => doneRun });
+  render(App);
+
+  await click(await screen.findByRole("button", { name: "Controlla e avvia Foto di Anna" }));
+
+  expect(await screen.findByRole("heading", { name: "Anteprima: Foto di Anna" })).toBeTruthy();
+  expect(calls("preview_sync")).toEqual([
+    ["preview_sync", { source: "D:\\Foto", destination: "E:\\Backup", mode: "Copy" }],
+  ]);
+  expect(await screen.findByText("Da copiare (nuovi)")).toBeTruthy();
+  expect(calls("run_sync")).toHaveLength(0);
+  expect(screen.getByRole("button", { name: "No, torna all’elenco" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Indietro, cambio qualcosa" })).toBeNull();
+  expect(screen.getByRole("complementary").textContent).toContain("E:\\Backup");
+});
+
+test("running a saved sync again does not save it twice and runs that sync by its id", async () => {
+  backend({ list_syncs: () => [savedSync], preview_sync: () => preview(3, 0), run_sync: () => doneRun });
+  render(App);
+  await click(await screen.findByRole("button", { name: "Controlla e avvia Foto di Anna" }));
+
+  await click(await screen.findByRole("button", { name: "Sì, avvia" }));
+
+  await screen.findByText(/Fatto:/);
+  expect(calls("save_sync")).toHaveLength(0);
+  expect(invokeMock).toHaveBeenLastCalledWith(
+    "run_sync",
+    expect.objectContaining({
+      sync: expect.objectContaining({ id: 7, name: "Foto di Anna", source: "D:\\Foto", destination: "E:\\Backup" }),
+    }),
+  );
+});
+
+test("No, torna all’elenco leaves a saved sync as it is and shows the list again", async () => {
+  backend({ list_syncs: () => [savedSync], preview_sync: () => preview(3, 0) });
+  render(App);
+  await click(await screen.findByRole("button", { name: "Controlla e avvia Foto di Anna" }));
+
+  await click(await screen.findByRole("button", { name: "No, torna all’elenco" }));
+
+  expect(await screen.findByRole("heading", { name: "Foto di Anna" })).toBeTruthy();
+  expect(calls("save_sync")).toHaveLength(0);
+});
+
+test("Controlla e avvia on a saved Mirror sync still shows the red group and asks for the consent before running", async () => {
+  const mirrorSync: SyncSummary = { ...savedSync, mode: "Mirror" };
+  backend({
+    list_syncs: () => [mirrorSync],
+    preview_sync: () => ({ ...preview(20, 1), deleted: { count: 3, files: ["vecchio.txt"] } }),
+    run_sync: () => doneRun,
+  });
+  render(App);
+  expect(
+    ((await screen.findByRole("heading", { name: "Foto di Anna" })).closest("li") as HTMLElement).textContent,
+  ).toContain("Specchio");
+
+  await click(screen.getByRole("button", { name: "Controlla e avvia Foto di Anna" }));
+
+  expect(calls("preview_sync")).toEqual([
+    ["preview_sync", { source: "D:\\Foto", destination: "E:\\Backup", mode: "Mirror" }],
+  ]);
+  const start = (await screen.findByRole("button", { name: "Sì, avvia" })) as HTMLButtonElement;
+  expect(screen.getByText("Da cancellare in B")).toBeTruthy();
+  expect(calls("run_sync")).toHaveLength(0);
+  expect(start.disabled).toBe(true);
+
+  await fireEvent.click(screen.getByLabelText("Ho capito: 3 file verranno cancellati da B"));
+  await click(start);
+
+  await screen.findByText(/Fatto:/);
+  expect(invokeMock).toHaveBeenLastCalledWith(
+    "run_sync",
+    expect.objectContaining({
+      sync: expect.objectContaining({ id: 7, mode: "Mirror" }),
+      counts: { new: 20, updated: 1, deleted: 3 },
+    }),
+  );
+  expect(calls("save_sync")).toHaveLength(0);
+});
+
+test("an unreadable syncs.json says so, shows no list and does not let a new sync be started over it", async () => {
+  backend({
+    list_syncs: () => {
+      throw "Non riesco a leggere le sincronizzazioni salvate.";
+    },
+  });
+  render(App);
+
+  expect((await screen.findByRole("alert")).textContent).toContain("Non riesco a leggere le sincronizzazioni salvate.");
+  expect((screen.getByRole("button", { name: "Nuova sincronizzazione" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByRole("listitem")).toBeNull();
+});
+
+test("clicking No, salva e basta twice quickly saves once", async () => {
+  backend({ preview_sync: () => preview(2, 1) });
+  render(App);
+  await goToPreview();
+  const no = await screen.findByRole("button", { name: "No, salva e basta" });
+
+  fireEvent.click(no);
+  fireEvent.click(no);
+
+  expect(await screen.findByRole("heading", { name: "Le tue sincronizzazioni" })).toBeTruthy();
+  expect(calls("save_sync")).toHaveLength(1);
+});
+
+test("clicking Sì, avvia twice quickly saves and runs once", async () => {
+  backend({ preview_sync: () => preview(2, 1), run_sync: () => doneRun });
+  render(App);
+  await goToPreview();
+  const yes = await screen.findByRole("button", { name: "Sì, avvia" });
+
+  fireEvent.click(yes);
+  fireEvent.click(yes);
+
+  await screen.findByText(/Fatto:/);
+  expect(calls("save_sync")).toHaveLength(1);
+  expect(calls("run_sync")).toHaveLength(1);
+});
+
+/** Lets a test answer each `default_sync_name` request when it chooses. */
+function slowSuggestions() {
+  const asked: { source: string; answer: (name: string) => void }[] = [];
+  const base = invokeMock.getMockImplementation()!;
+  invokeMock.mockImplementation(async (cmd, args) =>
+    cmd === "default_sync_name"
+      ? new Promise<string>((answer) => asked.push({ source: (args as { source: string }).source, answer }))
+      : base(cmd, args),
+  );
+  return asked;
+}
+
+test("while the suggested name is on its way Avanti waits, and no empty-name error shows when it arrives", async () => {
+  backend();
+  const asked = slowSuggestions();
+  render(App);
+  await click("Nuova sincronizzazione");
+  await typeInto(/Percorso/, "D:\\Foto");
+  await click("Avanti");
+  await typeInto(/Percorso/, "E:\\Backup");
+  await click("Avanti");
+
+  expect((screen.getByRole("button", { name: "Avanti" }) as HTMLButtonElement).disabled).toBe(true);
+  await act(() => asked[0].answer("Copia di Foto"));
+
+  expect((screen.getByRole("button", { name: "Avanti" }) as HTMLButtonElement).disabled).toBe(false);
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect((screen.getByLabelText("Nome della sincronizzazione") as HTMLInputElement).value).toBe("Copia di Foto");
+});
+
+test("an older suggested name arriving late does not replace the newer one", async () => {
+  backend();
+  const asked = slowSuggestions();
+  render(App);
+  await click("Nuova sincronizzazione");
+  await typeInto(/Percorso/, "D:\\Foto");
+  await click("Avanti");
+  await typeInto(/Percorso/, "E:\\Backup");
+  await click("Avanti"); // asks for D:\Foto
+  await click("Indietro");
+  await click("Indietro");
+  await typeInto(/Percorso/, "D:\\Altro");
+  await click("Avanti");
+  await click("Avanti"); // asks for D:\Altro
+
+  await act(() => asked[1].answer("Copia di Altro"));
+  await act(() => asked[0].answer("Copia di Foto"));
+
+  expect((screen.getByLabelText("Nome della sincronizzazione") as HTMLInputElement).value).toBe("Copia di Altro");
+});
+
+test("home: a saved sync's A and B are in the schema with the caption", async () => {
+  backend({ list_syncs: () => [savedSync] });
+  render(App);
+
+  await screen.findByRole("heading", { name: "Foto di Anna" });
+
+  const schema = screen.getByRole("complementary");
+  expect(schema.textContent).toContain("D:\\Foto");
+  expect(schema.textContent).toContain("E:\\Backup");
+  expect(schema.textContent).toContain('Premi "Controlla e avvia": prima ti mostro cosa cambierà, poi decidi tu.');
 });
 
 test("Storico lists the runs from Rust and swaps the schema for the legend", async () => {
@@ -277,11 +583,13 @@ test("closing the window during a run asks to stop the copy", async () => {
 });
 
 const toOpzioni = async () => {
-  await click("+ Nuova sincronizzazione");
+  await click("Nuova sincronizzazione");
   await typeInto(/Percorso/, String.raw`D:\Foto`);
   await click("Avanti");
   await typeInto(/Percorso/, String.raw`E:\Backup`);
   await click("Avanti");
+  await screen.findByDisplayValue("Copia di Foto");
+  await click("Avanti"); // Come la chiamo?
   await screen.findByRole("heading", { name: "Opzioni" });
 };
 const mirrorSwitch = () => screen.getByRole("switch", { name: "Rendi B identico ad A (specchio)" }) as HTMLInputElement;
@@ -341,9 +649,13 @@ test("mirror on: the preview runs in Mirror mode, lists what is deleted and the 
 
   expect(await screen.findByText(/Fatto: 2 file copiati, 1 aggiornato, 12 cancellati da B/)).toBeTruthy();
   expect(invokeMock).toHaveBeenLastCalledWith("run_sync", {
-    source: String.raw`D:\Foto`,
-    destination: String.raw`E:\Backup`,
-    mode: "Mirror",
+    sync: {
+      id: 7,
+      name: "Copia di Foto",
+      source: String.raw`D:\Foto`,
+      destination: String.raw`E:\Backup`,
+      mode: "Mirror",
+    },
     counts: { new: 20, updated: 1, deleted: 12 },
   });
 });
@@ -396,7 +708,7 @@ test("Dove: Avanti is blocked with the message from Rust when B is A or inside A
     },
   });
   render(App);
-  await click("+ Nuova sincronizzazione");
+  await click("Nuova sincronizzazione");
   await typeInto(/Percorso/, String.raw`D:\Foto`);
   await click("Avanti");
   await typeInto(/Percorso/, "d:\\foto\\");
@@ -429,7 +741,7 @@ test("Dove: if the paths change while they are being checked, the new ones are c
     },
   });
   render(App);
-  await click("+ Nuova sincronizzazione");
+  await click("Nuova sincronizzazione");
   await typeInto(/Percorso/, String.raw`D:\Foto`);
   await click("Avanti");
   await typeInto(/Percorso/, String.raw`E:\Backup`);

@@ -5,6 +5,7 @@ use colombo_sync_lib::mirror_guard;
 use colombo_sync_lib::robocopy::SyncMode;
 use colombo_sync_lib::runner::{self, ActiveRun};
 use colombo_sync_lib::storage::Storage;
+use colombo_sync_lib::sync_store::SavedSync;
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
@@ -16,6 +17,16 @@ fn write(path: &Path, text: &str) {
 
 fn path_str(path: &Path) -> &str {
     path.to_str().unwrap()
+}
+
+fn saved(name: &str, a: &Path, b: &Path) -> SavedSync {
+    SavedSync {
+        id: 7,
+        name: name.into(),
+        source: path_str(a).into(),
+        destination: path_str(b).into(),
+        mode: SyncMode::Copy,
+    }
 }
 
 #[test]
@@ -51,9 +62,7 @@ fn copy_keeps_extra_files_in_destination() {
 
     let run = runner::run(
         &storage,
-        path_str(&a),
-        path_str(&b),
-        SyncMode::Copy,
+        &saved("Le foto di Anna", &a, &b),
         preview.counts(),
         &ActiveRun::default(),
         |_| {},
@@ -63,7 +72,11 @@ fn copy_keeps_extra_files_in_destination() {
     assert_eq!(run.outcome, Outcome::Ok);
     assert_eq!(run.partial, None, "an Ok run keeps the preview counts");
     assert_eq!((run.new, run.updated, run.deleted), (2, 1, 0));
-    assert_eq!(run.sync_name, "Copia di A");
+    assert_eq!(
+        run.sync_name, "Le foto di Anna",
+        "the run carries the sync's name"
+    );
+    assert_eq!(run.sync_id, Some(7), "the run points at its saved sync");
     assert_eq!(fs::read_to_string(b.join("new.txt")).unwrap(), "nuovo");
     assert_eq!(
         fs::read_to_string(b.join("updated.txt")).unwrap(),
@@ -91,9 +104,7 @@ fn robocopy_failure_is_recorded_as_error() {
 
     let run = runner::run(
         &storage,
-        path_str(&missing),
-        path_str(&b),
-        SyncMode::Copy,
+        &saved("Copia di non-esiste", &missing, &b),
         Default::default(),
         &ActiveRun::default(),
         |_| {},
@@ -128,9 +139,7 @@ fn run_reports_progress_with_the_current_file() {
     let mut events = Vec::new();
     let run = runner::run(
         &storage,
-        path_str(&a),
-        path_str(&b),
-        SyncMode::Copy,
+        &saved("Copia di A", &a, &b),
         counts,
         &ActiveRun::default(),
         |progress| events.push(progress.clone()),
@@ -173,9 +182,7 @@ fn cancel_kills_robocopy_and_records_a_cancelled_run() {
 
     let run = runner::run(
         &storage,
-        path_str(&a),
-        path_str(&b),
-        SyncMode::Copy,
+        &saved("Copia di A", &a, &b),
         counts,
         &active,
         |_| {
@@ -215,9 +222,7 @@ fn the_active_run_is_freed_when_the_history_cannot_be_written() {
 
     let result = runner::run(
         &storage,
-        path_str(&a),
-        path_str(&b),
-        SyncMode::Copy,
+        &saved("Copia di A", &a, &b),
         Default::default(),
         &active,
         |_| {},
@@ -235,9 +240,10 @@ fn run_mirror(
 ) -> Result<Run, String> {
     runner::run(
         storage,
-        path_str(a),
-        path_str(b),
-        SyncMode::Mirror,
+        &SavedSync {
+            mode: SyncMode::Mirror,
+            ..saved("Copia di A", a, b)
+        },
         counts,
         &ActiveRun::default(),
         |_| {},

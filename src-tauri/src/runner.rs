@@ -7,6 +7,7 @@ use crate::preview_parser::{self, Counts, Preview};
 use crate::progress::{Progress, StdoutFollower};
 use crate::robocopy::{self, SyncMode};
 use crate::storage::Storage;
+use crate::sync_store::SavedSync;
 use chrono::Local;
 use std::fs;
 use std::io::{self, Read};
@@ -178,13 +179,13 @@ const PROGRESS_EVERY: Duration = Duration::from_millis(100);
 /// every `PROGRESS_EVERY` while robocopy writes, and once more when its output ends.
 pub fn run(
     storage: &Storage,
-    source: &str,
-    destination: &str,
-    mode: SyncMode,
+    sync: &SavedSync,
     counts: Counts,
     active: &ActiveRun,
     mut on_progress: impl FnMut(&Progress),
 ) -> Result<Run, String> {
+    let (source, destination, mode) = (sync.source.as_str(), sync.destination.as_str(), sync.mode);
+    let sync_name = sync.name.clone();
     path_rules::check_destination(source, destination)?;
     if mode == SyncMode::Mirror
         && let Some(reason) = mirror_guard::problem(Path::new(source), counts)
@@ -192,7 +193,6 @@ pub fn run(
         return Err(reason.to_string());
     }
     let started = Local::now();
-    let sync_name = default_sync_name(source);
     let log = storage.log_file(&sync_name, started.naive_local());
     fs::create_dir_all(storage.logs_dir()).map_err(|e| e.to_string())?;
 
@@ -235,6 +235,7 @@ pub fn run(
     // Only a failed or stopped run needs its log: it can be huge.
     let log_text = if ok { String::new() } else { read_log(&log) };
     let run = Run {
+        sync_id: Some(sync.id),
         sync_name,
         source: source.to_string(),
         destination: destination.to_string(),
@@ -369,7 +370,14 @@ mod tests {
             for mode in [SyncMode::Copy, SyncMode::Mirror] {
                 assert_eq!(preview(a, b, mode).unwrap_err(), message);
                 let active = ActiveRun::default();
-                let result = run(&storage, a, b, mode, Counts::default(), &active, |_| {});
+                let sync = SavedSync {
+                    id: 1,
+                    name: "Foto".into(),
+                    source: a.into(),
+                    destination: b.into(),
+                    mode,
+                };
+                let result = run(&storage, &sync, Counts::default(), &active, |_| {});
                 assert_eq!(result.unwrap_err(), message);
             }
         }

@@ -1,6 +1,6 @@
 ---
 name: xp-slice
-description: Implement one ColomboSync backlog slice (S1…S6) test-first, XP style – red/green/refactor, commit at every green, full suite and portable build before handing back. Use when asked to implement, build, do or continue a slice/story from docs/backlog/colombo-sync/backlog.md.
+description: Implement one ColomboSync backlog slice (S1, S1b, S2…S6 or later slices) test-first, XP style – red/green/refactor, commit at every green, full suite and portable build before handing back. Use when asked to implement, build, do or continue a slice/story from docs/backlog/colombo-sync/backlog.md.
 ---
 
 # Implement a slice, XP style
@@ -9,7 +9,7 @@ Input: a slice id (e.g. `S3`) and, if parallel, the worktree path you work in.
 
 ## 1. Load context (read, don't skim)
 - `CLAUDE.md` (repo root) – commands and boundaries.
-- The slice section in `docs/backlog/colombo-sync/backlog.md` + its "Shared conventions" and C#→Tauri table.
+- The slice section in `docs/backlog/colombo-sync/backlog.md` + its "Shared conventions" section.
 - `docs/agents/glossary.md`, `docs/agents/robocopy.md` (if the slice touches the engine), `docs/agents/xp.md`.
 - `docs/backlog/colombo-sync/prototype.html` only for the screens of this slice: copy Italian texts and CSS tokens verbatim.
 - The existing code you will change.

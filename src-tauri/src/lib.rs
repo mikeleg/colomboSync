@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod error_messages;
 pub mod folder_browser;
 pub mod history;
 pub mod mirror_guard;

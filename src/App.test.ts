@@ -194,19 +194,38 @@ test("Storico lists the runs from Rust and swaps the schema for the legend", asy
   expect(invokeMock).toHaveBeenCalledWith("list_runs");
   expect(screen.getByRole("heading", { name: "Storico" })).toBeTruthy();
   expect(await screen.findByText("Seconda")).toBeTruthy();
-  const aside = screen.getByRole("complementary");
-  expect(aside.textContent).toContain("Come leggere lo storico");
+  const aside = screen.getByRole("complementary", { name: "Come leggere lo storico" });
   expect(aside.textContent).not.toContain("Cosa succede");
   expect(within(aside).getByText("Copie fatte").previousElementSibling?.textContent).toBe("2");
   expect(within(aside).getByText("Riuscite").previousElementSibling?.textContent).toBe("1");
 });
 
-test("a failed list_runs shows an empty history, not a crash", async () => {
+test("a failed list_runs says so instead of showing an empty history", async () => {
   invokeMock.mockRejectedValueOnce("boom");
   render(App);
 
   await click("Storico");
 
-  expect(await screen.findByText("Copie fatte")).toBeTruthy();
-  expect(screen.getByText("Copie fatte").previousElementSibling?.textContent).toBe("0");
+  expect((await screen.findByRole("alert")).textContent).toContain("Non riesco a leggere lo storico.");
+  expect(screen.queryByRole("listitem")).toBeNull();
+});
+
+test("while the history loads there are no old rows, and a late older answer is ignored", async () => {
+  let answerFirst!: (runs: Run[]) => void;
+  invokeMock
+    .mockReturnValueOnce(new Promise((resolve) => (answerFirst = resolve)))
+    .mockResolvedValueOnce([{ ...doneRun, syncName: "Aggiornata" }]);
+  render(App);
+
+  await click("Storico");
+  expect(screen.getByText("Sto leggendo lo storico…")).toBeTruthy();
+  await click("Sincronizzazioni");
+  await click("Storico");
+  expect(await screen.findByText("Aggiornata")).toBeTruthy();
+
+  answerFirst([{ ...doneRun, syncName: "Vecchia" }]);
+  await Promise.resolve();
+
+  expect(screen.queryByText("Vecchia")).toBeNull();
+  expect(screen.getByText("Aggiornata")).toBeTruthy();
 });

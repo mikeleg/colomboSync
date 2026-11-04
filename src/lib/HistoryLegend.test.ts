@@ -5,8 +5,8 @@ import type { Run } from "./types";
 
 const run = (over: Partial<Run> = {}): Run => ({
   syncName: "Copia di Foto",
-  source: "D:\Foto",
-  destination: "E:\Backup",
+  source: String.raw`D:\Foto`,
+  destination: String.raw`E:\Backup`,
   mode: "Copy",
   new: 1,
   updated: 0,
@@ -14,7 +14,7 @@ const run = (over: Partial<Run> = {}): Run => ({
   durationMs: 1_000,
   outcome: "Ok",
   startedAt: "2026-11-02T21:30:00+01:00",
-  logPath: "C:\L\a.log",
+  logPath: String.raw`C:\L\a.log`,
   ...over,
 });
 

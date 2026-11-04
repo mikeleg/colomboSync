@@ -11,10 +11,22 @@
   let view = $state<"home" | "history" | "wizard">("home");
   let schema = $state<SchemaModel>(emptySchema);
   let runs = $state<Run[]>([]);
+  let historyStatus = $state<"loading" | "ready" | "error">("ready");
+  let historyLoads = 0;
 
   async function openHistory() {
+    const load = ++historyLoads;
     view = "history";
-    runs = await listRuns().catch(() => []);
+    runs = [];
+    historyStatus = "loading";
+    try {
+      const result = await listRuns();
+      if (load !== historyLoads) return; // a newer request owns the screen
+      runs = result;
+      historyStatus = "ready";
+    } catch {
+      if (load === historyLoads) historyStatus = "error";
+    }
   }
 
   function leaveWizard() {
@@ -38,12 +50,12 @@
     {#if view === "home"}
       <Home onnew={() => (view = "wizard")} />
     {:else if view === "history"}
-      <History {runs} />
+      <History {runs} status={historyStatus} />
     {:else}
       <Wizard onschema={(model) => (schema = model)} onexit={leaveWizard} />
     {/if}
   </main>
-  <aside class="schema" aria-label="Schema di cosa succede">
+  <aside class="schema" aria-label={view === "history" ? "Come leggere lo storico" : "Schema di cosa succede"}>
     {#if view === "history"}
       <HistoryLegend {runs} />
     {:else}

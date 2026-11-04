@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatNumber, formatWhen } from "./format";
+  import { formatNumber, formatWhen, modeChip, outcomeChip } from "./format";
   import type { Run } from "./types";
 
   /** Newest first, as returned by `list_runs`. */
@@ -15,12 +15,12 @@
   <div class="cnt"><b>{formatNumber(succeeded.length)}</b><span>Riuscite</span></div>
 </div>
 <div class="legend">
-  <p><span class="chip ok">OK</span> La copia è andata a buon fine.</p>
+  <p><span class="chip {outcomeChip.Ok.cls}">{outcomeChip.Ok.label}</span> La copia è andata a buon fine.</p>
   <p>
-    <span class="chip err">Errore</span> Interrotta per un problema (di solito un disco o la rete). I file già copiati restano.
+    <span class="chip {outcomeChip.Error.cls}">{outcomeChip.Error.label}</span> Interrotta per un problema (di solito un disco o la rete). I file già copiati restano.
   </p>
-  <p><span class="chip ann">Annullato</span> Fermata a mano.</p>
-  <p><span class="chip mirror">Specchio</span> In quella copia erano stati cancellati da B i file in più.</p>
+  <p><span class="chip {outcomeChip.Cancelled.cls}">{outcomeChip.Cancelled.label}</span> Fermata a mano.</p>
+  <p><span class="chip {modeChip.Mirror.cls}">{modeChip.Mirror.label}</span> In quella copia erano stati cancellati da B i file in più.</p>
 </div>
 {#if lastSuccess}
   <p class="cap">Ultima copia riuscita: {formatWhen(lastSuccess.startedAt)}.</p>

@@ -9,8 +9,8 @@ const invokeMock = vi.mocked(invoke);
 
 const run = (over: Partial<Run> = {}): Run => ({
   syncName: "Copia di Foto",
-  source: "D:\Foto",
-  destination: "E:\Backup",
+  source: String.raw`D:\Foto`,
+  destination: String.raw`E:\Backup`,
   mode: "Copy",
   new: 12,
   updated: 1,
@@ -18,7 +18,7 @@ const run = (over: Partial<Run> = {}): Run => ({
   durationMs: 61_000,
   outcome: "Ok",
   startedAt: "2026-11-02T21:30:00+01:00",
-  logPath: "C:\L\logs\a.log",
+  logPath: String.raw`C:\L\logs\a.log`,
   ...over,
 });
 
@@ -27,6 +27,7 @@ beforeEach(() => invokeMock.mockReset());
 test("lead and one row per run, in the order given (newest first)", () => {
   render(History, {
     runs: [run({ syncName: "Recente", startedAt: "2026-11-03T08:05:00+01:00" }), run({ syncName: "Vecchia" })],
+    status: "ready",
   });
 
   expect(screen.getByText("Tutte le copie fatte, dalla più recente. Ogni riga ha il suo registro completo.")).toBeTruthy();
@@ -37,7 +38,7 @@ test("lead and one row per run, in the order given (newest first)", () => {
 });
 
 test("a row shows mode and outcome chips, counts and duration", () => {
-  render(History, { runs: [run({ new: 12000, updated: 3, deleted: 5, mode: "Mirror", outcome: "Error" })] });
+  render(History, { runs: [run({ new: 12000, updated: 3, deleted: 5, mode: "Mirror", outcome: "Error" })], status: "ready" });
 
   const row = screen.getByRole("listitem");
   expect(within(row).getByText("Specchio")).toBeTruthy();
@@ -49,7 +50,7 @@ test("a row shows mode and outcome chips, counts and duration", () => {
 });
 
 test("outcome chips: OK, Errore, Annullato; Copia for copy mode", () => {
-  render(History, { runs: [run({ outcome: "Ok" }), run({ outcome: "Cancelled" })] });
+  render(History, { runs: [run({ outcome: "Ok" }), run({ outcome: "Cancelled" })], status: "ready" });
 
   const [first, second] = screen.getAllByRole("listitem");
   expect(within(first).getByText("OK")).toBeTruthy();
@@ -57,13 +58,29 @@ test("outcome chips: OK, Errore, Annullato; Copia for copy mode", () => {
   expect(within(second).getByText("Annullato")).toBeTruthy();
 });
 
+test("while the history is being read there are no rows, only a short message", () => {
+  render(History, { runs: [], status: "loading" });
+
+  expect(screen.getByText("Sto leggendo lo storico…")).toBeTruthy();
+  expect(screen.queryByRole("listitem")).toBeNull();
+});
+
+test("when the history cannot be read, a short message says so", () => {
+  render(History, { runs: [], status: "error" });
+
+  expect(screen.getByRole("alert").textContent).toContain("Non riesco a leggere lo storico.");
+});
+
 test("Registro opens the log modal of that run; Chiudi closes it", async () => {
   invokeMock.mockResolvedValueOnce("riga di log");
-  render(History, { runs: [run({ syncName: "Altra", logPath: "C:\L\logs\b.log" })] });
+  render(History, {
+    runs: [run({ syncName: "Altra", logPath: String.raw`C:\L\logs\b.log` })],
+    status: "ready",
+  });
 
   await fireEvent.click(screen.getByRole("button", { name: "Registro" }));
 
-  expect(invokeMock).toHaveBeenCalledWith("read_run_log", { path: "C:\L\logs\b.log" });
+  expect(invokeMock).toHaveBeenCalledWith("read_run_log", { path: String.raw`C:\L\logs\b.log` });
   expect(screen.getByRole("dialog", { name: "Registro – Altra (02/11/2026 21:30)" })).toBeTruthy();
   expect(await screen.findByText("riga di log")).toBeTruthy();
 
@@ -74,7 +91,7 @@ test("Registro opens the log modal of that run; Chiudi closes it", async () => {
 
 test("Esc closes the log modal", async () => {
   invokeMock.mockResolvedValueOnce("x");
-  render(History, { runs: [run()] });
+  render(History, { runs: [run()], status: "ready" });
   await fireEvent.click(screen.getByRole("button", { name: "Registro" }));
 
   await fireEvent.keyDown(window, { key: "Escape" });
@@ -82,9 +99,37 @@ test("Esc closes the log modal", async () => {
   expect(screen.queryByRole("dialog")).toBeNull();
 });
 
+test("closing the log modal gives the focus back to the Registro button", async () => {
+  invokeMock.mockResolvedValueOnce("x");
+  render(History, { runs: [run()], status: "ready" });
+  const opener = screen.getByRole("button", { name: "Registro" });
+  opener.focus();
+  await fireEvent.click(opener);
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Chiudi" }));
+
+  await fireEvent.keyDown(window, { key: "Escape" });
+
+  expect(document.activeElement).toBe(opener);
+});
+
+test("Tab stays inside the log modal", async () => {
+  invokeMock.mockResolvedValueOnce("x");
+  render(History, { runs: [run()], status: "ready" });
+  await fireEvent.click(screen.getByRole("button", { name: "Registro" }));
+  const close = screen.getByRole("button", { name: "Chiudi" });
+  const logText = await screen.findByText("x");
+
+  logText.focus();
+  await fireEvent.keyDown(logText, { key: "Tab" });
+  expect(document.activeElement).toBe(close);
+
+  await fireEvent.keyDown(close, { key: "Tab", shiftKey: true });
+  expect(document.activeElement).toBe(logText);
+});
+
 test("a deleted log file says it is no longer available", async () => {
   invokeMock.mockRejectedValueOnce("os error 2");
-  render(History, { runs: [run()] });
+  render(History, { runs: [run()], status: "ready" });
 
   await fireEvent.click(screen.getByRole("button", { name: "Registro" }));
 

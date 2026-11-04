@@ -9,20 +9,35 @@
   let text = $state("");
   let unavailable = $state(false);
   let closeButton: HTMLButtonElement;
+  let dialog: HTMLElement;
 
   onMount(() => {
+    const opener = document.activeElement as HTMLElement | null;
     closeButton.focus();
     readRunLog(run.logPath).then(
       (log) => (text = log),
       () => (unavailable = true),
     );
+    return () => opener?.focus();
   });
+
+  function onkeydown(e: KeyboardEvent) {
+    if (e.key === "Escape") return onclose();
+    if (e.key !== "Tab") return;
+    // Keep Tab inside the dialog: wrap from the last control to the first and back.
+    const stops = [...dialog.querySelectorAll<HTMLElement>("button, [tabindex='0']")];
+    const edge = e.shiftKey ? stops[0] : stops[stops.length - 1];
+    if (document.activeElement === edge || !dialog.contains(document.activeElement)) {
+      e.preventDefault();
+      (e.shiftKey ? stops[stops.length - 1] : stops[0]).focus();
+    }
+  }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === "Escape" && onclose()} />
+<svelte:window {onkeydown} />
 
 <div class="overlay" role="presentation" onclick={(e) => e.target === e.currentTarget && onclose()}>
-  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="log-title">
+  <div class="dialog" bind:this={dialog} role="dialog" aria-modal="true" aria-labelledby="log-title">
     <header>
       <h2 id="log-title">Registro – {run.syncName} ({formatWhen(run.startedAt)})</h2>
       <button type="button" class="btn" bind:this={closeButton} onclick={onclose}>Chiudi</button>

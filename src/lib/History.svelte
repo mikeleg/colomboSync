@@ -1,26 +1,21 @@
 <script lang="ts">
-  import { formatDuration, formatNumber, formatWhen } from "./format";
+  import { formatDuration, formatNumber, formatWhen, modeChip, outcomeChip } from "./format";
   import LogViewer from "./LogViewer.svelte";
-  import type { Outcome, Run, SyncMode } from "./types";
+  import type { Run } from "./types";
 
   /** Newest first, as returned by `list_runs`. */
-  let { runs }: { runs: Run[] } = $props();
+  let { runs, status }: { runs: Run[]; status: "loading" | "ready" | "error" } = $props();
 
   let viewing = $state<Run | null>(null);
-
-  const modeChip: Record<SyncMode, { cls: string; label: string }> = {
-    Copy: { cls: "copy", label: "Copia" },
-    Mirror: { cls: "mirror", label: "Specchio" },
-  };
-  const outcomeChip: Record<Outcome, { cls: string; label: string }> = {
-    Ok: { cls: "ok", label: "OK" },
-    Error: { cls: "err", label: "Errore" },
-    Cancelled: { cls: "ann", label: "Annullato" },
-  };
 </script>
 
 <h1 id="h">Storico</h1>
 <p class="lead">Tutte le copie fatte, dalla più recente. Ogni riga ha il suo registro completo.</p>
+{#if status === "loading"}
+  <p class="muted" role="status">Sto leggendo lo storico…</p>
+{:else if status === "error"}
+  <p class="err-msg" role="alert">Non riesco a leggere lo storico.</p>
+{/if}
 <ul class="runs">
   {#each runs as run}
     <li class="run">

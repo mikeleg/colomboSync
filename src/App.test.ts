@@ -100,7 +100,7 @@ test("shell: brand, theme switch, sections, a way to start, and the schema docke
   backend({});
   render(App);
 
-  expect(screen.getByText("ColomboSync")).toBeTruthy();
+  expect(screen.getByRole("banner").textContent).toContain("ColomboSync"); // wordmark: "Colombo" + "Sync"
   expect(screen.getByText("Copie di sicurezza senza sorprese")).toBeTruthy();
   expect(screen.getByRole("group", { name: "Tema" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Sincronizzazioni" })).toBeTruthy();

@@ -20,6 +20,10 @@ impl Storage {
         Self { root: root.into() }
     }
 
+    pub fn syncs_file(&self) -> PathBuf {
+        self.root.join("syncs.json")
+    }
+
     pub fn history_file(&self) -> PathBuf {
         self.root.join("history.jsonl")
     }
@@ -56,6 +60,10 @@ mod tests {
 
     #[test]
     fn files_live_under_the_root() {
+        assert_eq!(
+            storage().syncs_file(),
+            Path::new(r"C:\Users\Anna\AppData\Local\ColomboSync\syncs.json")
+        );
         assert_eq!(
             storage().history_file(),
             Path::new(r"C:\Users\Anna\AppData\Local\ColomboSync\history.jsonl")

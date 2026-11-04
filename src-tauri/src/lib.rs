@@ -5,6 +5,7 @@ pub mod preview_parser;
 pub mod robocopy;
 pub mod runner;
 pub mod storage;
+pub mod sync_store;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -13,6 +14,9 @@ pub fn run() {
             commands::preview_sync,
             commands::run_sync,
             commands::browse_folders,
+            commands::list_syncs,
+            commands::save_sync,
+            commands::default_sync_name,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -54,12 +54,16 @@ fn copy_keeps_extra_files_in_destination() {
         path_str(&b),
         SyncMode::Copy,
         preview.counts(),
+        "Le foto di Anna".into(),
     )
     .unwrap();
 
     assert_eq!(run.outcome, Outcome::Ok);
     assert_eq!((run.new, run.updated, run.deleted), (2, 1, 0));
-    assert_eq!(run.sync_name, "Copia di A");
+    assert_eq!(
+        run.sync_name, "Le foto di Anna",
+        "the run carries the sync's name"
+    );
     assert_eq!(fs::read_to_string(b.join("new.txt")).unwrap(), "nuovo");
     assert_eq!(
         fs::read_to_string(b.join("updated.txt")).unwrap(),
@@ -91,6 +95,7 @@ fn robocopy_failure_is_recorded_as_error() {
         path_str(&b),
         SyncMode::Copy,
         Default::default(),
+        "Copia di non-esiste".into(),
     )
     .unwrap();
 

@@ -42,9 +42,9 @@ pub fn run(
     destination: &str,
     mode: SyncMode,
     counts: Counts,
+    sync_name: String,
 ) -> Result<Run, String> {
     let started = Local::now();
-    let sync_name = default_sync_name(source);
     let log = storage.log_file(&sync_name, started.naive_local());
     fs::create_dir_all(storage.logs_dir()).map_err(|e| e.to_string())?;
 

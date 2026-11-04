@@ -13,7 +13,7 @@ const foto: SyncSummary = {
   source: String.raw`D:\Foto`,
   destination: String.raw`\\NAS\Backup`,
   mode: "Copy",
-  lastRun: { startedAt: "2026-11-02T21:30:00+01:00", outcome: "Ok" },
+  lastRun: { startedAt: "2026-11-02T21:30:00+01:00", outcome: "Ok", note: null },
 };
 const documenti: SyncSummary = {
   id: 1,
@@ -23,6 +23,10 @@ const documenti: SyncSummary = {
   mode: "Mirror",
   lastRun: null,
 };
+
+// The notes come from Rust (error_messages), already in Italian.
+const unreachable = String.raw`La cartella di rete \\NAS non era raggiungibile. Controlla che sia collegato e riprova.`;
+const stopped = "La copia era stata fermata a mano: puoi riprenderla quando vuoi.";
 
 const props = { onnew: () => {}, onrun: () => {}, onschema: () => {} };
 
@@ -50,6 +54,7 @@ test("lists one card per sync: A → B, mode chip, last time with outcome, or Ma
   expect(first.getByText("02/11/2026 21:30")).toBeTruthy();
   expect(first.getByText("OK")).toBeTruthy();
   expect(first.getByRole("button", { name: /^Controlla e avvia/ })).toBeTruthy();
+  expect(first.queryByText(/raggiungibile|fermata/)).toBeNull(); // an OK run has no note
 
   const second = within(card("Documenti ufficio"));
   expect(second.getByText("Specchio")).toBeTruthy();
@@ -58,23 +63,25 @@ test("lists one card per sync: A → B, mode chip, last time with outcome, or Ma
 });
 
 test("when the last outcome is Errore the button reads Riprova and the chip says Errore", async () => {
-  invokeMock.mockResolvedValue([{ ...foto, lastRun: { startedAt: "2026-11-01T18:05:00+01:00", outcome: "Error" } }]);
+  invokeMock.mockResolvedValue([{ ...foto, lastRun: { startedAt: "2026-11-01T18:05:00+01:00", outcome: "Error", note: unreachable } }]);
   render(Home, props);
 
   await screen.findByRole("heading", { name: "Copia di Foto" });
   const c = within(card("Copia di Foto"));
   expect(c.getByText("Errore")).toBeTruthy();
+  expect(c.getByText(unreachable)).toBeTruthy();
   expect(c.getByText("01/11/2026 18:05")).toBeTruthy();
   expect(c.getByRole("button", { name: "Riprova Copia di Foto" })).toBeTruthy();
   expect(c.queryByRole("button", { name: /Controlla e avvia/ })).toBeNull();
 });
 
 test("a stopped run shows the Annullato chip and keeps Controlla e avvia", async () => {
-  invokeMock.mockResolvedValue([{ ...foto, lastRun: { startedAt: "2026-11-01T18:05:00+01:00", outcome: "Cancelled" } }]);
+  invokeMock.mockResolvedValue([{ ...foto, lastRun: { startedAt: "2026-11-01T18:05:00+01:00", outcome: "Cancelled", note: stopped } }]);
   render(Home, props);
 
   await screen.findByRole("heading", { name: "Copia di Foto" });
   expect(within(card("Copia di Foto")).getByText("Annullato")).toBeTruthy();
+  expect(within(card("Copia di Foto")).getByText(stopped)).toBeTruthy();
   expect(screen.getByRole("button", { name: /^Controlla e avvia/ })).toBeTruthy();
 });
 

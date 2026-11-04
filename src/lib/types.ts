@@ -37,10 +37,18 @@ export interface Run {
   outcome: Outcome;
   startedAt: string;
   logPath: string;
-  error?: string;
   /** Files copied before an Error or Cancelled run stopped. */
   partial?: number;
 }
+
+/** Why something failed, as Rust words it: what happened, and what to do about it. */
+export interface Explanation {
+  title: string;
+  advice: string;
+}
+
+/** What `run_sync` returns: the stored Run, plus the explanation when it ended in Errore. */
+export type RunReport = Run & { explanation: Explanation | null };
 
 /** The `run-progress` event while a Run is going. */
 export interface RunProgress {
@@ -75,5 +83,5 @@ export interface Sync {
 
 /** A saved sync as the home lists it, with how its latest Run ended (null: never run). */
 export interface SyncSummary extends Sync {
-  lastRun: { startedAt: string; outcome: Outcome } | null;
+  lastRun: { startedAt: string; outcome: Outcome; note: string | null } | null;
 }

@@ -30,7 +30,7 @@ fn is_inside(path: &str, folder: &str) -> bool {
 
 /// Lower-case, `\` separators, no trailing `\`, `.`/`..` resolved without touching the disk.
 /// A drive (`d:`) or a UNC `\\server\share` is the root that `..` cannot climb above.
-fn normalize(path: &str) -> String {
+pub(crate) fn normalize(path: &str) -> String {
     let mut path = path.trim().replace('/', "\\").to_lowercase();
     if let Some(rest) = path.strip_prefix(r"\\?\unc\") {
         path = format!(r"\\{rest}");

@@ -1,5 +1,6 @@
 //! A Preview or a Run end to end: robocopy + parser + storage + history. No Tauri types.
 
+use crate::error_messages::{self, Explanation, Moment};
 use crate::history::{self, Outcome, Run};
 use crate::mirror_guard;
 use crate::path_rules;
@@ -19,7 +20,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 /// Dry run (`/L`): lists what a Run would do, touches nothing. Blocks until robocopy exits.
-pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Preview, String> {
+pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Preview, Explanation> {
     path_rules::check_destination(source, destination)?;
     static SEQ: AtomicU32 = AtomicU32::new(0);
     let log = std::env::temp_dir().join(format!(
@@ -29,7 +30,16 @@ pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Previe
     ));
     let log_arg = log.to_string_lossy();
 
-    // A missing or empty A would make robocopy fail or empty B: answer "blocked" without running it.
+    // A that cannot be read says why (unplugged disk, share down, no permission): that is not
+    // the same as an A with nothing in it, and robocopy would only fail on it.
+    if let Err(error) = fs::metadata(source) {
+        return Err(error_messages::explain_source_error(
+            &error,
+            source,
+            destination,
+        ));
+    }
+    // An empty A would empty B: answer "blocked" without running robocopy.
     if mode == SyncMode::Mirror
         && let Some(reason) = mirror_guard::source_problem(Path::new(source))
     {
@@ -40,12 +50,18 @@ pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Previe
     }
 
     let code = robocopy::execute(&robocopy::preview_args(mode, source, destination, &log_arg))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| Explanation::from(e.to_string()))?;
     let text = read_log(&log);
     let _ = fs::remove_file(&log);
 
     if !robocopy::is_success(code) {
-        return Err(failure_message(code, &text));
+        let cause = error_messages::find_cause(&text, source, destination);
+        return Err(error_messages::describe(
+            cause,
+            source,
+            destination,
+            Moment::Preview,
+        ));
     }
     let mut preview = preview_parser::parse(&text, source, destination, |p| p.exists());
     if mode == SyncMode::Mirror {
@@ -234,6 +250,11 @@ pub fn run(
     let ok = !cancelled && robocopy::is_success(code);
     // Only a failed or stopped run needs its log: it can be huge.
     let log_text = if ok { String::new() } else { read_log(&log) };
+    let cause = if ok || cancelled {
+        None
+    } else {
+        error_messages::find_cause(&log_text, source, destination)
+    };
     let run = Run {
         sync_id: Some(sync.id),
         sync_name,
@@ -251,8 +272,8 @@ pub fn run(
         },
         started_at: started.to_rfc3339(),
         log_path: log.to_string_lossy().into_owned(),
-        error: (!ok && !cancelled).then(|| failure_message(code, &log_text)),
         partial: (!ok).then(|| partial_count(&log_text, source, destination)),
+        cause,
     };
     history::append(&storage.history_file(), &run).map_err(|e| e.to_string())?;
     Ok(run)
@@ -279,19 +300,6 @@ fn read_log(path: &Path) -> String {
     fs::read(path)
         .map(|bytes| robocopy::decode_unilog(&bytes))
         .unwrap_or_default()
-}
-
-/// Raw message: exit code plus the last lines of the log.
-fn failure_message(code: i32, log: &str) -> String {
-    let tail: Vec<&str> = log
-        .lines()
-        .map(str::trim)
-        .filter(|l| !l.is_empty())
-        .collect();
-    let tail = tail[tail.len().saturating_sub(3)..].join(" ");
-    format!("robocopy ha restituito il codice {code}. {tail}")
-        .trim_end()
-        .to_string()
 }
 
 #[cfg(test)]
@@ -368,7 +376,7 @@ mod tests {
         ];
         for (a, b, message) in cases {
             for mode in [SyncMode::Copy, SyncMode::Mirror] {
-                assert_eq!(preview(a, b, mode).unwrap_err(), message);
+                assert_eq!(preview(a, b, mode).unwrap_err(), Explanation::from(message));
                 let active = ActiveRun::default();
                 let sync = SavedSync {
                     id: 1,
@@ -411,15 +419,18 @@ mod tests {
     }
 
     #[test]
-    fn failure_message_has_exit_code_and_log_tail() {
-        let log = "\r\nERROR 53 (0x00000035) Accessing Source Directory \\\\NAS\\x\\\r\nThe network path was not found.\r\n";
-        assert_eq!(
-            failure_message(16, log),
-            "robocopy ha restituito il codice 16. ERROR 53 (0x00000035) Accessing Source Directory \\\\NAS\\x\\ The network path was not found."
-        );
-        assert_eq!(
-            failure_message(16, ""),
-            "robocopy ha restituito il codice 16."
-        );
+    fn preview_of_a_missing_source_says_where_to_look_in_both_modes() {
+        let temp = tempfile::tempdir().unwrap();
+        let missing = temp.path().join("Foto");
+        let missing = missing.to_str().unwrap();
+
+        for mode in [SyncMode::Copy, SyncMode::Mirror] {
+            let failure = preview(missing, r"E:\Backup", mode).unwrap_err();
+            assert_eq!(
+                failure.title,
+                format!("Non trovo la cartella A ({missing}).")
+            );
+            assert_eq!(failure.advice, "Il disco è collegato?");
+        }
     }
 }

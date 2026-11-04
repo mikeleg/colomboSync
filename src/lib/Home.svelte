@@ -63,6 +63,7 @@
       <li
         class="card"
         class:sel={sync === selected}
+        class:bad={retry}
         onclick={() => (selectedId = sync.id)}
         onfocusin={() => (selectedId = sync.id)}
       >
@@ -73,6 +74,7 @@
         <p class="route">
           {@render place(sync.source)}<span class="ar">&rarr;</span>{@render place(sync.destination)}
         </p>
+        {#if sync.lastRun?.note}<p class="note" class:err={retry}>{sync.lastRun.note}</p>{/if}
         <div class="foot">
           <div class="last">
             {#if sync.lastRun && outcome}
@@ -118,6 +120,12 @@
   .card:hover {
     background: color-mix(in srgb, var(--fg) 4%, var(--card-2));
   }
+  .card.bad {
+    border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  }
+  .card.bad.sel {
+    border-color: var(--danger);
+  }
   .card.sel {
     border-color: var(--accent);
     background: color-mix(in srgb, var(--accent) 7%, var(--card-2));
@@ -154,6 +162,19 @@
   .ar {
     color: var(--fg-2);
     opacity: 0.6;
+  }
+  .note {
+    margin: -6px 0 14px;
+    padding: 10px 14px;
+    border-radius: var(--r-s);
+    background: var(--card);
+    color: var(--fg-2);
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .note.err {
+    background: var(--danger-soft);
+    color: var(--on-danger-soft);
   }
   .foot {
     display: flex;

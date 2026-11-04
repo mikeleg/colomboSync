@@ -2,7 +2,7 @@
   import Icon from "../Icon.svelte";
   import Warnbox from "../Warnbox.svelte";
   import { formatNumber, formatSize } from "../format";
-  import type { FileGroup, Preview } from "../types";
+  import type { Explanation, FileGroup, Preview } from "../types";
 
   let {
     scanning,
@@ -13,16 +13,19 @@
     onstart,
     onstop,
     onback,
+    onretry,
   }: {
     scanning: boolean;
     mirror: boolean;
     preview: Preview | null;
-    error: string;
+    /** Why the preview could not be made, in Rust's words. */
+    error: Explanation | null;
     /** Re-running a saved sync: nothing to save, nothing to change, "No" just returns to the list. */
     saved?: boolean;
     onstart: () => void;
     onstop: () => void;
     onback: () => void;
+    onretry: () => void;
   } = $props();
 
   const total = $derived(preview ? preview.new.count + preview.updated.count + preview.deleted.count : 0);
@@ -52,8 +55,14 @@
     <span>Sto controllando le due cartelle… Non copio ancora niente.</span>
   </div>
 {:else if error}
-  <div class="err-msg" role="alert">{error}</div>
-  <div class="btns back"><button type="button" class="link" onclick={onback}>Indietro</button></div>
+  <div class="err-msg" role="alert">
+    <p>{error.title}</p>
+    {#if error.advice}<p>{error.advice}</p>{/if}
+  </div>
+  <div class="btns back">
+    <button type="button" class="btn primary" onclick={onretry}>Riprova</button>
+    <button type="button" class="link" onclick={onback}>Indietro</button>
+  </div>
 {:else if preview && total === 0 && !preview.blocked}
   <div class="empty">
     <Icon name="check" />

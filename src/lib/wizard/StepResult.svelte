@@ -1,9 +1,18 @@
 <script lang="ts">
   import Icon from "../Icon.svelte";
+  import LogViewer from "../LogViewer.svelte";
   import { formatDuration, formatNumber, partialText } from "../format";
-  import type { Run } from "../types";
+  import type { RunReport } from "../types";
 
-  let { run, failure, onhome }: { run: Run | null; failure: string; onhome: () => void } = $props();
+  let {
+    run,
+    failure,
+    onhome,
+    onretry,
+    onhistory,
+  }: { run: RunReport | null; failure: string; onhome: () => void; onretry: () => void; onhistory: () => void } = $props();
+
+  let viewingLog = $state(false);
 
   const ok = $derived(run?.outcome === "Ok");
   const deletedText = $derived(
@@ -16,12 +25,14 @@
   const partialLine = $derived(
     run?.partial === undefined ? "" : run.partial === 0 ? "Nessun file è stato copiato." : partialText(run.partial),
   );
+  // What Rust says about the failure; a command that failed before any Run exists has only its message.
+  const why = $derived(run?.explanation ?? { title: "Non completato", advice: failure });
   const title = $derived(
     run && ok
       ? `Fatto: ${formatNumber(run.new)} ${run.new === 1 ? "file copiato" : "file copiati"}, ${formatNumber(run.updated)} ${run.updated === 1 ? "aggiornato" : "aggiornati"}${deletedText} in ${formatDuration(run.durationMs)}`
       : cancelled
         ? "Annullato: ho fermato la copia."
-        : "Non completato",
+        : why.title,
   );
 </script>
 
@@ -35,14 +46,20 @@
     {:else if cancelled}
       <p>{partialLine}{run?.partial ? ". I file già copiati restano in B." : ""}</p>
     {:else}
-      <p>{run?.error ?? failure}</p>
+      {#if why.advice}<p>{why.advice}</p>{/if}
       {#if partialLine}<p>{partialLine}</p>{/if}
     {/if}
   </div>
 </div>
 <div class="btns">
-  <button type="button" class="btn primary big" onclick={onhome}>Torna all’inizio</button>
+  {#if !ok}<button type="button" class="btn primary big" onclick={onretry}>Riprova</button>{/if}
+  <button type="button" class="btn big" class:primary={ok} onclick={onhome}>Torna all’elenco</button>
+  {#if run}<button type="button" class="link" onclick={() => (viewingLog = true)}>Apri il registro</button>{/if}
+  <button type="button" class="link" onclick={onhistory}>Vai allo storico</button>
 </div>
+{#if run && viewingLog}
+  <LogViewer {run} onclose={() => (viewingLog = false)} />
+{/if}
 
 <style>
   .res {

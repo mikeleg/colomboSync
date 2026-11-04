@@ -12,7 +12,15 @@ const preview = (n: number, u: number, files = { n: ["a.jpg", "b.jpg"], u: ["c.p
   blocked: null,
 });
 
-const props = { scanning: false, mirror: false, error: "", onstart: () => {}, onstop: () => {}, onback: () => {} };
+const props = {
+  scanning: false,
+  mirror: false,
+  error: null,
+  onstart: () => {},
+  onstop: () => {},
+  onback: () => {},
+  onretry: () => {},
+};
 
 test("shows new and updated groups with counts, the files, and the start button", () => {
   render(StepPreview, { ...props, preview: preview(148, 1) });
@@ -50,15 +58,29 @@ test("while scanning it reassures that nothing is copied yet and offers no start
   expect(screen.queryByRole("button", { name: "Sì, avvia" })).toBeNull();
 });
 
-test("a failed preview shows the message, no start button and a way back", async () => {
+test("a failed preview shows what happened and what to do, no start button, Riprova and a way back", async () => {
   const onback = vi.fn();
-  render(StepPreview, { ...props, preview: null, error: "robocopy ha restituito il codice 16.", onback });
+  const onretry = vi.fn();
+  const error = {
+    title: String.raw`Non riesco a controllare le cartelle: la cartella di rete \NAS non è raggiungibile.`,
+    advice: "Controlla la connessione e riprova.",
+  };
+  render(StepPreview, { ...props, preview: null, error, onback, onretry });
 
-  expect(screen.getByRole("alert").textContent).toContain("robocopy ha restituito il codice 16.");
+  expect(screen.getByRole("alert").textContent).toContain(error.title);
+  expect(screen.getByText(error.advice)).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Sì, avvia" })).toBeNull();
 
+  await fireEvent.click(screen.getByRole("button", { name: "Riprova" }));
+  expect(onretry).toHaveBeenCalledOnce();
   await fireEvent.click(screen.getByRole("button", { name: "Indietro" }));
   expect(onback).toHaveBeenCalledOnce();
+});
+
+test("a failure with no advice shows just the title", () => {
+  render(StepPreview, { ...props, preview: null, error: { title: "La destinazione non può stare qui.", advice: "" } });
+
+  expect(screen.getByRole("alert").textContent?.trim()).toBe("La destinazione non può stare qui.");
 });
 
 test("the three choices after the preview call back: Sì, avvia / No, salva e basta / Indietro, cambio qualcosa", async () => {

@@ -5,6 +5,7 @@ use crate::preview_parser::{self, Counts, Preview};
 use crate::progress::{Progress, StdoutFollower};
 use crate::robocopy::{self, SyncMode};
 use crate::storage::Storage;
+use crate::sync_store::SavedSync;
 use chrono::Local;
 use std::fs;
 use std::io::{self, Read};
@@ -126,17 +127,15 @@ const PROGRESS_EVERY: Duration = Duration::from_millis(100);
 /// when robocopy cannot be started or the history cannot be written. `counts` come from the
 /// preview the user just confirmed and give the total of `on_progress`, which is called at most
 /// every `PROGRESS_EVERY` while robocopy writes, and once more when its output ends.
-#[allow(clippy::too_many_arguments)] // distinct inputs of one run; a bundling struct would have a single user
 pub fn run(
     storage: &Storage,
-    source: &str,
-    destination: &str,
-    mode: SyncMode,
+    sync: &SavedSync,
     counts: Counts,
-    sync_name: String,
     active: &ActiveRun,
     mut on_progress: impl FnMut(&Progress),
 ) -> Result<Run, String> {
+    let (source, destination, mode) = (sync.source.as_str(), sync.destination.as_str(), sync.mode);
+    let sync_name = sync.name.clone();
     let started = Local::now();
     let log = storage.log_file(&sync_name, started.naive_local());
     fs::create_dir_all(storage.logs_dir()).map_err(|e| e.to_string())?;
@@ -180,6 +179,7 @@ pub fn run(
     // Only a failed or stopped run needs its log: it can be huge.
     let log_text = if ok { String::new() } else { read_log(&log) };
     let run = Run {
+        sync_id: Some(sync.id),
         sync_name,
         source: source.to_string(),
         destination: destination.to_string(),

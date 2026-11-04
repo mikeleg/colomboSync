@@ -42,25 +42,15 @@ pub async fn read_run_log(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn run_sync(
-    app: AppHandle,
-    source: String,
-    destination: String,
-    mode: SyncMode,
-    counts: Counts,
-    sync_name: String,
-) -> Result<Run, String> {
+pub async fn run_sync(app: AppHandle, sync: SavedSync, counts: Counts) -> Result<Run, String> {
     let storage = Storage::from_env()?;
     let run = spawn_blocking({
         let app = app.clone();
         move || {
             runner::run(
                 &storage,
-                &source,
-                &destination,
-                mode,
+                &sync,
                 counts,
-                sync_name,
                 &app.state::<ActiveRun>(),
                 |progress| {
                     let _ = app.emit("run-progress", progress);
@@ -91,9 +81,12 @@ pub fn cancel_run(app: AppHandle, active: State<'_, ActiveRun>, exit_when_done: 
 #[tauri::command]
 pub async fn list_syncs() -> Result<Vec<SyncSummary>, String> {
     let storage = Storage::from_env()?;
-    spawn_blocking(move || sync_store::list(&storage))
-        .await
-        .map_err(|e| e.to_string())
+    spawn_blocking(move || {
+        sync_store::list(&storage)
+            .map_err(|_| "Non riesco a leggere le sincronizzazioni salvate.".to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

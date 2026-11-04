@@ -49,6 +49,9 @@
   let run = $state<Run | null>(null);
   let failure = $state("");
   let scanId = 0;
+  let suggestionId = 0;
+  let suggesting = $state(false);
+  let saving = false; // a save (and run) is in flight: further clicks are ignored
   // Listen from the start: an X click right after "Sì, avvia" must not slip by the running view.
   let closeRequests = $state(0);
 
@@ -109,6 +112,7 @@
       error = "Scegli prima dove mettere la copia.";
       return;
     }
+    if (stepId === "name" && suggesting) return;
     if (stepId === "name" && !name.trim()) {
       error = "Scrivi un nome per riconoscere questa sincronizzazione.";
       return;
@@ -119,15 +123,24 @@
     if (STEPS[step].id === "preview") scan();
   }
 
-  /** Prefills "Copia di <last folder of A>" unless the user already chose a name. */
+  /** Prefills "Copia di <last folder of A>" unless the user already chose a name. Avanti waits for it. */
   async function suggestName() {
     if (nameTouched) return;
+    const id = ++suggestionId;
+    suggesting = true;
     try {
       const suggestion = await defaultSyncName(source.trim());
-      if (!nameTouched) name = suggestion;
+      if (id === suggestionId && !nameTouched) name = suggestion;
     } catch {
       // The user can type a name.
+    } finally {
+      if (id === suggestionId) suggesting = false;
     }
+  }
+
+  function editName() {
+    nameTouched = true;
+    suggesting = false;
   }
 
   function back() {
@@ -154,17 +167,16 @@
   }
 
   /** A new sync is saved when its first run starts or on "No, salva e basta"; a saved one already is. */
-  async function saveIfNew() {
-    if (!sync) await saveSync(name.trim(), source.trim(), destination.trim(), mode);
-  }
+  const saveIfNew = async (): Promise<Sync> =>
+    sync ?? (await saveSync(name.trim(), source.trim(), destination.trim(), mode));
 
   async function start() {
-    if (!previewCounts) return;
+    if (!previewCounts || saving) return;
+    saving = true;
     closeRequests = 0;
     phase = "running";
     try {
-      await saveIfNew();
-      run = await runSync(source.trim(), destination.trim(), mode, previewCounts, sync?.name ?? name.trim());
+      run = await runSync(await saveIfNew(), previewCounts);
     } catch (e) {
       failure = String(e);
     }
@@ -172,11 +184,14 @@
   }
 
   async function stop() {
+    if (saving) return;
+    saving = true;
     try {
       await saveIfNew();
       onexit();
     } catch (e) {
       previewError = String(e);
+      saving = false;
     }
   }
 </script>
@@ -202,7 +217,7 @@
     {:else if stepId === "destination"}
       <StepDestination bind:path={destination} {error} onenter={next} />
     {:else if stepId === "name"}
-      <StepName bind:name {error} onedit={() => (nameTouched = true)} onenter={next} />
+      <StepName bind:name {error} onedit={editName} onenter={next} />
     {:else if stepId === "options"}
       <StepOptions />
     {:else if stepId === "preview"}
@@ -222,7 +237,9 @@
     <div class="nav">
       <button type="button" class="btn" onclick={back}>{step === 0 || sync ? "Annulla" : "Indietro"}</button>
       {#if step < STEPS.length - 1}
-        <button type="button" class="btn primary" onclick={next}>Avanti</button>
+        <button type="button" class="btn primary" disabled={stepId === "name" && suggesting} onclick={next}>
+          Avanti
+        </button>
       {/if}
     </div>
   {/if}

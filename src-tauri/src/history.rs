@@ -17,6 +17,9 @@ pub enum Outcome {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Run {
+    /// The saved sync this run belongs to (lines written before syncs had ids have none).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sync_id: Option<u64>,
     pub sync_name: String,
     pub source: String,
     pub destination: String,
@@ -109,6 +112,7 @@ mod tests {
 
     fn run(name: &str, outcome: Outcome) -> Run {
         Run {
+            sync_id: None,
             sync_name: name.into(),
             source: r"D:\Foto".into(),
             destination: r"E:\Backup".into(),
@@ -260,6 +264,21 @@ mod tests {
         assert!(shown.lines().count() < 20);
         // No half line after the notice.
         assert!(shown.lines().nth(1).unwrap().starts_with("riga "));
+    }
+
+    #[test]
+    fn run_without_sync_id_field_still_loads() {
+        let old = r#"{"syncName":"n","source":"D:\\Foto","destination":"E:\\Backup","mode":"Copy","new":12,"updated":1,"deleted":0,"durationMs":61000,"outcome":"Ok","startedAt":"2026-11-02T21:30:00+01:00","logPath":"C:\\L\\logs\\x.log"}"#;
+        let loaded: Run = serde_json::from_str(old).unwrap();
+        assert_eq!(loaded.sync_id, None);
+
+        let with_id = Run {
+            sync_id: Some(7),
+            ..loaded
+        };
+        let json = serde_json::to_string(&with_id).unwrap();
+        assert!(json.starts_with(r#"{"syncId":7,"#));
+        assert_eq!(serde_json::from_str::<Run>(&json).unwrap(), with_id);
     }
 
     #[test]

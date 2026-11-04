@@ -17,12 +17,14 @@
   let syncs = $state<SyncSummary[]>([]);
   let selectedId = $state<number | null>(null);
 
-  // An unreadable store looks like no syncs: the empty state, never a crash.
+  /** Set when syncs.json cannot be read: no list, and no new sync that would have to be saved over it. */
+  let loadError = $state("");
+
   onMount(async () => {
     try {
       syncs = await listSyncs();
-    } catch {
-      syncs = [];
+    } catch (e) {
+      loadError = String(e);
     }
   });
 
@@ -86,7 +88,8 @@
     {/each}
   </ul>
 {/if}
-<button type="button" class="newcard" onclick={onnew}><Icon name="plus" />Nuova sincronizzazione</button>
+{#if loadError}<div class="err-msg" role="alert">{loadError}</div>{/if}
+<button type="button" class="newcard" disabled={!!loadError} onclick={onnew}><Icon name="plus" />Nuova sincronizzazione</button>
 
 <style>
   .list {
@@ -180,7 +183,11 @@
     font-weight: 800;
     cursor: pointer;
   }
-  .newcard:hover {
+  .newcard:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .newcard:hover:not(:disabled) {
     background: color-mix(in srgb, var(--accent) 7%, transparent);
     border-style: solid;
   }

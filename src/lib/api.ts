@@ -6,8 +6,8 @@ import type { Counts, FolderListing, Preview, Run, RunProgress, Sync, SyncMode, 
 export const previewSync = (source: string, destination: string, mode: SyncMode) =>
   invoke<Preview>("preview_sync", { source, destination, mode });
 
-export const runSync = (source: string, destination: string, mode: SyncMode, counts: Counts, syncName: string) =>
-  invoke<Run>("run_sync", { source, destination, mode, counts, syncName });
+/** Runs a saved sync; the run is recorded in the history under its id. */
+export const runSync = (sync: Sync, counts: Counts) => invoke<Run>("run_sync", { sync, counts });
 
 /** Saved syncs, newest first, each with how its latest Run ended. */
 export const listSyncs = () => invoke<SyncSummary[]>("list_syncs");

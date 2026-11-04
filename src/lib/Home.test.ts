@@ -78,21 +78,26 @@ test("a stopped run shows the Annullato chip and keeps Controlla e avvia", async
   expect(screen.getByRole("button", { name: /^Controlla e avvia/ })).toBeTruthy();
 });
 
-test.each([
-  ["no syncs", () => invokeMock.mockResolvedValue([])],
-  ["an unreadable store", () =>
-      invokeMock.mockImplementation(async () => {
-        throw "illeggibile";
-      }),
-  ],
-])("%s: empty state with the dashed Nuova sincronizzazione card, no crash", async (_, arrange) => {
-  arrange();
+test("no syncs yet: empty state with the dashed Nuova sincronizzazione card", async () => {
+  invokeMock.mockResolvedValue([]);
   const onnew = vi.fn();
   render(Home, { ...props, onnew });
 
   await fireEvent.click(await screen.findByRole("button", { name: "Nuova sincronizzazione" }));
 
   expect(onnew).toHaveBeenCalledOnce();
+  expect(screen.queryByRole("listitem")).toBeNull();
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("an unreadable store: a message, no list, and a new sync cannot be started", async () => {
+  invokeMock.mockImplementation(async () => {
+    throw "Non riesco a leggere le sincronizzazioni salvate.";
+  });
+  render(Home, props);
+
+  expect((await screen.findByRole("alert")).textContent).toContain("Non riesco a leggere le sincronizzazioni salvate.");
+  expect((screen.getByRole("button", { name: "Nuova sincronizzazione" }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.queryByRole("listitem")).toBeNull();
 });
 

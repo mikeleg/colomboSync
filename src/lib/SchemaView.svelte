@@ -41,7 +41,7 @@
 
 <h2>Cosa succede</h2>
 {@render node("A · Da copiare", model.source)}
-<div class="mid">
+<div class="mid" class:run={model.running}>
   <div class="arr">
     <svg viewBox="0 0 44 64" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path class="flow" d="M22 4v44" /><path d="M10 40l12 16 12-16" />
@@ -133,6 +133,16 @@
   }
   .flow {
     stroke-dasharray: 7 7;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .mid.run .flow {
+      animation: flow 0.7s linear infinite;
+    }
+  }
+  @keyframes flow {
+    to {
+      stroke-dashoffset: -14;
+    }
   }
   .counts {
     display: grid;

@@ -42,14 +42,17 @@
       : null,
   );
 
+  const runTotal = $derived(previewCounts ? previewCounts.new + previewCounts.updated + previewCounts.deleted : 0);
+
   const schema = $derived.by((): SchemaModel => {
     const places = { source: source.trim(), destination: destination.trim() };
     if (phase === "result") {
       const ok = run?.outcome === "Ok";
       const counts = run && ok ? { new: run.new, updated: run.updated, deleted: run.deleted } : null;
-      return { ...places, counts, caption: ok ? "Fatto." : "Non completato." };
+      const caption = ok ? "Fatto." : run?.outcome === "Cancelled" ? "Annullato." : "Non completato.";
+      return { ...places, counts, caption };
     }
-    if (phase === "running") return { ...places, counts: previewCounts, caption: "Sto copiando…" };
+    if (phase === "running") return { ...places, counts: previewCounts, caption: "Sto copiando…", running: true };
     if (stepId === "preview" && scanning) {
       return { ...places, counts: null, caption: "Sto controllando le due cartelle…" };
     }
@@ -121,7 +124,7 @@
 </script>
 
 {#if phase === "running"}
-  <StepRunning />
+  <StepRunning total={runTotal} />
 {:else if phase === "result"}
   <StepResult {run} {failure} onhome={onexit} />
 {:else}

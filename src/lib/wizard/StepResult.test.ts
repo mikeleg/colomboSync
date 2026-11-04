@@ -49,3 +49,32 @@ test("a command failure before any Run exists is shown as not completed", () => 
   expect(screen.getByRole("heading").textContent).toBe("Non completato");
   expect(screen.getByText("spawn failed")).toBeTruthy();
 });
+
+test("cancelled: Annullato with what stays in B, and the partial count", () => {
+  render(StepResult, {
+    run: run({ outcome: "Cancelled", new: 0, updated: 0, partial: 40 }),
+    failure: "",
+    onhome: () => {},
+  });
+
+  expect(screen.getByRole("heading").textContent).toBe("Annullato: ho fermato la copia.");
+  expect(screen.getByText("I 40 file già copiati restano in B.")).toBeTruthy();
+  expect(screen.getByText("40 file copiati (parziale)")).toBeTruthy();
+});
+
+test("error after copying 40 files says 40 file copiati (parziale) next to the message", () => {
+  render(StepResult, {
+    run: run({ outcome: "Error", error: "robocopy ha restituito il codice 16.", partial: 40 }),
+    failure: "",
+    onhome: () => {},
+  });
+
+  expect(screen.getByText("robocopy ha restituito il codice 16.")).toBeTruthy();
+  expect(screen.getByText("40 file copiati (parziale)")).toBeTruthy();
+});
+
+test("a success has no partial line", () => {
+  render(StepResult, { run: run(), failure: "", onhome: () => {} });
+
+  expect(screen.queryByText(/parziale/)).toBeNull();
+});

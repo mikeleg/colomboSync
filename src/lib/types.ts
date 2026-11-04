@@ -36,4 +36,15 @@ export interface Run {
   startedAt: string;
   logPath: string;
   error?: string;
+  /** Files copied before an Error or Cancelled run stopped. */
+  partial?: number;
+}
+
+/** The `run-progress` event while a Run is going. */
+export interface RunProgress {
+  syncName: string;
+  done: number;
+  total: number;
+  elapsedMs: number;
+  currentFile: string;
 }

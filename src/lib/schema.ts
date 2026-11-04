@@ -7,6 +7,8 @@ export interface SchemaModel {
   /** null shows "—" instead of numbers. */
   counts: Counts | null;
   caption: string;
+  /** A run is going: the arrow is animated. */
+  running?: boolean;
 }
 
 export const emptySchema: SchemaModel = {

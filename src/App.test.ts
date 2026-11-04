@@ -7,6 +7,7 @@ import type { Preview, Run } from "./lib/types";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
 
 const invokeMock = vi.mocked(invoke);
 
@@ -105,7 +106,7 @@ test("while the copy runs the UI says Sto copiando…", async () => {
 
   await click(await screen.findByRole("button", { name: "Sì, avvia" }));
 
-  expect(screen.getByRole("heading", { name: "Sto copiando…" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: /^Sto copiando/ })).toBeTruthy();
 });
 
 test("a run that ends in Error says Non completato with the raw message", async () => {

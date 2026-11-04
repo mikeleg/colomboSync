@@ -1,12 +1,8 @@
+import type { Outcome, SyncMode } from "./types";
+
 export const formatNumber = (n: number) => n.toLocaleString("it-IT");
 
 export const isNetworkPath = (path: string) => path.startsWith("\\\\");
-
-/** "02/11/2026 21:30" from an RFC 3339 start time, as recorded (local time, no conversion). */
-export function formatWhen(startedAt: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(startedAt);
-  return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : startedAt;
-}
 
 export function formatSize(bytes: number): string {
   if (bytes >= 1e9) return (bytes / 1e9).toFixed(1).replace(".", ",") + " GB";
@@ -17,3 +13,30 @@ export function formatDuration(ms: number): string {
   const minutes = Math.round(ms / 60000);
   return minutes < 1 ? "< 1 min" : `${minutes} min`;
 }
+
+/** "2026-11-02T21:30:00+01:00" -> "02/11/2026 21:30": the local time as it was stored. */
+export function formatWhen(startedAt: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2})/.exec(startedAt);
+  return match ? `${match[3]}/${match[2]}/${match[1]} ${match[4]}` : startedAt;
+}
+
+/** Chip class (from theme.css) and Italian label, as used by the Storico rows and its legend. */
+export const modeChip: Record<SyncMode, { cls: string; label: string }> = {
+  Copy: { cls: "copy", label: "Copia" },
+  Mirror: { cls: "mirror", label: "Specchio" },
+};
+
+export const outcomeChip: Record<Outcome, { cls: string; label: string }> = {
+  Ok: { cls: "ok", label: "OK" },
+  Error: { cls: "err", label: "Errore" },
+  Cancelled: { cls: "ann", label: "Annullato" },
+};
+
+/** Time left, from the files done so far in `elapsedMs`. */
+export function etaText(done: number, total: number, elapsedMs: number): string {
+  if (elapsedMs < 1000 || done === 0) return "Calcolo il tempo che manca…";
+  const seconds = Math.ceil((total - done) / (done / (elapsedMs / 1000)));
+  return seconds <= 1 ? "Quasi finito." : `Mancano circa ${formatNumber(seconds)} secondi.`;
+}
+
+export const partialText = (n: number) => `${formatNumber(n)} ${n === 1 ? "file copiato" : "file copiati"} (parziale)`;

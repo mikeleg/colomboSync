@@ -2,9 +2,9 @@
   import { onMount } from "svelte";
   import Icon from "./Icon.svelte";
   import { listSyncs } from "./api";
-  import { formatWhen, isNetworkPath } from "./format";
+  import { formatWhen, isNetworkPath, modeChip, outcomeChip } from "./format";
   import { emptySchema, type SchemaModel } from "./schema";
-  import type { Outcome, Sync, SyncSummary } from "./types";
+  import type { Sync, SyncSummary } from "./types";
 
   let {
     onnew,
@@ -12,11 +12,6 @@
     onschema,
   }: { onnew: () => void; onrun: (sync: Sync) => void; onschema: (model: SchemaModel) => void } = $props();
 
-  const OUTCOME_CHIP: Record<Outcome, { css: string; label: string }> = {
-    Ok: { css: "ok", label: "OK" },
-    Error: { css: "err", label: "Errore" },
-    Cancelled: { css: "ann", label: "Annullato" },
-  };
   const CAPTION = 'Premi "Controlla e avvia": prima ti mostro cosa cambierà, poi decidi tu.';
 
   let syncs = $state<SyncSummary[]>([]);
@@ -54,7 +49,7 @@
   <ul class="list">
     {#each syncs as sync (sync.id)}
       {@const retry = sync.lastRun?.outcome === "Error"}
-      {@const chip = sync.lastRun ? OUTCOME_CHIP[sync.lastRun.outcome] : null}
+      {@const outcome = sync.lastRun && outcomeChip[sync.lastRun.outcome]}
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_click_events_have_key_events -->
       <li
         class="card"
@@ -64,18 +59,16 @@
       >
         <div class="head">
           <h2>{sync.name}</h2>
-          <span class="chip" class:mirror={sync.mode === "Mirror"} class:copy={sync.mode === "Copy"}>
-            {sync.mode === "Mirror" ? "Specchio" : "Copia"}
-          </span>
+          <span class="chip {modeChip[sync.mode].cls}">{modeChip[sync.mode].label}</span>
         </div>
         <p class="route">
           {@render place(sync.source)}<span class="ar">&rarr;</span>{@render place(sync.destination)}
         </p>
         <div class="foot">
           <div class="last">
-            {#if sync.lastRun && chip}
+            {#if sync.lastRun && outcome}
               <span>Ultima volta: <span>{formatWhen(sync.lastRun.startedAt)}</span></span>
-              <span class="chip {chip.css}">{chip.label}</span>
+              <span class="chip {outcome.cls}">{outcome.label}</span>
             {:else}
               <span>Mai avviata</span>
             {/if}

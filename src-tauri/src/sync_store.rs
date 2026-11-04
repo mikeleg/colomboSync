@@ -1,6 +1,6 @@
 //! `syncs.json`: the saved syncs, and what the home screen shows about each.
 
-use crate::history::{Outcome, Run};
+use crate::history::{self, Outcome};
 use crate::robocopy::SyncMode;
 use crate::storage::Storage;
 use serde::{Deserialize, Serialize};
@@ -73,19 +73,16 @@ pub fn add(
     Ok(sync)
 }
 
-/// Every saved sync with the outcome of its latest Run in `history.jsonl` (malformed lines are skipped).
+/// Every saved sync with the outcome of its latest Run in the history (an unreadable history
+/// just means no last run).
 pub fn list(storage: &Storage) -> Vec<SyncSummary> {
-    let history = fs::read_to_string(storage.history_file()).unwrap_or_default();
-    let runs: Vec<Run> = history
-        .lines()
-        .filter_map(|line| serde_json::from_str(line).ok())
-        .collect();
+    let runs = history::read(&storage.history_file()).unwrap_or_default(); // newest first
     load(&storage.syncs_file())
         .into_iter()
         .map(|sync| {
             let last_run = runs
                 .iter()
-                .rfind(|r| {
+                .find(|r| {
                     r.sync_name == sync.name
                         && r.source == sync.source
                         && r.destination == sync.destination
@@ -102,7 +99,7 @@ pub fn list(storage: &Storage) -> Vec<SyncSummary> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::history;
+    use crate::history::Run;
 
     fn sync(id: u64, name: &str) -> SavedSync {
         SavedSync {
@@ -165,6 +162,7 @@ mod tests {
             started_at: started_at.into(),
             log_path: String::new(),
             error: None,
+            partial: None,
         }
     }
 
@@ -177,14 +175,6 @@ mod tests {
         history::append(
             &storage.history_file(),
             &run(&foto, Outcome::Error, "2026-11-01T10:00:00+01:00"),
-        )
-        .unwrap();
-        fs::write(
-            storage.history_file(),
-            format!(
-                "{}\nnon json\n",
-                fs::read_to_string(storage.history_file()).unwrap().trim()
-            ),
         )
         .unwrap();
         history::append(

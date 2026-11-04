@@ -1,10 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import { fireEvent, render, screen } from "@testing-library/svelte";
+import { listen } from "@tauri-apps/api/event";
+import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App.svelte";
 import type { Preview, Run, SyncSummary } from "./lib/types";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
 
 const invokeMock = vi.mocked(invoke);
 
@@ -38,7 +40,9 @@ const savedSync: SyncSummary = {
   lastRun: { startedAt: "2026-11-02T21:30:00+01:00", outcome: "Ok" },
 };
 
-type Handlers = Partial<Record<"preview_sync" | "run_sync" | "list_syncs" | "save_sync", () => unknown>>;
+type Handlers = Partial<
+  Record<"preview_sync" | "run_sync" | "list_syncs" | "save_sync" | "list_runs" | "read_run_log", () => unknown>
+>;
 
 /** Answers the Rust commands the app uses; by default the computer has no folders and no saved syncs. */
 function backend(handlers: Handlers = {}) {
@@ -137,7 +141,7 @@ test("while the copy runs the UI says Sto copiando…", async () => {
 
   await click(await screen.findByRole("button", { name: "Sì, avvia" }));
 
-  expect(screen.getByRole("heading", { name: "Sto copiando…" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: /^Sto copiando/ })).toBeTruthy();
 });
 
 test("a run that ends in Error says Non completato with the raw message", async () => {
@@ -389,11 +393,68 @@ test("home: a saved sync's A and B are in the schema with the caption", async ()
   expect(schema.textContent).toContain('Premi "Controlla e avvia": prima ti mostro cosa cambierà, poi decidi tu.');
 });
 
-test("the Storico tab is there for S4 to fill", async () => {
-  backend({});
+test("Storico lists the runs from Rust and swaps the schema for the legend", async () => {
+  backend({
+    list_runs: () => [
+      { ...doneRun, syncName: "Seconda", outcome: "Error" },
+      { ...doneRun, syncName: "Prima" },
+    ],
+  });
   render(App);
 
   await click("Storico");
 
+  expect(invokeMock).toHaveBeenCalledWith("list_runs");
   expect(screen.getByRole("heading", { name: "Storico" })).toBeTruthy();
+  expect(await screen.findByText("Seconda")).toBeTruthy();
+  const aside = screen.getByRole("complementary", { name: "Come leggere lo storico" });
+  expect(aside.textContent).not.toContain("Cosa succede");
+  expect(within(aside).getByText("Copie fatte").previousElementSibling?.textContent).toBe("2");
+  expect(within(aside).getByText("Riuscite").previousElementSibling?.textContent).toBe("1");
+});
+
+test("a failed list_runs says so instead of showing an empty history", async () => {
+  backend({
+    list_runs: () => {
+      throw "boom";
+    },
+  });
+  render(App);
+
+  await click("Storico");
+
+  expect((await screen.findByRole("alert")).textContent).toContain("Non riesco a leggere lo storico.");
+  expect(screen.queryByRole("listitem")).toBeNull();
+});
+
+test("while the history loads there are no old rows, and a late older answer is ignored", async () => {
+  let answerFirst!: (runs: Run[]) => void;
+  const answers = [new Promise<Run[]>((resolve) => (answerFirst = resolve)), Promise.resolve([{ ...doneRun, syncName: "Aggiornata" }])];
+  backend({ list_runs: () => answers.shift() });
+  render(App);
+
+  await click("Storico");
+  expect(screen.getByText("Sto leggendo lo storico…")).toBeTruthy();
+  await click("Sincronizzazioni");
+  await click("Storico");
+  expect(await screen.findByText("Aggiornata")).toBeTruthy();
+
+  answerFirst([{ ...doneRun, syncName: "Vecchia" }]);
+  await Promise.resolve();
+
+  expect(screen.queryByText("Vecchia")).toBeNull();
+  expect(screen.getByText("Aggiornata")).toBeTruthy();
+});
+
+test("closing the window during a run asks to stop the copy", async () => {
+  backend({ preview_sync: () => preview(2, 1), run_sync: () => new Promise(() => {}) });
+  render(App);
+  await goToPreview();
+  await click(await screen.findByRole("button", { name: "Sì, avvia" }));
+
+  const closeRequested = vi.mocked(listen).mock.calls.find(([name]) => name === "close-requested")![1];
+  closeRequested({ event: "close-requested", id: 1, payload: null });
+
+  expect(await screen.findByRole("alertdialog")).toBeTruthy();
+  expect(screen.getByText("Vuoi fermare la copia? I file già copiati restano in B.")).toBeTruthy();
 });

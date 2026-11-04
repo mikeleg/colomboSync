@@ -55,16 +55,36 @@
   }
 </script>
 
-<div class="app">
+<div class="app" class:mirror={view === "wizard" && schema.mirror}>
   <header class="topbar">
     <div class="brand">
-      <span class="logo" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 8h12l-3-3M20 16H8l3 3" />
-        </svg>
+      <!-- "Eclissi": A (teal) partly covered by B (the page colour, with a faint rim). -->
+      <svg class="logo" viewBox="0 0 100 100" aria-hidden="true">
+        <defs>
+          <linearGradient id="colombo-eclissi" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#6ff0d6" />
+            <stop offset="0.55" stop-color="#1fc7a8" />
+            <stop offset="1" stop-color="#0a7d6e" />
+          </linearGradient>
+        </defs>
+        <circle cx="58" cy="50" r="30" fill="url(#colombo-eclissi)" />
+        <circle class="cover" cx="45" cy="50" r="30" />
+      </svg>
+      <span>
+        <span class="t">Colombo<span class="sync">Sync</span></span>
+        <span class="s">Copie di sicurezza senza sorprese</span>
       </span>
-      <span><span class="t">ColomboSync</span><span class="s">Copie di sicurezza senza sorprese</span></span>
     </div>
+    {#if view !== "wizard"}
+      <nav class="tabs" aria-label="Sezioni">
+        <button type="button" aria-current={view === "home" ? "page" : undefined} onclick={() => (view = "home")}>
+          Sincronizzazioni
+        </button>
+        <button type="button" aria-current={view === "history" ? "page" : undefined} onclick={openHistory}>
+          Storico
+        </button>
+      </nav>
+    {/if}
     <ThemeSwitch />
   </header>
   {#if elevated}
@@ -74,16 +94,6 @@
   {/if}
   <div class="layout">
     <main class="screen">
-      {#if view !== "wizard"}
-        <nav class="tabs" aria-label="Sezioni">
-          <button type="button" aria-current={view === "home" ? "page" : undefined} onclick={() => (view = "home")}>
-            Sincronizzazioni
-          </button>
-          <button type="button" aria-current={view === "history" ? "page" : undefined} onclick={openHistory}>
-            Storico
-          </button>
-        </nav>
-      {/if}
       {#if view === "home"}
         <Home onnew={() => openWizard()} onrun={openWizard} onschema={(model) => (schema = model)} />
       {:else if view === "history"}
@@ -113,13 +123,21 @@
 <style>
   .app {
     min-height: 100vh;
-    background: var(--surface);
+    background:
+      radial-gradient(70% 55% at 85% 0%, var(--glow) 0%, transparent 70%),
+      var(--surface);
+  }
+  /* Mirror is the one risky mode: the whole page takes a red glow instead of the teal one. */
+  .app.mirror {
+    background:
+      radial-gradient(60% 45% at 90% 30%, color-mix(in srgb, var(--danger) 18%, transparent) 0%, transparent 70%),
+      var(--surface);
   }
   .topbar {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 16px 22px 14px 26px;
+    gap: 16px;
+    padding: 24px 40px 0;
     flex-wrap: wrap;
   }
   .brand {
@@ -130,26 +148,29 @@
     flex: 1;
   }
   .logo {
-    width: 40px;
-    height: 40px;
-    border-radius: 14px;
-    background: var(--accent);
-    color: var(--on-accent);
-    display: grid;
-    place-items: center;
+    width: 34px;
+    height: 34px;
     flex: none;
   }
-  .logo svg {
-    width: 22px;
-    height: 22px;
+  .logo .cover {
+    fill: var(--surface);
+    stroke: var(--fg);
+    stroke-opacity: 0.2;
+    stroke-width: 2;
   }
   .t {
-    font-size: 19px;
-    font-weight: 800;
-    letter-spacing: -0.01em;
+    display: block;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+  .sync {
+    font-weight: 300;
+    color: var(--fg-2);
   }
   .s {
-    font-size: 14px;
+    font-size: 13px;
     color: var(--fg-2);
     display: block;
     line-height: 1.2;
@@ -158,7 +179,7 @@
     display: flex;
     gap: 12px;
     align-items: center;
-    margin: 0 18px 6px;
+    margin: 16px 40px 0;
     padding: 12px 18px;
     border-radius: var(--r-s);
     background: var(--warn-soft);
@@ -173,20 +194,18 @@
   .layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 360px;
-    gap: 18px;
-    padding: 6px 18px 18px;
+    gap: 32px;
+    padding: 32px 40px 48px;
+    align-items: start;
   }
   .screen {
-    padding: 22px 26px 28px;
     min-width: 0;
-    background: var(--card);
-    border-radius: var(--r);
-    box-shadow: var(--shadow);
   }
   .schema {
-    background: var(--card-2);
-    border-radius: var(--r);
-    padding: 20px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    border-radius: 32px;
+    padding: 28px;
     min-width: 0;
     align-self: start;
     position: sticky;
@@ -195,18 +214,18 @@
   .tabs {
     display: inline-flex;
     gap: 4px;
-    margin-bottom: 22px;
     padding: 4px;
     border-radius: 999px;
-    background: var(--card-2);
+    background: color-mix(in srgb, var(--fg) 8%, transparent);
   }
   .tabs button {
     background: none;
     border: 0;
     border-radius: 999px;
-    padding: 8px 20px;
-    min-height: 44px;
-    font-weight: 700;
+    padding: 8px 18px;
+    min-height: 40px;
+    font-size: 15px;
+    font-weight: 600;
     color: var(--fg-2);
     cursor: pointer;
   }
@@ -214,13 +233,16 @@
     color: var(--fg);
   }
   .tabs button[aria-current="page"] {
-    background: var(--card);
-    color: var(--fg);
-    box-shadow: var(--shadow);
+    background: var(--fg);
+    color: var(--bg);
   }
   @media (max-width: 900px) {
+    .topbar {
+      padding-inline: 24px;
+    }
     .layout {
       grid-template-columns: minmax(0, 1fr);
+      padding-inline: 24px;
     }
     .schema {
       order: -1;

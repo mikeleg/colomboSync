@@ -127,7 +127,8 @@
     align-items: center;
     padding: 26px;
     border-radius: var(--r);
-    background: var(--card-2);
+    background: var(--card);
+    box-shadow: var(--shadow);
     font-size: 18px;
     font-weight: 600;
   }
@@ -150,61 +151,67 @@
     }
   }
   .sum {
-    font-size: 18px;
-    margin-bottom: 16px;
+    font-size: 19px;
+    margin-bottom: 20px;
     line-height: 1.5;
+    color: var(--fg-2);
   }
   .sum b {
-    color: var(--accent);
+    color: var(--fg);
   }
+  /* Each group's count is the big number of its tile; the one that deletes is red and glows. */
   .grp {
-    border-radius: var(--r);
-    margin-bottom: 12px;
-    background: var(--card-2);
+    border-radius: 24px;
+    margin-bottom: 14px;
+    background: var(--card);
+    box-shadow: var(--shadow);
   }
   .grp > summary {
     display: flex;
     gap: 12px;
     align-items: center;
     justify-content: space-between;
-    min-height: 58px;
-    padding: 8px 20px;
+    min-height: 84px;
+    padding: 12px 24px;
+    font-size: 17px;
     font-weight: 700;
     cursor: pointer;
-    border-radius: var(--r);
+    border-radius: 24px;
     list-style: none;
   }
   .grp > summary::-webkit-details-marker {
     display: none;
   }
   .grp > summary:hover {
-    background: color-mix(in srgb, var(--fg) 5%, transparent);
+    background: color-mix(in srgb, var(--fg) 4%, transparent);
   }
   .grp > summary b {
-    font-size: 22px;
-    font-weight: 800;
-    padding: 0 12px;
-    border-radius: 999px;
-    background: var(--card);
+    font-size: 56px;
+    line-height: 1;
+    font-weight: 700;
+    letter-spacing: -0.05em;
   }
   .grp.del {
     background: var(--danger-soft);
     color: var(--on-danger-soft);
+    box-shadow:
+      inset 0 0 0 1.5px color-mix(in srgb, var(--danger) 60%, transparent),
+      0 20px 50px -25px var(--danger);
   }
   .grp.del > summary b {
-    background: var(--danger);
-    color: var(--card);
+    color: var(--danger);
   }
   .grp.del > summary:hover {
     background: color-mix(in srgb, var(--on-danger-soft) 8%, transparent);
   }
   .why {
-    padding: 0 20px;
+    padding: 0 24px;
     color: var(--fg-2);
     font-size: 15px;
   }
   .grp.del .why,
-  .grp.del .more {
+  .grp.del .more,
+  .grp.del .files {
     color: var(--on-danger-soft);
   }
   .guard {
@@ -213,36 +220,38 @@
   .ack {
     display: flex;
     gap: 14px;
-    align-items: flex-start;
-    padding: 16px 20px;
-    border-radius: var(--r);
-    background: var(--danger-soft);
+    align-items: center;
+    padding: 18px 24px;
+    border-radius: 20px;
+    background: color-mix(in srgb, var(--danger) 20%, transparent);
     color: var(--on-danger-soft);
-    margin: 14px 0;
+    margin: 16px 0;
     cursor: pointer;
+    font-size: 17px;
     font-weight: 700;
   }
   .ack:hover {
-    background: color-mix(in srgb, var(--on-danger-soft) 8%, var(--danger-soft));
+    background: color-mix(in srgb, var(--danger) 26%, transparent);
   }
   .ack input {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     flex: none;
     accent-color: var(--danger);
     margin: 0;
   }
   .files {
     margin: 10px 0 0;
-    padding: 0 20px 16px 40px;
+    padding: 0 24px 16px 44px;
     font-family: var(--mono);
-    font-size: 14.5px;
+    font-size: 14px;
+    color: color-mix(in srgb, var(--fg) 85%, transparent);
     overflow-wrap: anywhere;
   }
   .more {
-    padding: 0 20px 14px;
+    padding: 0 24px 14px;
     color: var(--fg-2);
-    font-size: 15px;
+    font-size: 14px;
   }
   .empty {
     text-align: center;
@@ -258,18 +267,18 @@
     color: var(--ok);
   }
   .empty h2 {
-    font-size: 24px;
+    font-size: 26px;
     margin: 8px 0 4px;
   }
   .final {
-    margin-top: 24px;
-    padding: 22px;
+    margin-top: 28px;
+    padding: 26px;
     border-radius: var(--r);
-    background: var(--card-2);
+    background: var(--card);
+    box-shadow: var(--shadow);
   }
   .final h2 {
-    font-size: 24px;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
   }
   .back {
     margin-top: 12px;

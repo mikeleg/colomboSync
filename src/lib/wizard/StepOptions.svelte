@@ -47,12 +47,13 @@
     display: grid;
     place-items: center;
     background: var(--ok);
-    color: var(--card);
+    color: var(--on-ok);
     font-weight: 800;
   }
   .adv {
     border-radius: var(--r);
-    background: var(--card-2);
+    background: var(--card);
+    box-shadow: var(--shadow);
   }
   .adv > summary {
     display: flex;

@@ -90,7 +90,8 @@
           </div>
           <button
             type="button"
-            class="btn primary"
+            class="btn"
+            class:primary={!retry}
             aria-label="{retry ? 'Riprova' : 'Controlla e avvia'} {sync.name}"
             onclick={() => onrun(sync)}
           >
@@ -108,44 +109,47 @@
 <style>
   .list {
     display: grid;
-    gap: 14px;
-    margin: 0 0 18px;
+    gap: 20px;
+    margin: 0 0 20px;
     padding: 0;
     list-style: none;
   }
   .card {
     border-radius: var(--r);
-    padding: 20px 22px;
-    background: var(--card-2);
+    padding: 28px;
+    background: var(--card);
+    box-shadow: var(--shadow);
     color: var(--fg);
     cursor: pointer;
     min-width: 0;
-    border: 2px solid transparent;
   }
   .card:hover {
-    background: color-mix(in srgb, var(--fg) 4%, var(--card-2));
+    background: color-mix(in srgb, var(--fg) 3%, var(--card));
   }
   .card.bad {
-    border-color: color-mix(in srgb, var(--danger) 45%, transparent);
-  }
-  .card.bad.sel {
-    border-color: var(--danger);
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--danger) 45%, transparent);
   }
   .card.sel {
-    border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 7%, var(--card-2));
+    box-shadow: var(--shadow-sel);
+  }
+  .card.bad.sel {
+    box-shadow:
+      inset 0 0 0 1.5px var(--danger),
+      0 30px 60px -40px var(--danger);
   }
   .head {
     display: flex;
     flex-wrap: wrap;
     gap: 8px 12px;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: 14px;
   }
   .head h2 {
     min-width: 0;
     overflow-wrap: anywhere;
     flex: 1;
+    font-size: 28px;
+    letter-spacing: -0.025em;
   }
   .route {
     display: flex;
@@ -154,8 +158,11 @@
     gap: 6px 10px;
     color: var(--fg-2);
     overflow-wrap: anywhere;
-    margin-bottom: 16px;
-    font-size: 15.5px;
+    margin-bottom: 18px;
+    font-size: 16px;
+  }
+  .route span {
+    color: var(--fg);
     font-weight: 600;
   }
   .route :global(svg) {
@@ -164,15 +171,15 @@
     color: var(--accent);
     flex: none;
   }
-  .ar {
+  .route .ar {
     color: var(--fg-2);
-    opacity: 0.6;
+    font-weight: 400;
   }
   .note {
-    margin: -6px 0 14px;
-    padding: 10px 14px;
+    margin: -4px 0 18px;
+    padding: 12px 16px;
     border-radius: var(--r-s);
-    background: var(--card);
+    background: var(--card-2);
     color: var(--fg-2);
     font-size: 15px;
     font-weight: 600;
@@ -197,7 +204,7 @@
     gap: 6px 10px;
     align-items: center;
     min-width: 0;
-    font-size: 15.5px;
+    font-size: 15px;
     color: var(--fg-2);
   }
   .foot .btn :global(svg) {
@@ -210,13 +217,13 @@
     justify-content: center;
     gap: 10px;
     width: 100%;
-    min-height: 68px;
-    border: 2px dashed color-mix(in srgb, var(--accent) 50%, transparent);
+    min-height: 76px;
+    border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, transparent);
     border-radius: var(--r);
     background: none;
     color: var(--accent);
-    font-size: 18px;
-    font-weight: 800;
+    font-size: 19px;
+    font-weight: 700;
     cursor: pointer;
   }
   .newcard:disabled {
@@ -224,7 +231,7 @@
     cursor: not-allowed;
   }
   .newcard:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--accent) 7%, transparent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
     border-style: solid;
   }
   .newcard :global(svg) {

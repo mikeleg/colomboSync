@@ -63,24 +63,26 @@
 
 <style>
   h2 {
-    font-size: 15px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     color: var(--fg-2);
-    margin-bottom: 12px;
+    margin-bottom: 14px;
   }
   .node {
-    background: var(--card);
+    background: var(--card-2);
     color: var(--fg);
-    padding: 14px 16px;
-    border-radius: var(--r);
-    box-shadow: var(--shadow);
+    padding: 16px 18px;
+    border-radius: 20px;
   }
   .tag {
     font-weight: 700;
-    font-size: 16px;
-    margin-bottom: 8px;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fg-2);
+    margin-bottom: 10px;
   }
   .nb {
     display: flex;
@@ -88,28 +90,30 @@
     align-items: center;
   }
   .nb > :global(svg) {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     padding: 10px;
     border-radius: 14px;
     flex: none;
     background: var(--accent-soft);
-    color: var(--on-accent-soft);
+    color: var(--accent);
   }
   .nb > div {
     min-width: 0;
   }
   .dl {
-    font-size: 15px;
+    font-size: 14px;
     color: var(--fg-2);
   }
   .pth {
-    font-weight: 600;
+    font-size: 18px;
+    font-weight: 700;
     overflow-wrap: anywhere;
     line-height: 1.3;
   }
   .node.mir {
     background: var(--danger-soft);
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--danger) 60%, transparent);
     color: var(--on-danger-soft);
   }
   .node.mir .dl,
@@ -118,27 +122,27 @@
   }
   .node.mir .nb > :global(svg) {
     background: var(--danger);
-    color: var(--card);
+    color: var(--on-danger);
   }
   .empty-n {
-    background: var(--card-3);
-    box-shadow: none;
-    border: 2px dashed var(--line);
+    background: none;
+    border: 1.5px dashed var(--line);
   }
   .empty-n .pth {
     color: var(--fg-2);
+    font-size: 16px;
     font-weight: 500;
     font-style: italic;
   }
   .empty-n .nb > :global(svg) {
-    background: var(--card-3);
+    background: var(--card-2);
     color: var(--fg-2);
   }
   .mid {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 6px 0;
+    padding: 12px 0;
   }
   .arr {
     display: flex;
@@ -147,15 +151,11 @@
     color: var(--accent);
   }
   .arr svg {
-    width: 44px;
-    height: 64px;
+    width: 34px;
+    height: 58px;
   }
   .mid.mir .arr {
     color: var(--danger);
-  }
-  .mid.mir .chip {
-    background: var(--danger);
-    color: var(--card);
   }
   .flow {
     stroke-dasharray: 7 7;
@@ -176,48 +176,49 @@
     grid-auto-columns: 1fr;
     gap: 8px;
     width: 100%;
-    margin-top: 6px;
+    margin-top: 10px;
   }
   .cnt {
     text-align: center;
-    padding: 10px 4px;
+    padding: 12px 6px;
     border-radius: 16px;
-    background: var(--card);
+    background: var(--card-2);
     color: var(--fg);
     min-width: 0;
   }
   .cnt b {
     display: block;
-    font-size: 26px;
+    font-size: 30px;
     line-height: 1.1;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: -0.03em;
   }
   .cnt span {
-    font-size: 14px;
+    font-size: 13px;
     color: var(--fg-2);
     display: block;
     line-height: 1.2;
   }
   .cnt.d {
-    background: var(--danger-soft);
+    background: color-mix(in srgb, var(--danger) 20%, transparent);
   }
-  .cnt.d b,
+  .cnt.d b {
+    color: var(--danger);
+  }
   .cnt.d span {
     color: var(--on-danger-soft);
+    font-weight: 700;
   }
   .safe {
     display: flex;
     gap: 8px;
     align-items: center;
     justify-content: center;
-    margin-top: 12px;
-    padding: 10px 14px;
-    border-radius: 999px;
-    background: var(--ok-soft);
-    color: var(--on-ok-soft);
-    font-size: 16px;
-    font-weight: 600;
-    text-align: left;
+    margin-top: 14px;
+    color: var(--ok);
+    font-size: 15px;
+    font-weight: 700;
+    text-align: center;
   }
   .safe :global(svg) {
     width: 20px;
@@ -226,7 +227,7 @@
   }
   .cap {
     margin-top: 14px;
-    font-size: 16px;
+    font-size: 15px;
     text-align: center;
     color: var(--fg-2);
   }

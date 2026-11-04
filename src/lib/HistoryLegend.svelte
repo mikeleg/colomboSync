@@ -27,35 +27,44 @@
 {/if}
 
 <style>
+  h2 {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--fg-2);
+    margin-bottom: 14px;
+  }
   .counts {
     display: grid;
     grid-auto-flow: column;
     grid-auto-columns: 1fr;
     gap: 8px;
-    margin: 0 0 14px;
+    margin: 0 0 18px;
   }
   .cnt {
     text-align: center;
-    padding: 12px 4px;
-    background: var(--card);
+    padding: 12px 6px;
+    border-radius: 16px;
+    background: var(--card-2);
     min-width: 0;
   }
   .cnt b {
     display: block;
-    font-size: 28px;
+    font-size: 30px;
     line-height: 1.1;
-    font-weight: 800;
+    font-weight: 700;
+    letter-spacing: -0.03em;
   }
   .cnt span {
     display: block;
-    font-size: 14px;
+    font-size: 13px;
     color: var(--fg-2);
-    font-weight: 600;
     margin-top: 2px;
   }
   .legend {
     display: grid;
-    gap: 10px;
+    gap: 12px;
     font-size: 15px;
     color: var(--fg-2);
   }
@@ -70,10 +79,9 @@
     margin-top: 1px;
   }
   .cap {
-    margin-top: 14px;
-    font-size: 15.5px;
+    margin-top: 16px;
+    font-size: 15px;
     text-align: center;
     color: var(--fg-2);
-    font-weight: 600;
   }
 </style>

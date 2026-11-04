@@ -116,7 +116,8 @@
     margin-top: 18px;
     border-radius: var(--r);
     overflow: hidden;
-    background: var(--card-2);
+    background: var(--card);
+    box-shadow: var(--shadow);
   }
   .pickhead {
     display: flex;
@@ -174,14 +175,14 @@
     padding: 6px 14px;
     border: 0;
     border-radius: var(--r-s);
-    background: var(--card);
+    background: var(--card-2);
     text-align: left;
     cursor: pointer;
     font-size: 17px;
     font-weight: 600;
   }
   .row:hover {
-    background: color-mix(in srgb, var(--accent) 10%, var(--card));
+    background: color-mix(in srgb, var(--accent) 10%, var(--card-2));
   }
   .row :global(svg) {
     width: 26px;
@@ -199,7 +200,8 @@
   .manual {
     margin-top: 16px;
     border-radius: var(--r);
-    background: var(--card-2);
+    background: var(--card);
+    box-shadow: var(--shadow);
     color: var(--fg-2);
   }
   .manual > summary {

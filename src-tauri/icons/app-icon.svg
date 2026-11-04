@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="eclissi" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6ff0d6" />
+      <stop offset="0.55" stop-color="#1fc7a8" />
+      <stop offset="1" stop-color="#0a7d6e" />
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#3be0c1" stop-opacity="0.38" />
+      <stop offset="0.6" stop-color="#3be0c1" stop-opacity="0.1" />
+      <stop offset="1" stop-color="#3be0c1" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <!-- Black rounded square, corner radius ~22% -->
+  <rect width="1024" height="1024" rx="225" fill="#000000" />
+  <!-- Soft teal glow behind the mark -->
+  <circle cx="560" cy="512" r="420" fill="url(#glow)" />
+  <!-- Eclissi mark: the 100-unit logo scaled to ~62% of the icon (x 17..86 = 69 units x 9.2 = 635px = 62%), centred -->
+  <g transform="translate(38.2 52) scale(9.2)">
+    <circle cx="58" cy="50" r="28" fill="url(#eclissi)" />
+    <circle cx="45" cy="50" r="28" fill="#000000" stroke="#ffffff" stroke-opacity="0.18" stroke-width="1.5" />
+  </g>
+</svg>

@@ -66,7 +66,7 @@ jobs:
           - name: windows
             os: windows-latest
           - name: macos
-            os: macos-latest
+            os: macos-14 # macos-latest jobs stayed queued with no runner (2026-11-04)
           - name: linux
             os: ubuntu-22.04 # AppImage needs a glibc at least as old as the oldest target distro
     runs-on: ${{ matrix.os }}

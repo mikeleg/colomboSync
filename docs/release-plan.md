@@ -9,7 +9,7 @@ One tag → one GitHub Release with tested, checksummed binaries for Windows, ma
 | OS | File | Built on | Notes |
 |---|---|---|---|
 | Windows 10/11 x64 | `ColomboSync-<ver>-windows-x64.exe` | `windows-latest` | Portable exe (`tauri build --no-bundle`). Needs WebView2 (preinstalled on 10/11). Unsigned → SmartScreen warning. |
-| macOS 11+ (Intel + Apple Silicon) | `ColomboSync-<ver>-macos-universal.dmg` | `macos-latest` | `--target universal-apple-darwin` so Intel Macs work too (today CI builds arm64 only). Ad-hoc signed, not notarized → right-click → Apri the first time. Uses the system `openrsync`. |
+| macOS 11+ (Intel + Apple Silicon) | `ColomboSync-<ver>-macos-universal.dmg` | `macos-14` (pinned: `macos-latest` jobs stayed queued with no runner) | `--target universal-apple-darwin` so Intel Macs work too (today CI builds arm64 only). Ad-hoc signed, not notarized → right-click → Apri the first time. Uses the system `openrsync`. |
 | Linux x86_64 | `ColomboSync-<ver>-linux-x86_64.AppImage` | `ubuntu-22.04` | Build on 22.04, not `ubuntu-latest` (24.04): an AppImage only runs on distros with a glibc at least as new as the build machine. Needs `rsync` installed (the app says so in Italian if missing). |
 | all | `SHA256SUMS.txt` | release job | Checksums of the three files. |
 

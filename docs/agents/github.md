@@ -20,12 +20,12 @@ Triggers: push to `main` and `slice/**`, every pull request, manual `workflow_di
 | Job | Runner | Steps | Artifact |
 |---|---|---|---|
 | windows | windows-latest | `npm run check`, `npm test`, `npm run build`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, `npm run portable` | `colombo-sync-windows`: `colombo-sync.exe` |
-| macos | macos-latest | same checks, then `npx tauri build --bundles app,dmg` (ad-hoc signed, `bundle.macOS.signingIdentity` = `-`, not notarized) | `colombo-sync-macos`: `ColomboSync-macos.zip` (the `.app`) and the `.dmg` |
+| macos | macos-14 | same checks, then `npx tauri build --bundles app,dmg` (ad-hoc signed, `bundle.macOS.signingIdentity` = `-`, not notarized) | `colombo-sync-macos`: `ColomboSync-macos.zip` (the `.app`) and the `.dmg` |
 | linux | ubuntu-22.04 | same checks (after installing `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`), then `npx tauri build --bundles appimage` | `colombo-sync-linux`: `*.AppImage` |
 
 `npm run build` runs before cargo because `generate_context!` needs `dist/`.
 
-All three CI jobs run on `windows-latest`, `macos-latest` and `ubuntu-22.04` (the AppImage baseline). `ci.yml` is also `workflow_call`-able: the release workflow uses it as its test gate.
+All three CI jobs run on `windows-latest`, `macos-14` (pinned: `macos-latest` jobs stayed queued with no runner) and `ubuntu-22.04` (the AppImage baseline). `ci.yml` is also `workflow_call`-able: the release workflow uses it as its test gate.
 
 ## Releasing (`.github/workflows/release.yml`, spec in `docs/release-plan.md`)
 A tag `v*` runs: version check → CI gate on three OS → builds → **draft** release with `ColomboSync-<ver>-windows-x64.exe`, `-macos-universal.dmg`, `-linux-x86_64.AppImage` and `SHA256SUMS.txt`. Notes = `feat`/`fix` commits since the previous `v*` tag + `.github/release-notes-it.md` (edit that file for the Italian install notes). Pre-release flag is set when the version starts with `0.` or contains `-`.

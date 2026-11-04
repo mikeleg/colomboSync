@@ -185,7 +185,7 @@ Wizard (Da dove → Dove → Opzioni → Anteprima), `SchemaView`, robocopy runn
 - Given Mirror mode on macOS/Linux, then rsync uses `--delete` only in Mirror, files only in B are listed as "Da cancellare in B", and consent + MirrorGuard behave exactly as on Windows (integration test with temp dirs on the CI runners).
 - Given a run on macOS/Linux, then progress, "Ferma la copia" (kill rsync), partial counts, history and logs work as on Windows; data lives in `~/Library/Application Support/ColomboSync` (macOS) or `$XDG_DATA_HOME/ColomboSync` / `~/.local/share/ColomboSync` (Linux).
 - Given an rsync failure (exit 23, 24, 10–12, 3, 13…), then the plain-Italian messages of S6 are shown (mapped by exit code, never by English text).
-- Given a push to main, then GitHub Actions builds and tests on windows-latest, macos-latest and ubuntu-latest and uploads `colombo-sync.exe`, a zipped `.app`/`.dmg` (ad-hoc signed) and an AppImage.
+- Given a push to main, then GitHub Actions builds and tests on windows-latest, macos-14 and ubuntu-latest and uploads `colombo-sync.exe`, a zipped `.app`/`.dmg` (ad-hoc signed) and an AppImage.
 
 ### Implementation notes
 - Riskiest assumption: recent macOS ships `openrsync`, not GNU rsync 3.x. Spike first on the macos runner: `rsync --version`, and whether `rsync -a --dry-run --itemize-changes [--delete] A/ B/` gives `>f+++++++++` (new), `>f.st……` (updated), `*deleting` (extra). Fallback: `--out-format='%i %n'`. Classify by itemize code, never by message text.

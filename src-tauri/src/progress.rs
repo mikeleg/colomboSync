@@ -20,7 +20,8 @@ pub struct Progress {
 pub struct StdoutFollower {
     done: usize,
     line: Vec<u8>,
-    current_file: String,
+    /// Raw bytes of the last file line: decoded only when someone asks for the name.
+    last_file_line: Vec<u8>,
 }
 
 impl StdoutFollower {
@@ -40,16 +41,16 @@ impl StdoutFollower {
     }
 
     /// File name (no folders) of the last file line.
-    pub fn current_file(&self) -> &str {
-        &self.current_file
+    pub fn current_file(&self) -> String {
+        let text = decode_oem(&self.last_file_line);
+        let path = text.rsplit('\t').next().unwrap_or_default().trim_end();
+        path.rsplit(['\\', '/']).next().unwrap_or(path).to_string()
     }
 
     fn end_line(&mut self) {
         if self.line.first() == Some(&b'\t') {
             self.done += 1;
-            let text = decode_oem(&self.line);
-            let path = text.rsplit('\t').next().unwrap_or_default().trim_end();
-            self.current_file = path.rsplit(['\\', '/']).next().unwrap_or(path).to_string();
+            std::mem::swap(&mut self.line, &mut self.last_file_line);
         }
         self.line.clear();
     }
@@ -138,6 +139,7 @@ mod tests {
     fn crlf_line_endings_are_handled() {
         let mut follower = StdoutFollower::default();
         follower.feed(b"\t\t 5\tD:\\Foto\\a.txt\r\n");
-        assert_eq!((follower.done(), follower.current_file()), (1, "a.txt"));
+        assert_eq!(follower.done(), 1);
+        assert_eq!(follower.current_file(), "a.txt");
     }
 }

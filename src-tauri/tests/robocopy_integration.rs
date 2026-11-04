@@ -115,9 +115,9 @@ fn robocopy_failure_is_recorded_as_error() {
 fn run_reports_progress_with_the_current_file() {
     let temp = tempfile::tempdir().unwrap();
     let (a, b) = (temp.path().join("A"), temp.path().join("B"));
-    write(&a.join("è già.txt"), "uno");
     write(&a.join("due.txt"), "due");
-    write(&a.join("sub").join("tre.txt"), "tre");
+    write(&a.join("uno.txt"), "uno");
+    write(&a.join("è già.txt"), "tre");
     write(&b.join("only-in-b.txt"), "extra");
     let storage = Storage::at(temp.path().join("ColomboSync"));
     let counts = runner::preview(path_str(&a), path_str(&b), SyncMode::Copy)
@@ -144,10 +144,9 @@ fn run_reports_progress_with_the_current_file() {
         "extras in B are not counted"
     );
     assert_eq!(last.sync_name, "Copia di A");
-    let seen: Vec<&str> = events.iter().map(|e| e.current_file.as_str()).collect();
-    assert!(
-        seen.contains(&"è già.txt"),
-        "file names are readable: {seen:?}"
+    assert_eq!(
+        last.current_file, "è già.txt",
+        "the final state names the last file, readable"
     );
     assert!(events.windows(2).all(|w| w[0].done <= w[1].done));
 }
@@ -178,10 +177,8 @@ fn cancel_kills_robocopy_and_records_a_cancelled_run() {
         SyncMode::Copy,
         counts,
         &active,
-        |progress| {
-            if progress.done >= 1 {
-                assert!(active.cancel(false));
-            }
+        |_| {
+            active.cancel(false);
         },
     )
     .unwrap();
@@ -204,4 +201,27 @@ fn cancel_kills_robocopy_and_records_a_cancelled_run() {
     let recorded: Run = serde_json::from_str(history.trim()).unwrap();
     assert_eq!(recorded, run);
     assert!(!active.cancel(false), "nothing left to cancel");
+}
+
+#[test]
+fn the_active_run_is_freed_when_the_history_cannot_be_written() {
+    let temp = tempfile::tempdir().unwrap();
+    let (a, b) = (temp.path().join("A"), temp.path().join("B"));
+    write(&a.join("uno.txt"), "uno");
+    let storage = Storage::at(temp.path().join("ColomboSync"));
+    fs::create_dir_all(storage.history_file()).unwrap(); // a folder where the file should be
+    let active = ActiveRun::default();
+
+    let result = runner::run(
+        &storage,
+        path_str(&a),
+        path_str(&b),
+        SyncMode::Copy,
+        Default::default(),
+        &active,
+        |_| {},
+    );
+
+    assert!(result.is_err());
+    assert!(!active.is_running());
 }

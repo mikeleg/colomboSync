@@ -47,19 +47,23 @@ pub struct ActiveRun {
 }
 
 impl ActiveRun {
+    /// A Run is in flight: from robocopy's start until its history line is written.
     pub fn is_running(&self) -> bool {
         self.slot().is_some()
     }
 
     /// Kills robocopy; the Run then ends as `Cancelled`. `false` when nothing is running.
-    /// `exit_when_done` tells the caller of `run` that the app is closing: the history line is
-    /// written first.
+    /// `exit_when_done` (the app is closing) is remembered either way, so the caller of `run` can
+    /// exit after the history line is written; when `false` is returned there is no run left to
+    /// wait for.
     pub fn cancel(&self, exit_when_done: bool) -> bool {
         let mut slot = self.slot();
+        if exit_when_done {
+            self.exit_when_done.store(true, Ordering::SeqCst);
+        }
         let Some(child) = slot.as_mut() else {
             return false;
         };
-        self.exit_when_done.store(exit_when_done, Ordering::SeqCst);
         self.cancelled.store(true, Ordering::SeqCst);
         let _ = child.kill();
         true
@@ -95,7 +99,6 @@ impl ActiveRun {
                     .as_mut()
                     .ok_or_else(|| io::Error::other("no robocopy process"))?;
                 if let Some(status) = child.try_wait()? {
-                    *slot = None;
                     return Ok(status);
                 }
             }
@@ -104,10 +107,25 @@ impl ActiveRun {
     }
 }
 
+/// Frees the `ActiveRun` slot when `run` ends on any path, and makes sure robocopy is gone.
+struct SlotGuard<'a>(&'a ActiveRun);
+
+impl Drop for SlotGuard<'_> {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.0.slot().take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+/// Progress is reported at most this often (robocopy can print thousands of lines a second).
+const PROGRESS_EVERY: Duration = Duration::from_millis(100);
+
 /// Real run. Always returns the recorded `Run` (outcome `Ok`, `Error` or `Cancelled`); `Err` only
 /// when robocopy cannot be started or the history cannot be written. `counts` come from the
-/// preview the user just confirmed and give the total of `on_progress`, which is called for
-/// every chunk robocopy writes to stdout.
+/// preview the user just confirmed and give the total of `on_progress`, which is called at most
+/// every `PROGRESS_EVERY` while robocopy writes, and once more when its output ends.
 pub fn run(
     storage: &Storage,
     source: &str,
@@ -129,20 +147,28 @@ pub fn run(
         destination,
         &log.to_string_lossy(),
     ))?;
+    let _slot = SlotGuard(active);
     let total = counts.new + counts.updated + counts.deleted;
     let mut follower = StdoutFollower::default();
+    let progress = |follower: &StdoutFollower| Progress {
+        sync_name: sync_name.clone(),
+        done: follower.done().min(total),
+        total,
+        elapsed_ms: clock.elapsed().as_millis() as u64,
+        current_file: follower.current_file(),
+    };
+    let mut last_report: Option<Instant> = None;
     let mut chunk = [0u8; 8192];
     // Ends at EOF: robocopy exited or was killed.
     while let Ok(n @ 1..) = stdout.read(&mut chunk) {
         follower.feed(&chunk[..n]);
-        on_progress(&Progress {
-            sync_name: sync_name.clone(),
-            done: follower.done().min(total),
-            total,
-            elapsed_ms: clock.elapsed().as_millis() as u64,
-            current_file: follower.current_file().to_string(),
-        });
+        if last_report.is_none_or(|t| t.elapsed() >= PROGRESS_EVERY) {
+            last_report = Some(Instant::now());
+            on_progress(&progress(&follower));
+        }
     }
+    // The state the throttle may have skipped, so the UI ends on the real count.
+    on_progress(&progress(&follower));
     let status = active.wait().map_err(|e| e.to_string())?;
     let duration_ms = clock.elapsed().as_millis() as u64;
 
@@ -221,6 +247,15 @@ mod tests {
         assert_eq!(default_sync_name(r"D:\Foto\2024\"), "Copia di 2024");
         assert_eq!(default_sync_name(r"\\NAS\Condivisa\Foto"), "Copia di Foto");
         assert_eq!(default_sync_name(r"D:\"), "Copia di disco D:");
+    }
+
+    #[test]
+    fn exit_request_is_remembered_even_when_no_run_is_active() {
+        let active = ActiveRun::default();
+        assert!(!active.cancel(false));
+        assert!(!active.exit_when_done());
+        assert!(!active.cancel(true), "nothing to stop");
+        assert!(active.exit_when_done());
     }
 
     #[test]

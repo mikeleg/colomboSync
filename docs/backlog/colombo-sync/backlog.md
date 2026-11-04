@@ -47,6 +47,7 @@ Wizard (Da dove → Dove → Opzioni → Anteprima), `SchemaView`, robocopy runn
 ---
 
 ## S1b · Bring the app to the new prototype look and wizard details
+**Status:** done (2026-11-04, merged on main; manual flow on the exe not yet verified)
 **Why:** the user approved an updated prototype (2026-11-04) with a new look and a click-first folder picker; the real-user checkpoint after this slice must test the real look, not the old one.
 **Size:** S/M
 **Blocked by:** S1
@@ -70,6 +71,7 @@ Wizard (Da dove → Dove → Opzioni → Anteprima), `SchemaView`, robocopy runn
 ---
 
 ## S2 · Turn on mirror from advanced options, with warning and explicit consent
+**Status:** done (2026-11-04, merged on main; manual flow on the exe not yet verified)
 **Why:** the riskiest UX – deleting files on B must be impossible to do by accident.
 **Size:** M
 **Blocked by:** S1b
@@ -94,6 +96,7 @@ Wizard (Da dove → Dove → Opzioni → Anteprima), `SchemaView`, robocopy runn
 ---
 
 ## S3 · Name and save syncs, see them on the home screen and run one again
+**Status:** done (2026-11-04, merged on main; manual flow on the exe not yet verified)
 **Why:** the repeat job – after the first time, the user just clicks "Controlla e avvia".
 **Size:** M
 **Blocked by:** S1b
@@ -112,6 +115,7 @@ Wizard (Da dove → Dove → Opzioni → Anteprima), `SchemaView`, robocopy runn
 ---
 
 ## S4 · Browse the history of runs and open a run's log
+**Status:** done (2026-11-04, merged on main; manual flow on the exe not yet verified)
 **Why:** the user explicitly asked for a history; it is also how they check that last night's copy happened.
 **Size:** S
 **Blocked by:** S1 (can run in parallel to S3)
@@ -129,6 +133,7 @@ Wizard (Da dove → Dove → Opzioni → Anteprima), `SchemaView`, robocopy runn
 ---
 
 ## S5 · Follow the copy live on the schema and stop it safely
+**Status:** done (2026-11-04, merged on main; manual flow on the exe not yet verified)
 **Why:** a long copy with no feedback looks like a crash to a non-technical user.
 **Size:** M
 **Blocked by:** S1
@@ -149,6 +154,7 @@ Wizard (Da dove → Dove → Opzioni → Anteprima), `SchemaView`, robocopy runn
 ---
 
 ## S6 · Explain problems in plain Italian
+**Status:** done (2026-11-04, merged on main; manual flow on the exe not yet verified)
 **Why:** "ERRORE 53" means nothing to the user; every failure must say what happened and what to do.
 **Size:** S
 **Blocked by:** S1, S3, S4 (S3: shares the home card and Wizard/StepPreview files, run after it; S4: "Apri il registro" opens its log viewer)

@@ -96,7 +96,9 @@ pub fn list(storage: &Storage) -> io::Result<Vec<SyncSummary>> {
     let mut last_runs: HashMap<u64, LastRun> = HashMap::new();
     // Newest first: the first run seen for a sync is its latest.
     for run in history::read(&storage.history_file()).unwrap_or_default() {
-        if let Some(id) = run.sync_id {
+        if let Some(id) = run.sync_id
+            && !last_runs.contains_key(&id)
+        {
             let note = match run.outcome {
                 Outcome::Ok => None,
                 Outcome::Cancelled => Some(error_messages::STOPPED_NOTE.to_string()),
@@ -105,11 +107,14 @@ pub fn list(storage: &Storage) -> io::Result<Vec<SyncSummary>> {
                         .unwrap_or_else(|| error_messages::GENERIC_NOTE.to_string()),
                 ),
             };
-            last_runs.entry(id).or_insert(LastRun {
-                started_at: run.started_at,
-                outcome: run.outcome,
-                note,
-            });
+            last_runs.insert(
+                id,
+                LastRun {
+                    started_at: run.started_at,
+                    outcome: run.outcome,
+                    note,
+                },
+            );
         }
     }
     Ok(load(&storage.syncs_file())?

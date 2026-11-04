@@ -1,6 +1,6 @@
 //! `history.jsonl`: append-only, one `Run` per line.
 
-use crate::robocopy::SyncMode;
+use crate::robocopy::{SyncMode, decode_unilog};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
@@ -45,6 +45,22 @@ pub fn append(file: &Path, run: &Run) -> io::Result<()> {
         .append(true)
         .open(file)?
         .write_all(line.as_bytes())
+}
+
+/// Runs newest first. Lines that do not parse are skipped; a missing file is an empty history.
+pub fn read(file: &Path) -> Vec<Run> {
+    let text = fs::read_to_string(file).unwrap_or_default();
+    let mut runs: Vec<Run> = text
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .collect();
+    runs.reverse();
+    runs
+}
+
+/// A run's robocopy log (`/UNILOG`, UTF-16LE with BOM) as text.
+pub fn read_log(file: &Path) -> io::Result<String> {
+    fs::read(file).map(|bytes| decode_unilog(&bytes))
 }
 
 #[cfg(test)]
@@ -93,5 +109,54 @@ mod tests {
             json,
             r#"{"syncName":"n","source":"D:\\Foto","destination":"E:\\Backup","mode":"Copy","new":12,"updated":1,"deleted":0,"durationMs":61000,"outcome":"Cancelled","startedAt":"2026-11-02T21:30:00+01:00","logPath":"C:\\L\\logs\\x.log"}"#
         );
+    }
+
+    #[test]
+    fn reads_newest_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("history.jsonl");
+        append(&file, &run("prima", Outcome::Ok)).unwrap();
+        append(&file, &run("seconda", Outcome::Error)).unwrap();
+        append(&file, &run("terza", Outcome::Cancelled)).unwrap();
+
+        let names: Vec<String> = read(&file).into_iter().map(|r| r.sync_name).collect();
+
+        assert_eq!(names, ["terza", "seconda", "prima"]);
+    }
+
+    #[test]
+    fn skips_malformed_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("history.jsonl");
+        let good = |name: &str| serde_json::to_string(&run(name, Outcome::Ok)).unwrap();
+        let text = format!(
+            "{}\nnot json\n{{\"syncName\":\"incompleta\"}}\n\n{}\n",
+            good("buona"),
+            good("ultima")
+        );
+        fs::write(&file, text).unwrap();
+
+        let names: Vec<String> = read(&file).into_iter().map(|r| r.sync_name).collect();
+
+        assert_eq!(names, ["ultima", "buona"]);
+    }
+
+    #[test]
+    fn missing_history_file_is_an_empty_list() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(read(&dir.path().join("history.jsonl")).is_empty());
+    }
+
+    #[test]
+    fn read_log_decodes_utf16le_and_fails_when_deleted() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("x.log");
+        let mut bytes = vec![0xFF, 0xFE];
+        bytes.extend("è già\r\n".encode_utf16().flat_map(u16::to_le_bytes));
+        fs::write(&file, bytes).unwrap();
+
+        assert_eq!(read_log(&file).unwrap(), "è già\r\n");
+        fs::remove_file(&file).unwrap();
+        assert!(read_log(&file).is_err());
     }
 }

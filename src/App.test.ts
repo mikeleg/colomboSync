@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
@@ -189,4 +190,17 @@ test("the Storico tab is there for S4 to fill", async () => {
   await click("Storico");
 
   expect(screen.getByRole("heading", { name: "Storico" })).toBeTruthy();
+});
+
+test("closing the window during a run asks to stop the copy", async () => {
+  invokeMock.mockResolvedValueOnce(preview(2, 1)).mockReturnValueOnce(new Promise(() => {}));
+  render(App);
+  await goToPreview();
+  await click(await screen.findByRole("button", { name: "Sì, avvia" }));
+
+  const closeRequested = vi.mocked(listen).mock.calls.find(([name]) => name === "close-requested")![1];
+  closeRequested({ event: "close-requested", id: 1, payload: null });
+
+  expect(await screen.findByRole("alertdialog")).toBeTruthy();
+  expect(screen.getByText("Vuoi fermare la copia? I file già copiati restano in B.")).toBeTruthy();
 });

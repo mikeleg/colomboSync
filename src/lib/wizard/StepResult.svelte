@@ -7,7 +7,10 @@
 
   const ok = $derived(run?.outcome === "Ok");
   const cancelled = $derived(run?.outcome === "Cancelled");
-  const copied = $derived(run?.partial ?? 0);
+  // Shown once: next to the error message, or as the whole body of a stopped run.
+  const partialLine = $derived(
+    run?.partial === undefined ? "" : run.partial === 0 ? "Nessun file è stato copiato." : partialText(run.partial),
+  );
   const title = $derived(
     run && ok
       ? `Fatto: ${formatNumber(run.new)} ${run.new === 1 ? "file copiato" : "file copiati"}, ${formatNumber(run.updated)} ${run.updated === 1 ? "aggiornato" : "aggiornati"} in ${formatDuration(run.durationMs)}`
@@ -25,12 +28,10 @@
     {#if ok}
       <p>B ora è aggiornato.</p>
     {:else if cancelled}
-      <p>{copied === 1 ? "Il file già copiato resta" : `I ${formatNumber(copied)} file già copiati restano`} in B.</p>
+      <p>{partialLine}{run?.partial ? ". I file già copiati restano in B." : ""}</p>
     {:else}
       <p>{run?.error ?? failure}</p>
-    {/if}
-    {#if run?.partial !== undefined}
-      <p>{partialText(run.partial)}</p>
+      {#if partialLine}<p>{partialLine}</p>{/if}
     {/if}
   </div>
 </div>

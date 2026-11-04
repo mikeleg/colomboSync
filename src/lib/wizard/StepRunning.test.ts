@@ -1,13 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
-import { cancelRun, onCloseRequested, onRunProgress } from "../api";
+import { cancelRun, onRunProgress } from "../api";
 import type { RunProgress } from "../types";
 import StepRunning from "./StepRunning.svelte";
 
 vi.mock("../api", () => ({
   cancelRun: vi.fn(() => Promise.resolve(true)),
   onRunProgress: vi.fn(() => Promise.resolve(() => {})),
-  onCloseRequested: vi.fn(() => Promise.resolve(() => {})),
 }));
 
 const progressAt = (done: number, over: Partial<RunProgress> = {}): RunProgress => ({
@@ -24,7 +23,6 @@ const emit = async (progress: RunProgress) => {
   handler(progress);
   await Promise.resolve();
 };
-const closeRequested = () => vi.mocked(onCloseRequested).mock.calls.at(-1)![0]();
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -98,9 +96,9 @@ test("Sì, ferma stops the copy", async () => {
 });
 
 test("closing the window during the run asks the same question and exits after Sì, ferma", async () => {
-  render(StepRunning, { total: 151 });
+  const { rerender } = render(StepRunning, { total: 151, closeRequests: 0 });
 
-  await closeRequested();
+  await rerender({ total: 151, closeRequests: 1 });
 
   expect(await screen.findByRole("alertdialog")).toBeTruthy();
   expect(screen.getByText("Vuoi fermare la copia? I file già copiati restano in B.")).toBeTruthy();
@@ -108,13 +106,38 @@ test("closing the window during the run asks the same question and exits after S
   expect(cancelRun).toHaveBeenCalledWith(true);
 });
 
+test("an X click before the view was ready still shows the question", async () => {
+  render(StepRunning, { total: 151, closeRequests: 1 });
+
+  expect(await screen.findByRole("alertdialog")).toBeTruthy();
+});
+
 test("closing the window then No, continua keeps the copy running", async () => {
-  render(StepRunning, { total: 151 });
-  await closeRequested();
+  render(StepRunning, { total: 151, closeRequests: 1 });
   await fireEvent.click(await screen.findByRole("button", { name: "No, continua" }));
 
   await fireEvent.click(screen.getByRole("button", { name: "Ferma la copia" }));
   await fireEvent.click(screen.getByRole("button", { name: "Sì, ferma" }));
 
   expect(cancelRun).toHaveBeenCalledWith(false);
+});
+
+test("if there is nothing left to stop the buttons come back", async () => {
+  vi.mocked(cancelRun).mockResolvedValueOnce(false);
+  render(StepRunning, { total: 151 });
+  await fireEvent.click(screen.getByRole("button", { name: "Ferma la copia" }));
+
+  await fireEvent.click(screen.getByRole("button", { name: "Sì, ferma" }));
+
+  expect(await screen.findByRole("button", { name: "Ferma la copia" })).toBeTruthy();
+});
+
+test("if stopping fails the buttons come back", async () => {
+  vi.mocked(cancelRun).mockRejectedValueOnce("boom");
+  render(StepRunning, { total: 151 });
+  await fireEvent.click(screen.getByRole("button", { name: "Ferma la copia" }));
+
+  await fireEvent.click(screen.getByRole("button", { name: "Sì, ferma" }));
+
+  expect(await screen.findByRole("button", { name: "Ferma la copia" })).toBeTruthy();
 });

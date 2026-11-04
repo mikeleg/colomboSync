@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import Icon from "../Icon.svelte";
-  import { previewSync, runSync } from "../api";
+  import { onCloseRequested, previewSync, runSync } from "../api";
   import { formatNumber } from "../format";
   import type { SchemaModel } from "../schema";
   import type { Counts, Preview, Run, SyncMode } from "../types";
@@ -33,6 +34,15 @@
   let run = $state<Run | null>(null);
   let failure = $state("");
   let scanId = 0;
+  // Listen from the start: an X click right after "Sì, avvia" must not slip by the running view.
+  let closeRequests = $state(0);
+
+  onMount(() => {
+    const unlisten = onCloseRequested(() => closeRequests++);
+    return () => {
+      unlisten.then((stop) => stop());
+    };
+  });
 
   const stepId = $derived(STEPS[step].id);
 
@@ -113,6 +123,7 @@
 
   async function start() {
     if (!previewCounts) return;
+    closeRequests = 0;
     phase = "running";
     try {
       run = await runSync(source.trim(), destination.trim(), mode, previewCounts);
@@ -124,7 +135,7 @@
 </script>
 
 {#if phase === "running"}
-  <StepRunning total={runTotal} />
+  <StepRunning total={runTotal} {closeRequests} />
 {:else if phase === "result"}
   <StepResult {run} {failure} onhome={onexit} />
 {:else}

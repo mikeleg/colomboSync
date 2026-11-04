@@ -1,12 +1,16 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Icon from "../Icon.svelte";
-  import { cancelRun, onCloseRequested, onRunProgress } from "../api";
+  import { cancelRun, onRunProgress } from "../api";
   import { etaText, formatNumber } from "../format";
   import type { RunProgress } from "../types";
 
-  /** `total` comes from the preview, so "0 di N file" shows before the first event. */
-  let { total }: { total: number } = $props();
+  /**
+   * `total` comes from the preview, so "0 di N file" shows before the first event.
+   * `closeRequests` counts the clicks on the window's X during the run; the Wizard listens from
+   * its mount on, so none is lost while this view is still starting.
+   */
+  let { total, closeRequests = 0 }: { total: number; closeRequests?: number } = $props();
 
   let progress = $state<RunProgress | null>(null);
   let confirming = $state(false);
@@ -26,15 +30,18 @@
     }
   });
 
+  $effect(() => {
+    if (closeRequests > 0) {
+      confirming = true;
+      closingWindow = true;
+    }
+  });
+
   onMount(() => {
-    const unlisten = [
-      onRunProgress((p) => (progress = p)),
-      onCloseRequested(() => {
-        confirming = true;
-        closingWindow = true;
-      }),
-    ];
-    return () => unlisten.forEach((u) => u.then((stop) => stop()));
+    const unlisten = onRunProgress((p) => (progress = p));
+    return () => {
+      unlisten.then((stop) => stop());
+    };
   });
 
   function keepCopying() {
@@ -42,9 +49,19 @@
     closingWindow = false;
   }
 
-  function stop() {
+  async function stop() {
     stopping = true;
-    cancelRun(closingWindow);
+    let stopped = false;
+    try {
+      stopped = await cancelRun(closingWindow);
+    } catch {
+      // Stopping failed: the copy goes on, so the buttons come back.
+    }
+    // Nothing left to stop means the run just ended: its result replaces this view.
+    if (!stopped) {
+      stopping = false;
+      keepCopying();
+    }
   }
 
   const focus = (node: HTMLElement) => node.focus();

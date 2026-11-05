@@ -1,7 +1,7 @@
 //! Thin `#[tauri::command]` wrappers for the Storico screen.
 
 use super::summary::{self, HistorySummary};
-use super::{Run, read, read_log};
+use super::{Run, RunLog, read, read_log};
 use crate::shared::blocking::blocking;
 use crate::shared::storage::Storage;
 use crate::shared::sync_store;
@@ -29,9 +29,10 @@ pub async fn list_runs() -> Result<RunList, String> {
     .await
 }
 
-/// The robocopy log of one run; fails when the file is gone or not inside the logs folder.
+/// The engine log of one run with its error lines; fails when the file is gone or not inside the
+/// logs folder.
 #[tauri::command]
-pub async fn read_run_log(path: String) -> Result<String, String> {
+pub async fn read_run_log(path: String) -> Result<RunLog, String> {
     let storage = Storage::from_env()?;
     blocking(move || read_log(&storage.logs_dir(), Path::new(&path)).map_err(|e| e.to_string()))
         .await

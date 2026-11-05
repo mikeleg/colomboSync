@@ -69,6 +69,13 @@ pub fn find_cause(_exit_code: i32, log: &str, source: &str, destination: &str) -
     error_messages::find_cause(log, source, destination)
 }
 
+/// Is this log line an error of robocopy? It holds a Windows error code (`ERROR 5 (0x00000005)`);
+/// the label before it is localized and never read. A file line (it starts with a tab) is a file
+/// whatever its name says.
+pub fn is_error_line(line: &str) -> bool {
+    !line.starts_with('\t') && error_messages::has_error_code(line)
+}
+
 /// A run's log as text: the `/UNILOG` of a robocopy run, UTF-16LE with BOM (never UTF-8).
 pub fn decode_log(bytes: &[u8]) -> String {
     let bytes = bytes.strip_prefix(&[0xFF, 0xFE]).unwrap_or(bytes);
@@ -215,6 +222,29 @@ mod process {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_error_line_is_the_one_with_a_windows_error_code_in_any_language() {
+        for label in ["ERROR", "ERRORE"] {
+            // 32 is not one of the codes that get a message of their own: it is an error all the same.
+            for code in [5, 32] {
+                let line = format!(
+                    "2026/11/04 11:58:26 {label} {code} (0x{code:08X}) Copying File E:\\Backup\\a.jpg\r"
+                );
+                assert!(is_error_line(&line), "{line}");
+            }
+        }
+        for line in [
+            "",
+            "Access is denied.",
+            "\t  \t\t 5\tD:\\Foto\\a.jpg\r",
+            // A file whose name looks like an error code is still a file line.
+            "\t\t 5\tD:\\Foto\\ERROR 5 (0x5)",
+            "2026/11/04 11:58:26 Waiting 1 seconds... Retrying...",
+        ] {
+            assert!(!is_error_line(line), "{line:?}");
+        }
+    }
 
     #[test]
     fn exit_codes_0_to_7_are_success() {

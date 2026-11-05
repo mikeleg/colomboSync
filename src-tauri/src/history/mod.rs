@@ -6,6 +6,7 @@ pub mod summary;
 use crate::engine;
 use crate::shared::domain::Run;
 use crate::shared::storage::read_if_present;
+use serde::Serialize;
 use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -55,10 +56,23 @@ pub fn latest_per_sync(runs: &[Run]) -> Vec<(u64, &Run)> {
 const MAX_LOG_BYTES: u64 = 2 * 1024 * 1024;
 const TRUNCATED_NOTICE: &str = "… (mostro solo l’ultima parte del registro)\n";
 
+/// What the log window shows of a run's log: the text, and which of its lines (from 0, as
+/// `str::lines` splits it) are engine errors, for the UI to highlight.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunLog {
+    pub text: String,
+    pub error_lines: Vec<usize>,
+}
+
 /// A run's log as text (robocopy's `/UNILOG`, UTF-16LE with BOM, or rsync's UTF-8 output), only
 /// if the file is inside `logs_dir`. Long logs are cut to their last part.
-pub fn read_log(logs_dir: &Path, file: &Path) -> io::Result<String> {
-    read_log_capped(logs_dir, file, MAX_LOG_BYTES)
+pub fn read_log(logs_dir: &Path, file: &Path) -> io::Result<RunLog> {
+    let text = read_log_capped(logs_dir, file, MAX_LOG_BYTES)?;
+    Ok(RunLog {
+        error_lines: engine::error_lines(&text),
+        text,
+    })
 }
 
 fn read_log_capped(logs_dir: &Path, file: &Path, max_bytes: u64) -> io::Result<String> {
@@ -218,9 +232,35 @@ mod tests {
         let file = dir.path().join("x.log");
         fs::write(&file, unilog("è già\r\n")).unwrap();
 
-        assert_eq!(read_log(dir.path(), &file).unwrap(), "è già\r\n");
+        assert_eq!(read_log(dir.path(), &file).unwrap().text, "è già\r\n");
         fs::remove_file(&file).unwrap();
         assert!(read_log(dir.path(), &file).is_err());
+    }
+
+    #[test]
+    fn read_log_says_which_lines_are_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("x.log");
+        let (error, fine) = if cfg!(windows) {
+            (
+                "2026/11/04 11:58:26 ERROR 5 (0x00000005) Copying File E:\\a.jpg",
+                "\t\t 5\tD:\\Foto\\a.jpg",
+            )
+        } else {
+            (
+                "rsync: [sender] send_files failed to open \"/A/a.jpg\": Permission denied (13)",
+                ">f+++++++++ a.jpg",
+            )
+        };
+        fs::write(&file, unilog(&format!("{fine}\r\n{error}\r\n{fine}\r\n"))).unwrap();
+
+        let log = read_log(dir.path(), &file).unwrap();
+
+        assert_eq!(log.error_lines, [1]);
+        assert_eq!(
+            serde_json::to_value(&log).unwrap(),
+            serde_json::json!({ "text": log.text, "errorLines": [1] })
+        );
     }
 
     #[test]
@@ -232,7 +272,7 @@ mod tests {
         fs::write(&outside, unilog("segreto")).unwrap();
         fs::write(logs.join("ok.log"), unilog("ok")).unwrap();
 
-        assert_eq!(read_log(&logs, &logs.join("ok.log")).unwrap(), "ok");
+        assert_eq!(read_log(&logs, &logs.join("ok.log")).unwrap().text, "ok");
         assert!(read_log(&logs, &outside).is_err());
         assert!(read_log(&logs, &logs.join("..").join("secret.txt")).is_err());
     }

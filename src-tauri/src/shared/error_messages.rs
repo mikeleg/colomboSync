@@ -241,14 +241,28 @@ fn capitalized(text: &str) -> String {
 /// the number (`ERROR`, `ERRORE`…) is ignored.
 fn first_mapped_error(log: &str) -> Option<(u32, &str)> {
     log.lines().find_map(|line| {
-        let tokens: Vec<&str> = line.split_whitespace().collect();
-        tokens.windows(2).find_map(|pair| {
-            let hex = pair[1].strip_prefix("(0x")?.strip_suffix(')')?;
-            let code: u32 = pair[0].parse().ok()?;
-            let is_hex = !hex.is_empty() && hex.chars().all(|c| c.is_ascii_hexdigit());
-            (is_hex && MAPPED_CODES.contains(&code)).then_some((code, line))
-        })
+        let code = error_codes(line).find(|code| MAPPED_CODES.contains(code))?;
+        Some((code, line))
     })
+}
+
+/// Does this log line hold a Windows error code (`<n> (0x<hex>)`), mapped or not?
+pub fn has_error_code(line: &str) -> bool {
+    error_codes(line).next().is_some()
+}
+
+/// The `n` of every `<n> (0x<hex>)` in a log line.
+fn error_codes(line: &str) -> impl Iterator<Item = u32> {
+    let tokens: Vec<&str> = line.split_whitespace().collect();
+    tokens
+        .windows(2)
+        .filter_map(|pair| {
+            let hex = pair[1].strip_prefix("(0x")?.strip_suffix(')')?;
+            let is_hex = !hex.is_empty() && hex.chars().all(|c| c.is_ascii_hexdigit());
+            is_hex.then(|| pair[0].parse().ok()).flatten()
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
 }
 
 /// The folder an error line talks about: the one whose path the line holds. A line that

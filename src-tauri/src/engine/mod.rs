@@ -32,15 +32,15 @@ pub fn missing_engine(error: &std::io::Error) -> Option<Cause> {
 use robocopy::partial_count;
 #[cfg(windows)]
 pub use robocopy::{
-    decode_log, dry_run, exit_code, file_name, find_cause, is_file_line, is_success, parse_preview,
-    spawn,
+    decode_log, dry_run, exit_code, file_name, find_cause, is_error_line, is_file_line, is_success,
+    parse_preview, spawn,
 };
 #[cfg(unix)]
 use rsync::partial_count;
 #[cfg(unix)]
 pub use rsync::{
-    decode_log, dry_run, exit_code, file_name, find_cause, is_file_line, is_success, parse_preview,
-    spawn,
+    decode_log, dry_run, exit_code, file_name, find_cause, is_error_line, is_file_line, is_success,
+    parse_preview, spawn,
 };
 
 /// How a Run ended.
@@ -95,6 +95,14 @@ fn judge(
     }
 }
 
+/// Which lines of `log` (counted from 0, as `str::lines` splits them) are errors of the engine.
+pub fn error_lines(log: &str) -> Vec<usize> {
+    log.lines()
+        .enumerate()
+        .filter_map(|(number, line)| is_error_line(line).then_some(number))
+        .collect()
+}
+
 /// A run's log file as text; empty when it cannot be read.
 pub fn read_log(file: &Path) -> String {
     fs::read(file)
@@ -107,6 +115,26 @@ mod tests {
     use super::*;
     use crate::shared::error_messages::{self, Moment};
     use std::io;
+
+    #[test]
+    fn the_error_lines_of_a_log_are_numbered_from_zero() {
+        let (error, file) = if cfg!(windows) {
+            (
+                "2026/11/04 11:58:26 ERROR 5 (0x00000005) Copying File E:\\a.jpg",
+                "\t\t 5\tD:\\Foto\\a.jpg",
+            )
+        } else {
+            (
+                "rsync: [sender] send_files failed to open \"/A/a.jpg\": Permission denied (13)",
+                ">f+++++++++ a.jpg",
+            )
+        };
+        let log = format!("{file}\r\n{error}\r\n{file}\r\n\r\n{error}");
+
+        assert_eq!(error_lines(&log), [1, 4]);
+        assert_eq!(error_lines(file), Vec::<usize>::new());
+        assert_eq!(error_lines(""), Vec::<usize>::new());
+    }
 
     #[test]
     fn a_run_that_ends_well_is_ok_and_its_log_is_never_read() {

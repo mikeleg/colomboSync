@@ -164,6 +164,26 @@ pub fn partial_count(
     }
 }
 
+/// Is this log line an error or warning of rsync? Both write them under the program's own name,
+/// which is not translated: GNU as `rsync: …`, `rsync error: …` and `rsync warning: …`, openrsync
+/// as `rsync(<pid>): error: …` and `rsync(<pid>): warning: …`. The text after it is never read.
+/// Itemize lines start with their code, so a file name can not pass for one.
+pub fn is_error_line(line: &str) -> bool {
+    let Some(rest) = line.strip_prefix("rsync") else {
+        return false;
+    };
+    if rest.starts_with(':') || rest.starts_with(" error:") || rest.starts_with(" warning:") {
+        return true;
+    }
+    rest.strip_prefix('(')
+        .and_then(|rest| rest.split_once("): "))
+        .is_some_and(|(pid, message)| {
+            !pid.is_empty()
+                && pid.bytes().all(|b| b.is_ascii_digit())
+                && (message.starts_with("error") || message.starts_with("warning"))
+        })
+}
+
 /// A run's log is plain UTF-8 (rsync output as the app captured it).
 pub fn decode_log(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
@@ -594,6 +614,39 @@ sending incremental file list\n";
         );
         assert_eq!(partial_count(MACOS, "", "", 1, true), 4);
         assert_eq!(partial_count("", "", "", 1, true), 0);
+    }
+
+    #[test]
+    fn an_error_line_is_one_rsync_wrote_under_its_own_name() {
+        for line in [
+            // GNU rsync 3.x.
+            "rsync: [sender] send_files failed to open \"/A/x.txt\": Permission denied (13)\r",
+            "rsync: [sender] change_dir \"/A\" failed: No such file or directory (2)",
+            "rsync error: some files/attrs were not transferred (see previous errors) (code 23) at main.c(1338) [sender=3.4.1]",
+            "rsync warning: some files vanished before they could be transferred (code 24) at main.c(1338) [sender=3.4.1]",
+            // openrsync: `<program>(<pid>): error|warning: …`.
+            "rsync(4242): error: unexpected end of file\r",
+            "rsync(4242): warning: open: Permission denied",
+        ] {
+            assert!(is_error_line(line), "{line}");
+        }
+        for line in [
+            "",
+            "sending incremental file list",
+            "skipping non-regular file \"link.txt\"",
+            "created directory /B",
+            ">f+++++++++ new.txt",
+            "*deleting   old.txt",
+            // Names come after the itemize code, whatever they say.
+            ">f+++++++++ rsync: [sender] a.txt",
+            "*deleting   rsync error: b.txt",
+            // Only verbose output is `rsync(<pid>): <message>`.
+            "rsync(4242): files to consider: 3",
+            "rsyncing: not ours",
+            "rsync",
+        ] {
+            assert!(!is_error_line(line), "{line:?}");
+        }
     }
 
     #[test]

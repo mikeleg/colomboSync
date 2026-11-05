@@ -4,6 +4,7 @@
 mod common;
 
 use colombo_sync_lib::engine::preview_parser::Counts;
+use colombo_sync_lib::history;
 use colombo_sync_lib::run::runner::{self, ActiveRun};
 use colombo_sync_lib::shared::domain::{Cause, Folder, Outcome, Run, SyncMode};
 use colombo_sync_lib::shared::error_messages;
@@ -208,6 +209,9 @@ fn an_rsync_failure_is_recorded_as_error() {
         format!("Non completato: non trovo la cartella A ({a}).")
     );
     assert_eq!(run.partial, Some(0), "an Error run keeps a partial count");
+    // What rsync says under its own name (`rsync: …`, `rsync(<pid>): error: …`) is marked as error.
+    let log = history::read_log(&storage.logs_dir(), Path::new(&run.log_path)).unwrap();
+    assert!(!log.error_lines.is_empty(), "log: {}", log.text);
     assert_eq!(
         fs::read_to_string(storage.history_file())
             .unwrap()

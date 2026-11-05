@@ -2,6 +2,7 @@
 //! `~/Library/Application Support/ColomboSync` on macOS, `$XDG_DATA_HOME/ColomboSync` or
 //! `~/.local/share/ColomboSync` on Linux.
 
+use crate::path_rules;
 use chrono::NaiveDateTime;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -48,7 +49,7 @@ impl Storage {
             .chars()
             .take(60)
             .map(|c| {
-                if "<>:\"/\\|?*".contains(c) || c.is_control() {
+                if path_rules::is_forbidden_in_name(c) {
                     '_'
                 } else {
                     c

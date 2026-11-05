@@ -3,6 +3,8 @@
 //! Linux paths start with `/` and the links on them are resolved first, as far as the disk has
 //! the folders: `/Volumes/Macintosh HD` is the root itself, whatever it is called.
 
+use crate::error_messages::Explanation;
+
 pub const NOT_ABSOLUTE: &str = "Scrivi il percorso completo, che inizia con /.";
 pub const SAME_FOLDER: &str = "La destinazione è la stessa cartella da copiare. Scegline un’altra.";
 pub const INSIDE_SOURCE: &str = "La destinazione non può stare dentro la cartella da copiare.";
@@ -124,9 +126,121 @@ pub(crate) fn normalize_windows(path: &str) -> String {
     if unc { format!(r"\\{joined}") } else { joined }
 }
 
+/// Characters Windows does not allow in a file or folder name (also controls), whatever the OS.
+pub fn is_forbidden_in_name(c: char) -> bool {
+    c.is_control() || "<>:\"/\\|?*".contains(c)
+}
+
+/// The trimmed name when it is something Windows accepts as a single folder name.
+pub fn checked_name(name: &str) -> Result<&str, Explanation> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("Scrivi un nome per la nuova cartella.".into());
+    }
+    if name.len() > 255 {
+        return Err("Il nome è troppo lungo.".into());
+    }
+    if name.chars().any(is_forbidden_in_name) {
+        return Err(Explanation {
+            title: "Il nome non può contenere questi caratteri: \\ / : * ? \" < > |".into(),
+            advice: "Scrivi solo il nome della cartella, senza percorso.".into(),
+        });
+    }
+    if name.ends_with('.') || is_reserved_name(name) {
+        return Err(Explanation {
+            title: "Questo nome non si può usare.".into(),
+            advice: "Scegline un altro: niente punto in fondo, né nomi come CON o NUL.".into(),
+        });
+    }
+    Ok(name)
+}
+
+/// Device names Windows keeps for itself, with or without an extension (`NUL.txt`).
+fn is_reserved_name(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or_default().trim_end();
+    let stem = stem.to_uppercase();
+    if matches!(
+        stem.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) {
+        return true;
+    }
+    let Some(number) = stem
+        .strip_prefix("COM")
+        .or_else(|| stem.strip_prefix("LPT"))
+    else {
+        return false;
+    };
+    let mut chars = number.chars();
+    matches!(
+        (chars.next(), chars.next()),
+        (Some('1'..='9' | '¹' | '²' | '³'), None)
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn refused(name: &str) -> Explanation {
+        checked_name(name).unwrap_err()
+    }
+
+    #[test]
+    fn a_missing_or_unusable_name_is_refused() {
+        assert_eq!(refused("").title, "Scrivi un nome per la nuova cartella.");
+        assert_eq!(
+            refused("  \t ").title,
+            "Scrivi un nome per la nuova cartella."
+        );
+        for name in [
+            ".", "..", "Foto.", "Foto. ", "...", "CON", "con", "Nul.txt", "COM1", "com9.log",
+            "LPT3", "COM¹", "CONIN$", "aux ",
+        ] {
+            assert!(
+                refused(name)
+                    .title
+                    .starts_with("Questo nome non si può usare"),
+                "{name:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_name_that_is_a_path_or_has_characters_windows_refuses_is_refused() {
+        for name in [
+            r"a\b", "a/b", r"..\evil", "../evil", "/abs", r"C:\x", "a:b", "a*b", "a?b", "a\"b",
+            "a<b", "a>b", "a|b", "a\0b", "a\nb", "a\u{7f}b",
+        ] {
+            assert!(
+                refused(name).title.starts_with("Il nome non può contenere"),
+                "{name:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn dots_and_reserved_words_inside_a_longer_name_are_fine() {
+        for name in [
+            ".nascosta",
+            "Foto.2024",
+            "CONTO",
+            "COM10",
+            "COM",
+            "LPT0",
+            "a b",
+            "Città",
+        ] {
+            assert_eq!(checked_name(name), Ok(name));
+        }
+        assert_eq!(checked_name("  Foto 2024  "), Ok("Foto 2024"));
+    }
+
+    #[test]
+    fn a_name_longer_than_255_bytes_is_refused() {
+        assert_eq!(refused(&"a".repeat(256)).title, "Il nome è troppo lungo.");
+        assert!(checked_name(&"a".repeat(255)).is_ok());
+    }
 
     #[test]
     #[cfg(windows)]

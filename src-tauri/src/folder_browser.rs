@@ -3,6 +3,7 @@
 //! A folder that cannot be opened is reported in the listing (never a panic or a failed command).
 
 use crate::error_messages::Explanation;
+use crate::path_rules;
 use serde::Serialize;
 use std::fs::DirEntry;
 use std::io;
@@ -65,7 +66,7 @@ pub fn browse(path: &str) -> FolderListing {
 /// input and the Windows rules apply on every OS (the folder may end up on a stick Windows
 /// reads): one plain name, never a path. Fails when it already exists; never creates `parent`.
 pub fn create_folder(parent: &str, name: &str) -> Result<String, Explanation> {
-    let name = checked_name(name)?;
+    let name = path_rules::checked_name(name)?;
     let parent = Path::new(parent.trim());
     if !parent.is_absolute() {
         return Err(explain_create_error(&io::Error::from(
@@ -75,56 +76,6 @@ pub fn create_folder(parent: &str, name: &str) -> Result<String, Explanation> {
     let path = parent.join(name);
     std::fs::create_dir(&path).map_err(|e| explain_create_error(&e))?;
     Ok(path.to_string_lossy().into_owned())
-}
-
-/// The trimmed name when it is something Windows accepts as a single folder name.
-fn checked_name(name: &str) -> Result<&str, Explanation> {
-    let name = name.trim();
-    if name.is_empty() {
-        return Err("Scrivi un nome per la nuova cartella.".into());
-    }
-    if name.len() > 255 {
-        return Err("Il nome è troppo lungo.".into());
-    }
-    if name
-        .chars()
-        .any(|c| c.is_control() || "<>:\"/\\|?*".contains(c))
-    {
-        return Err(Explanation {
-            title: "Il nome non può contenere questi caratteri: \\ / : * ? \" < > |".into(),
-            advice: "Scrivi solo il nome della cartella, senza percorso.".into(),
-        });
-    }
-    if name.ends_with('.') || is_reserved_name(name) {
-        return Err(Explanation {
-            title: "Questo nome non si può usare.".into(),
-            advice: "Scegline un altro: niente punto in fondo, né nomi come CON o NUL.".into(),
-        });
-    }
-    Ok(name)
-}
-
-/// Device names Windows keeps for itself, with or without an extension (`NUL.txt`).
-fn is_reserved_name(name: &str) -> bool {
-    let stem = name.split('.').next().unwrap_or_default().trim_end();
-    let stem = stem.to_uppercase();
-    if matches!(
-        stem.as_str(),
-        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
-    ) {
-        return true;
-    }
-    let Some(number) = stem
-        .strip_prefix("COM")
-        .or_else(|| stem.strip_prefix("LPT"))
-    else {
-        return false;
-    };
-    let mut chars = number.chars();
-    matches!(
-        (chars.next(), chars.next()),
-        (Some('1'..='9' | '¹' | '²' | '³'), None)
-    )
 }
 
 fn explain_create_error(error: &io::Error) -> Explanation {
@@ -304,61 +255,12 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_or_unusable_name_is_refused_before_touching_the_disk() {
-        assert_eq!(refused("").title, "Scrivi un nome per la nuova cartella.");
-        assert_eq!(
-            refused("  \t ").title,
-            "Scrivi un nome per la nuova cartella."
+    fn a_refused_name_creates_nothing() {
+        assert!(
+            refused(r"..\evil")
+                .title
+                .starts_with("Il nome non può contenere")
         );
-        for name in [
-            ".", "..", "Foto.", "Foto. ", "...", "CON", "con", "Nul.txt", "COM1", "com9.log",
-            "LPT3", "COM¹", "CONIN$", "aux ",
-        ] {
-            assert!(
-                refused(name)
-                    .title
-                    .starts_with("Questo nome non si può usare"),
-                "{name:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn a_name_that_is_a_path_or_has_characters_windows_refuses_is_refused() {
-        for name in [
-            r"a\b", "a/b", r"..\evil", "../evil", "/abs", r"C:\x", "a:b", "a*b", "a?b", "a\"b",
-            "a<b", "a>b", "a|b", "a\0b", "a\nb", "a\u{7f}b",
-        ] {
-            assert!(
-                refused(name).title.starts_with("Il nome non può contenere"),
-                "{name:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn dots_and_reserved_words_inside_a_longer_name_are_fine() {
-        let dir = tempfile::tempdir().unwrap();
-        let parent = dir.path().to_str().unwrap();
-        for name in [
-            ".nascosta",
-            "Foto.2024",
-            "CONTO",
-            "COM10",
-            "COM",
-            "LPT0",
-            "a b",
-            "Città",
-        ] {
-            assert!(create_folder(parent, name).is_ok(), "{name:?}");
-        }
-    }
-
-    #[test]
-    fn a_name_longer_than_255_bytes_is_refused() {
-        assert_eq!(refused(&"a".repeat(256)).title, "Il nome è troppo lungo.");
-        let dir = tempfile::tempdir().unwrap();
-        assert!(create_folder(dir.path().to_str().unwrap(), &"a".repeat(255)).is_ok());
     }
 
     #[test]

@@ -4,6 +4,7 @@ pub mod engine;
 pub mod error_messages;
 pub mod folder_browser;
 pub mod history;
+pub mod history_summary;
 pub mod mirror_guard;
 pub mod path_rules;
 pub mod preview_parser;
@@ -39,6 +40,7 @@ pub fn run() {
             commands::save_sync,
             commands::default_sync_name,
             commands::list_runs,
+            commands::history_summary,
             commands::read_run_log,
             commands::check_destination,
             commands::is_elevated,

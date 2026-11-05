@@ -5,6 +5,7 @@ use crate::engine::SyncMode;
 use crate::error_messages::{self, Explanation};
 use crate::folder_browser::{self, FolderListing};
 use crate::history::{self, Run};
+use crate::history_summary::{self, HistorySummary};
 use crate::path_rules;
 use crate::preview_parser::{Counts, Preview};
 use crate::runner::{self, ActiveRun, PreviewMemo};
@@ -51,6 +52,19 @@ async fn blocking<T: Send + 'static, E: From<String> + Send + 'static>(
 pub async fn list_runs() -> Result<Vec<Run>, String> {
     let storage = Storage::from_env()?;
     blocking(move || history::read(&storage.history_file()).map_err(|e| e.to_string())).await
+}
+
+/// Totals over the history and the state of each sync, for the Storico side panel. A `syncs.json`
+/// that cannot be read only means the syncs keep the names they had in their runs.
+#[tauri::command]
+pub async fn history_summary() -> Result<HistorySummary, String> {
+    let storage = Storage::from_env()?;
+    blocking(move || {
+        let runs = history::read(&storage.history_file()).map_err(|e| e.to_string())?;
+        let syncs = sync_store::load(&storage.syncs_file()).unwrap_or_default();
+        Ok(history_summary::summarize(&runs, &syncs))
+    })
+    .await
 }
 
 /// The robocopy log of one run; fails when the file is gone or not inside the logs folder.

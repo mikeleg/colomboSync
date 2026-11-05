@@ -4,6 +4,7 @@ use crate::history;
 use crate::shared::domain::{Outcome, Run, SavedSync};
 use chrono::DateTime;
 use serde::Serialize;
+use std::collections::HashMap;
 
 #[derive(Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,11 +39,18 @@ pub fn summarize(runs: &[Run], syncs: &[SavedSync]) -> HistorySummary {
         runs: runs.len(),
         ..HistorySummary::default()
     };
+    // Newest first: the first Ok run seen of a sync is its last success.
+    let mut last_success: HashMap<u64, &str> = HashMap::new();
     for run in runs {
         match run.outcome {
             Outcome::Ok => summary.ok += 1,
             Outcome::Error => summary.failed += 1,
             Outcome::Cancelled => summary.cancelled += 1,
+        }
+        if run.outcome == Outcome::Ok
+            && let Some(id) = run.sync_id
+        {
+            last_success.entry(id).or_insert(&run.started_at);
         }
         summary.files_copied += run.partial.unwrap_or(run.new + run.updated);
         summary.files_deleted += run.deleted;
@@ -56,10 +64,9 @@ pub fn summarize(runs: &[Run], syncs: &[SavedSync]) -> HistorySummary {
                 .find(|s| s.id == id)
                 .map_or(&latest.sync_name, |s| &s.name)
                 .clone(),
-            last_success: runs
-                .iter()
-                .find(|r| r.sync_id == Some(id) && r.outcome == Outcome::Ok)
-                .map(|r| r.started_at.clone()),
+            last_success: last_success
+                .get(&id)
+                .map(|started_at| started_at.to_string()),
             warning: (latest.outcome == Outcome::Error).then(|| {
                 format!(
                     "L’ultima copia è finita con un errore il {}.",

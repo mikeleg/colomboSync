@@ -142,6 +142,25 @@ test("A and B through Opzioni: the preview and the schema show the same counts",
   expect(screen.getByText("Nessun file viene cancellato in B")).toBeTruthy();
 });
 
+test("only the preview step fills the window: the other steps scroll with the page", async () => {
+  backend({ preview_sync: () => preview(2, 1) });
+  render(App);
+
+  await click("Nuova sincronizzazione");
+  expect(document.querySelector(".fill")).toBeNull(); // Da dove copio?
+  await typeInto(/Percorso/, "D:\\Foto");
+  await click("Avanti");
+  await typeInto(/Percorso/, "E:\\Backup");
+  await click("Avanti");
+  await screen.findByDisplayValue("Copia di Foto");
+  await click("Avanti"); // Come la chiamo? -> Opzioni
+  expect(document.querySelector(".fill")).toBeNull();
+
+  await click("Avanti"); // Anteprima
+  await screen.findByText("Da copiare (nuovi)");
+  expect(document.querySelector(".content.fill")).not.toBeNull();
+});
+
 test("Sì, avvia runs with the previewed counts and says Fatto", async () => {
   backend({ preview_sync: () => preview(2, 1), run_sync: () => doneRun });
   render(App);

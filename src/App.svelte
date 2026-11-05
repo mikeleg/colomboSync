@@ -60,7 +60,7 @@
   }
 </script>
 
-<div class="app" class:mirror={view === "wizard" && schema.mirror} class:fill={view === "wizard"}>
+<div class="app" class:mirror={view === "wizard" && schema.mirror}>
   <header class="topbar">
     <div class="brand">
       <!-- "Eclissi": A (teal) partly covered by B (the page colour, with a faint rim). -->
@@ -99,7 +99,7 @@
     </p>
   {/if}
   <div class="layout">
-    <main class="screen" class:fill={view === "wizard"}>
+    <main class="screen">
       {#if view === "home"}
         <Home onnew={() => openWizard()} onrun={openWizard} onschema={(model) => (schema = model)} />
       {:else if view === "history"}
@@ -205,7 +205,8 @@
   .screen {
     min-width: 0;
   }
-  .screen.fill {
+  /* Only the preview step renders `.content.fill` (see Wizard.svelte): the other steps keep the page scrolling. */
+  .screen:has(:global(.content.fill)) {
     display: flex;
     flex-direction: column;
   }
@@ -213,21 +214,21 @@
      Narrow or short window (below 760px high, where the header takes most of the height): the page scrolls and the
      start box sticks instead. */
   @media (min-width: 901px) and (min-height: 760px) {
-    .app.fill :global(.groups) {
+    .app:has(:global(.content.fill)) :global(.groups) {
       min-height: 240px;
     }
-    .app.fill {
+    .app:has(:global(.content.fill)) {
       height: 100vh;
       display: flex;
       flex-direction: column;
     }
-    .app.fill .layout {
+    .app:has(:global(.content.fill)) .layout {
       flex: 1;
       min-height: 0;
       grid-template-rows: minmax(0, 1fr);
       align-items: stretch;
     }
-    .app.fill .screen {
+    .app:has(:global(.content.fill)) .screen {
       min-height: 0;
     }
   }

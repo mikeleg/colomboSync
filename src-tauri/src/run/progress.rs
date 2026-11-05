@@ -1,8 +1,7 @@
 //! Follows a running copy through its stdout: counts file lines, remembers the file being
-//! copied. Labels are never read. robocopy (`/TEE` with `/NJH /NJS /NDL /NC /NP`): a file line is
-//! the only kind of line that starts with a tab (the `/TEE` header, blank lines and `ERROR`
-//! lines do not). rsync: a file line starts with its itemize code (`>f…`, `*deleting`).
+//! copied. Which lines are file lines, and what their name is, is the engine's to say.
 
+use crate::engine;
 use serde::Serialize;
 
 /// What the UI shows while a Run is going; sent as the `run-progress` event.
@@ -42,71 +41,15 @@ impl StdoutFollower {
 
     /// File name (no folders) of the last file line.
     pub fn current_file(&self) -> String {
-        file_name(&self.last_file_line)
+        engine::file_name(&self.last_file_line)
     }
 
     fn end_line(&mut self) {
-        if is_file_line(&self.line) {
+        if engine::is_file_line(&self.line) {
             self.done += 1;
             std::mem::swap(&mut self.line, &mut self.last_file_line);
         }
         self.line.clear();
-    }
-}
-
-#[cfg(windows)]
-fn is_file_line(line: &[u8]) -> bool {
-    line.first() == Some(&b'\t')
-}
-
-#[cfg(windows)]
-fn file_name(raw: &[u8]) -> String {
-    let text = decode_oem(raw);
-    let path = text.rsplit('\t').next().unwrap_or_default().trim_end();
-    path.rsplit(['\\', '/']).next().unwrap_or(path).to_string()
-}
-
-#[cfg(unix)]
-fn is_file_line(line: &[u8]) -> bool {
-    crate::engine::rsync::is_file_line(&String::from_utf8_lossy(line))
-}
-
-#[cfg(unix)]
-fn file_name(raw: &[u8]) -> String {
-    let text = String::from_utf8_lossy(raw);
-    crate::engine::rsync::file_name(&text)
-        .unwrap_or_default()
-        .to_string()
-}
-
-/// Text robocopy writes to a pipe is in the console OEM code page (even with `/UNICODE`).
-#[cfg(windows)]
-fn decode_oem(bytes: &[u8]) -> String {
-    const CP_OEMCP: u32 = 1;
-    #[link(name = "kernel32")]
-    unsafe extern "system" {
-        fn MultiByteToWideChar(
-            code_page: u32,
-            flags: u32,
-            src: *const u8,
-            src_len: i32,
-            dst: *mut u16,
-            dst_len: i32,
-        ) -> i32;
-    }
-    let Ok(len) = i32::try_from(bytes.len()) else {
-        return String::from_utf8_lossy(bytes).into_owned();
-    };
-    // SAFETY: both calls read `len` bytes from `bytes`; the second writes at most `needed`
-    // units into a buffer of that size.
-    unsafe {
-        let needed = MultiByteToWideChar(CP_OEMCP, 0, bytes.as_ptr(), len, std::ptr::null_mut(), 0);
-        if needed <= 0 {
-            return String::from_utf8_lossy(bytes).into_owned();
-        }
-        let mut wide = vec![0u16; needed as usize];
-        MultiByteToWideChar(CP_OEMCP, 0, bytes.as_ptr(), len, wide.as_mut_ptr(), needed);
-        String::from_utf16_lossy(&wide)
     }
 }
 
@@ -117,14 +60,6 @@ mod tests {
     // Real output of a run with /TEE on a pipe: a header line, a blank line, then one tab-led
     // line per file.
     const STDOUT: &[u8] = b"\r\n Log File : C:\\L\\r.log\r\n\r\n\t  \t\t       5\tC:\\A\\due.txt\r\n\t  \t\t       5\tC:\\A\\uno.txt\r\n\t  \t\t       5\tC:\\A\\sub\\tre.txt\r\n";
-
-    #[test]
-    fn oem_bytes_become_text() {
-        assert_eq!(decode_oem(b"due.txt"), "due.txt");
-        assert_eq!(decode_oem(b""), "");
-        // 0x8A is a letter in the usual OEM code pages (437, 850), never a replacement char.
-        assert!(!decode_oem(&[0x8A]).contains('\u{FFFD}'));
-    }
 
     #[test]
     fn counts_only_file_lines_and_names_the_last_one() {

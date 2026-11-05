@@ -42,6 +42,13 @@ pub struct Counts {
     pub deleted: usize,
 }
 
+impl Counts {
+    /// Every file a run touches.
+    pub fn total(&self) -> usize {
+        self.new + self.updated + self.deleted
+    }
+}
+
 impl Preview {
     pub fn counts(&self) -> Counts {
         Counts {

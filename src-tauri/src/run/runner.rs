@@ -1,10 +1,10 @@
 //! A Run end to end: copy engine + progress + storage + history. No Tauri types.
 
 use super::progress::{Progress, StdoutFollower};
-use crate::engine;
 use crate::engine::preview_parser::Counts;
+use crate::engine::{self, Verdict};
 use crate::history;
-use crate::shared::domain::{Cause, Outcome, Run, SavedSync, SyncMode};
+use crate::shared::domain::{Outcome, Run, SavedSync, SyncMode};
 use crate::shared::mirror_guard;
 use crate::shared::path_rules;
 use crate::shared::storage::Storage;
@@ -139,8 +139,18 @@ pub fn run(
     fs::create_dir_all(storage.logs_dir()).map_err(|e| e.to_string())?;
 
     let clock = Instant::now();
-    let record =
-        |outcome: Outcome, counts: Counts, partial: Option<usize>, cause: Option<Cause>| Run {
+    // Every way a Run can end is made and written to the history here.
+    let save = |verdict: Verdict| -> Result<Run, String> {
+        let (outcome, counts, partial, cause) = match verdict {
+            Verdict::Ok => (Outcome::Ok, counts, None, None),
+            Verdict::Cancelled { partial } => {
+                (Outcome::Cancelled, Counts::default(), Some(partial), None)
+            }
+            Verdict::Error { cause, partial } => {
+                (Outcome::Error, Counts::default(), Some(partial), cause)
+            }
+        };
+        let run = Run {
             sync_id: Some(sync.id),
             sync_name: sync.name.clone(),
             source: source.to_string(),
@@ -156,23 +166,22 @@ pub fn run(
             partial,
             cause,
         };
+        history::append(&storage.history_file(), &run).map_err(|e| e.to_string())?;
+        Ok(run)
+    };
     let mut stdout = match active.start(mode, source, destination, &log) {
         Ok(stdout) => stdout,
         Err(StartError::Busy) => return Err("C’è già una copia in corso.".into()),
+        // The engine could not even start: a failed Run like any other, in the history.
         Err(StartError::Failed(error)) => {
-            // The engine could not even start: a failed Run like any other, in the history.
-            let run = record(
-                Outcome::Error,
-                Counts::default(),
-                Some(0),
-                engine::missing_engine(&error),
-            );
-            history::append(&storage.history_file(), &run).map_err(|e| e.to_string())?;
-            return Ok(run);
+            return save(Verdict::Error {
+                cause: engine::missing_engine(&error),
+                partial: 0,
+            });
         }
     };
     let _slot = SlotGuard(active);
-    let total = counts.new + counts.updated + counts.deleted;
+    let total = counts.total();
     let mut follower = StdoutFollower::default();
     let progress = |follower: &StdoutFollower| Progress {
         sync_name: sync.name.clone(),
@@ -195,36 +204,9 @@ pub fn run(
     on_progress(&progress(&follower));
     let status = active.wait().map_err(|e| e.to_string())?;
 
-    // A killed robocopy exits with code 1, which alone would read as success; a killed rsync has
-    // no exit code of its own (128 + 9).
     let cancelled = active.cancelled.load(Ordering::SeqCst);
     let code = engine::exit_code(status).map_err(|e| e.to_string())?;
-    let ok = !cancelled && engine::is_success(code);
-    // Only a failed or stopped run needs its log: it can be huge.
-    let log_text = if ok { String::new() } else { read_log(&log) };
-    let cause = if ok || cancelled {
-        None
-    } else {
-        engine::find_cause(code, &log_text, source, destination)
-    };
-    let run = record(
-        match (ok, cancelled) {
-            (true, _) => Outcome::Ok,
-            (false, true) => Outcome::Cancelled,
-            (false, false) => Outcome::Error,
-        },
-        if ok { counts } else { Counts::default() },
-        (!ok).then(|| engine::partial_count(&log_text, source, destination, code, cancelled)),
-        cause,
-    );
-    history::append(&storage.history_file(), &run).map_err(|e| e.to_string())?;
-    Ok(run)
-}
-
-fn read_log(path: &Path) -> String {
-    fs::read(path)
-        .map(|bytes| engine::decode_log(&bytes))
-        .unwrap_or_default()
+    save(engine::verdict(code, cancelled, &log, source, destination))
 }
 
 #[cfg(test)]

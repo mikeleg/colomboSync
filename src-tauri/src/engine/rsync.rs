@@ -169,17 +169,20 @@ pub fn decode_log(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
-/// Is this stdout line a file the run has just started on (or deleted)? Used by the progress.
-pub fn is_file_line(line: &str) -> bool {
-    item(line, NATIVE_PADDED).is_some()
+/// Is this stdout line of a running copy a file the run has just started on (or deleted)? A file
+/// line starts with its itemize code (`>f…`, `*deleting`); labels are never read.
+pub fn is_file_line(line: &[u8]) -> bool {
+    item(&String::from_utf8_lossy(line), NATIVE_PADDED).is_some()
 }
 
-/// File name (no folders) of an itemize line.
-pub fn file_name(line: &str) -> Option<&str> {
-    let name = match item(line, NATIVE_PADDED)? {
-        Item::Copied { name, .. } | Item::Deleted { name } => name,
+/// File name (no folders) of an itemize line; empty when the line is not a file line.
+pub fn file_name(raw: &[u8]) -> String {
+    let line = String::from_utf8_lossy(raw);
+    let name = match item(&line, NATIVE_PADDED) {
+        Some(Item::Copied { name, .. } | Item::Deleted { name }) => name,
+        None => return String::new(),
     };
-    name.rsplit('/').next()
+    name.rsplit('/').next().unwrap_or_default().to_string()
 }
 
 /// How a folder looks right now. B may well not exist yet (the run creates it), so it is
@@ -561,8 +564,8 @@ sending incremental file list\n";
     #[test]
     fn progress_counts_file_lines_and_names_the_last() {
         for line in [">f+++++++++ sub/è già.txt", "*deleting   sub/è già.txt"] {
-            assert!(is_file_line(line));
-            assert_eq!(file_name(line), Some("è già.txt"));
+            assert!(is_file_line(line.as_bytes()));
+            assert_eq!(file_name(line.as_bytes()), "è già.txt");
         }
         for line in [
             "cd+++++++++ sub/",
@@ -571,7 +574,8 @@ sending incremental file list\n";
             "rsync: mkdir failed",
             "",
         ] {
-            assert!(!is_file_line(line), "{line}");
+            assert!(!is_file_line(line.as_bytes()), "{line}");
+            assert_eq!(file_name(line.as_bytes()), "", "{line}");
         }
         assert_eq!(
             partial_count(LINUX, "", "", 1, true),

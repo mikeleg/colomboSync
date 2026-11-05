@@ -77,12 +77,12 @@ pub fn decode_log(bytes: &[u8]) -> String {
 }
 
 #[cfg(windows)]
-pub use process::{dry_run, exit_code, spawn};
+pub use process::{dry_run, exit_code, file_name, is_file_line, spawn};
 
 #[cfg(windows)]
 mod process {
     use super::*;
-    use crate::engine::Finished;
+    use crate::engine::{self, Finished};
     use std::fs;
     use std::io::{self, Read};
     use std::os::windows::process::CommandExt;
@@ -117,9 +117,7 @@ mod process {
         ));
         let args = preview_args(mode, source, destination, &log.to_string_lossy());
         let status = command(&args).stdout(Stdio::null()).status()?;
-        let text = fs::read(&log)
-            .map(|bytes| decode_log(&bytes))
-            .unwrap_or_default();
+        let text = engine::read_log(&log);
         let _ = fs::remove_file(&log);
         Ok(Finished {
             code: exit_code(status)?,
@@ -148,6 +146,64 @@ mod process {
         status
             .code()
             .ok_or_else(|| io::Error::other("robocopy terminated without an exit code"))
+    }
+
+    /// Is this stdout line of a running copy (`/TEE` with `/NJH /NJS /NDL /NC /NP`) a file? A file
+    /// line is the only kind of line that starts with a tab: the `/TEE` header, blank lines and
+    /// `ERROR` lines do not. Labels are never read.
+    pub fn is_file_line(line: &[u8]) -> bool {
+        line.first() == Some(&b'\t')
+    }
+
+    /// File name (no folders) of a file line.
+    pub fn file_name(raw: &[u8]) -> String {
+        let text = decode_oem(raw);
+        let path = text.rsplit('\t').next().unwrap_or_default().trim_end();
+        path.rsplit(['\\', '/']).next().unwrap_or(path).to_string()
+    }
+
+    /// Text robocopy writes to a pipe is in the console OEM code page (even with `/UNICODE`).
+    fn decode_oem(bytes: &[u8]) -> String {
+        const CP_OEMCP: u32 = 1;
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn MultiByteToWideChar(
+                code_page: u32,
+                flags: u32,
+                src: *const u8,
+                src_len: i32,
+                dst: *mut u16,
+                dst_len: i32,
+            ) -> i32;
+        }
+        let Ok(len) = i32::try_from(bytes.len()) else {
+            return String::from_utf8_lossy(bytes).into_owned();
+        };
+        // SAFETY: both calls read `len` bytes from `bytes`; the second writes at most `needed`
+        // units into a buffer of that size.
+        unsafe {
+            let needed =
+                MultiByteToWideChar(CP_OEMCP, 0, bytes.as_ptr(), len, std::ptr::null_mut(), 0);
+            if needed <= 0 {
+                return String::from_utf8_lossy(bytes).into_owned();
+            }
+            let mut wide = vec![0u16; needed as usize];
+            MultiByteToWideChar(CP_OEMCP, 0, bytes.as_ptr(), len, wide.as_mut_ptr(), needed);
+            String::from_utf16_lossy(&wide)
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn oem_bytes_become_text() {
+            assert_eq!(decode_oem(b"due.txt"), "due.txt");
+            assert_eq!(decode_oem(b""), "");
+            // 0x8A is a letter in the usual OEM code pages (437, 850), never a replacement char.
+            assert!(!decode_oem(&[0x8A]).contains('\u{FFFD}'));
+        }
     }
 }
 

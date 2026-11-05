@@ -205,9 +205,13 @@
     display: flex;
     flex-direction: column;
   }
-  /* Wide window: the wizard fills the window, so only its groups scroll and the start box stays at the bottom.
-     Narrow window: the side panel sits above the wizard, so the page scrolls and the start box sticks instead. */
-  @media (min-width: 901px) {
+  /* Wide and tall window: the wizard fills the window, so only its groups scroll and the start box stays at the bottom.
+     Narrow or short window (below 760px high, where the header takes most of the height): the page scrolls and the
+     start box sticks instead. */
+  @media (min-width: 901px) and (min-height: 760px) {
+    .app.fill :global(.groups) {
+      min-height: 240px;
+    }
     .app.fill {
       height: 100vh;
       display: flex;

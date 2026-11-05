@@ -225,11 +225,11 @@
     display: flex;
     gap: 14px;
     align-items: center;
-    padding: 18px 24px;
+    padding: 6px 14px;
     border-radius: 20px;
     background: color-mix(in srgb, var(--danger) 20%, transparent);
     color: var(--on-danger-soft);
-    margin: 0 0 16px;
+    margin: 0 0 10px;
     cursor: pointer;
     font-size: 17px;
     font-weight: 700;
@@ -305,7 +305,12 @@
   .footer {
     flex: none;
     margin-top: 16px;
+    padding: 12px 20px;
     position: sticky;
     bottom: 0;
+  }
+  .footer h2 {
+    font-size: 21px;
+    margin-bottom: 4px;
   }
 </style>

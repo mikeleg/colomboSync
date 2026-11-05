@@ -2,7 +2,6 @@
 //! MirrorGuard and the like.
 
 pub mod blocking;
-pub mod commands;
 pub mod domain;
 pub mod elevation;
 pub mod error_messages;

@@ -32,7 +32,7 @@ pub fn run() {
             history::commands::list_runs,
             history::commands::read_run_log,
             wizard::commands::check_destination,
-            shared::commands::is_elevated,
+            shared::elevation::is_elevated,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

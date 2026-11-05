@@ -1,5 +1,6 @@
 //! Is the app running as administrator (root)? Mapped network drives belong to the user's normal
 //! token and are not visible to an elevated one; on macOS and Linux root is the same warning.
+//! `is_elevated` is itself the command the UI calls for the banner.
 
 #[cfg(windows)]
 const TOKEN_QUERY: u32 = 0x0008;
@@ -28,6 +29,7 @@ unsafe extern "system" {
 
 /// `false` when the answer cannot be had: the banner is a hint, not a gate.
 #[cfg(windows)]
+#[tauri::command]
 pub fn is_elevated() -> bool {
     // SAFETY: plain Win32 calls on the current process; `token` is closed on every path and
     // `elevated` is the 4-byte TOKEN_ELEVATION struct that `TokenElevation` fills.
@@ -46,6 +48,7 @@ pub fn is_elevated() -> bool {
 
 /// Effective user id 0.
 #[cfg(unix)]
+#[tauri::command]
 pub fn is_elevated() -> bool {
     unsafe extern "C" {
         fn geteuid() -> u32;

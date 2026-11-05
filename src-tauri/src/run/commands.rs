@@ -3,12 +3,12 @@
 
 use super::runner::{self, ActiveRun};
 use crate::engine::preview_parser::Counts;
+use crate::shared::blocking::blocking;
 use crate::shared::domain::{Run, SavedSync};
 use crate::shared::error_messages::{self, Explanation};
 use crate::shared::storage::Storage;
 use crate::wizard::preview::PreviewMemo;
 use serde::Serialize;
-use tauri::async_runtime::spawn_blocking;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 /// A finished Run as the result screen gets it: what is stored, plus what to tell the user when
@@ -34,7 +34,7 @@ pub async fn run_sync(
         sync.mode,
         counts,
     )?;
-    let run = spawn_blocking({
+    let run = blocking({
         let app = app.clone();
         move || {
             runner::run(
@@ -48,8 +48,7 @@ pub async fn run_sync(
             )
         }
     })
-    .await
-    .map_err(|e| e.to_string())?;
+    .await;
     // The user confirmed closing the window during the run: the history line is already written.
     if app.state::<ActiveRun>().exit_when_done() {
         app.exit(0);

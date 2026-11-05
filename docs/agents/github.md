@@ -34,13 +34,13 @@ Version rule: `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.t
 
 Steps:
 1. Bump the three files to the new version (`npm version X.Y.Z --no-git-tag-version` for `package.json` + lock, edit `tauri.conf.json` and `Cargo.toml` by hand, `cd src-tauri && cargo check` to refresh `Cargo.lock`). Commit `chore(release): X.Y.Z` on `main`, push (CI green).
-2. Tag and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z` (with the token recipe's credential helper).
+2. Tag **the commit on `main`** and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z` (with the token recipe's credential helper). The `version` job fails a tag whose commit is not an ancestor of `origin/main`: tags never go on slice branches. To try the pipeline on a branch, use a dry run (below), not a tag.
 3. `gh run watch <id> -R mikeleg/colomboSync --exit-status` (run id: `gh run list -R mikeleg/colomboSync --workflow release.yml --limit 1`). Any red job → no release; fix, bump patch, new tag.
 4. Smoke checklist from `docs/release-plan.md` on a clean machine per OS with the **release files**, not local builds. Note the result as a comment on the draft.
 5. Publish the draft by hand (GitHub → Releases → Edit → Publish; keep "pre-release" for 0.x).
 6. The owner downloads the files and `SHA256SUMS.txt` and shares them privately with the Italian install notes (repo stays private).
 
-Dry run without a tag: `gh workflow run release.yml -R mikeleg/colomboSync --ref <branch>`; builds and uploads workflow artifacts, creates no release. GitHub only accepts `workflow_dispatch` for a workflow file that is on `main`, so until it is merged add a temporary `push: branches: [<branch>]` trigger to test a branch (a non-tag run takes the same dry-run path). macOS runner queues can last long or time out ("job was not acquired"): `gh run rerun <id> --failed`. A bad throwaway tag/draft is removed with `gh release delete <tag> --cleanup-tag -R mikeleg/colomboSync` (and `git tag -d <tag>`).
+Dry run without a tag: `gh workflow run release.yml -R mikeleg/colomboSync --ref <branch>`; builds and uploads workflow artifacts, creates no release (a non-tag run takes this path; `release.yml` is on `main`, so GitHub accepts the dispatch on any branch). macOS runner queues can last long or time out ("job was not acquired"): `gh run rerun <id> --failed`. A bad throwaway tag/draft is removed with `gh release delete <tag> --cleanup-tag -R mikeleg/colomboSync` (and `git tag -d <tag>`).
 
 ## Iterating on Unix-only code
 1. Work on a `slice/<id>` branch (CI runs on every push to it).

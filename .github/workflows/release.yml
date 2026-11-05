@@ -112,13 +112,17 @@ jobs:
           prev=$(git describe --tags --abbrev=0 --match 'v*' "${exclude[@]}" "$TAG^" 2>/dev/null || true)
           git log --no-merges --pretty='- %s' "${prev:+$prev..}$TAG" > commits.txt
           {
+            cat .github/release-notes-it.md
+            echo
+            echo "<details><summary>Dettagli tecnici (modifiche)</summary>"
+            echo
             echo "## Novità"
             grep -E '^- feat(\([^)]*\))?!?:' commits.txt || echo "- nessuna"
             echo
             echo "## Correzioni"
             grep -E '^- fix(\([^)]*\))?!?:' commits.txt || echo "- nessuna"
             echo
-            cat .github/release-notes-it.md
+            echo "</details>"
           } > notes.md
           cat notes.md
 

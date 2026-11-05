@@ -41,6 +41,28 @@ export interface Run {
   partial?: number;
 }
 
+/** One sync found in the history (src-tauri/src/history_summary.rs). */
+export interface SyncStatus {
+  id: number;
+  name: string;
+  /** Start time of its latest successful run. */
+  lastSuccess: string | null;
+  /** Italian sentence from Rust, set when its latest run ended in Errore. */
+  warning: string | null;
+}
+
+/** What `history_summary` returns: totals over the whole history and the state of each sync. */
+export interface HistorySummary {
+  runs: number;
+  ok: number;
+  failed: number;
+  cancelled: number;
+  /** New + updated files, plus those copied by failed or stopped runs. */
+  filesCopied: number;
+  filesDeleted: number;
+  syncs: SyncStatus[];
+}
+
 /** Why something failed, as Rust words it: what happened, and what to do about it. */
 export interface Explanation {
   title: string;

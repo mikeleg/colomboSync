@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { isElevated, listRuns } from "./lib/api";
+  import { historySummary, isElevated, listRuns } from "./lib/api";
   import History from "./lib/History.svelte";
-  import HistoryLegend from "./lib/HistoryLegend.svelte";
+  import HistoryPanel from "./lib/HistoryPanel.svelte";
   import Home from "./lib/Home.svelte";
   import Icon from "./lib/Icon.svelte";
   import { emptySchema, type SchemaModel } from "./lib/schema";
   import SchemaView from "./lib/SchemaView.svelte";
   import ThemeSwitch from "./lib/ThemeSwitch.svelte";
-  import type { Run, Sync } from "./lib/types";
+  import type { HistorySummary, Run, Sync } from "./lib/types";
   import Wizard from "./lib/wizard/Wizard.svelte";
 
   /** Started as administrator: mapped network drives are not visible then. */
@@ -31,6 +31,7 @@
   }
 
   let runs = $state<Run[]>([]);
+  let summary = $state<HistorySummary | null>(null);
   let historyStatus = $state<"loading" | "ready" | "error">("ready");
   let historyLoads = 0;
 
@@ -38,11 +39,14 @@
     const load = ++historyLoads;
     view = "history";
     runs = [];
+    summary = null;
     historyStatus = "loading";
     try {
-      const result = await listRuns();
+      // Without its summary the panel still has the legend, so only the list is essential.
+      const [result, totals] = await Promise.all([listRuns(), historySummary().catch(() => null)]);
       if (load !== historyLoads) return; // a newer request owns the screen
       runs = result;
+      summary = totals;
       historyStatus = "ready";
     } catch {
       if (load === historyLoads) historyStatus = "error";
@@ -110,9 +114,9 @@
         />
       {/if}
     </main>
-    <aside class="schema" aria-label={view === "history" ? "Come leggere lo storico" : "Schema di cosa succede"}>
+    <aside class="schema" aria-label={view === "history" ? "Riepilogo dello storico" : "Schema di cosa succede"}>
       {#if view === "history"}
-        <HistoryLegend {runs} />
+        <HistoryPanel {summary} />
       {:else}
         <SchemaView model={schema} />
       {/if}

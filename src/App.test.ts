@@ -51,6 +51,7 @@ type Handlers = Partial<
     | "default_sync_name"
     | "check_destination"
     | "list_runs"
+    | "history_summary"
     | "read_run_log"
     | "is_elevated",
     (args: Args) => unknown
@@ -62,6 +63,7 @@ function backend(handlers: Handlers = {}) {
   const defaults: Record<string, (args: Args) => unknown> = {
     browse_folders: () => ({ parent: "", folders: [], error: null }),
     list_syncs: () => ({ syncs: [], setAside: false }),
+    history_summary: () => ({ runs: 0, ok: 0, failed: 0, cancelled: 0, filesCopied: 0, filesDeleted: 0, syncs: [] }),
     default_sync_name: () => "Copia di Foto",
     check_destination: () => undefined, // B is fine
     is_elevated: () => false,
@@ -517,24 +519,52 @@ test("home: a saved sync's A and B are in the schema with the caption", async ()
   expect(schema.textContent).toContain('Premi "Controlla e avvia": prima ti mostro cosa cambierà, poi decidi tu.');
 });
 
-test("Storico lists the runs from Rust and swaps the schema for the legend", async () => {
+test("Storico lists the runs from Rust and swaps the schema for the summary panel", async () => {
   backend({
     list_runs: () => [
       { ...doneRun, syncName: "Seconda", outcome: "Error" },
       { ...doneRun, syncName: "Prima" },
     ],
+    history_summary: () => ({
+      runs: 2,
+      ok: 1,
+      failed: 1,
+      cancelled: 0,
+      filesCopied: 3,
+      filesDeleted: 0,
+      syncs: [{ id: 7, name: "Foto di Anna", lastSuccess: "2026-11-03T12:00:00+01:00", warning: null }],
+    }),
   });
   render(App);
 
   await click("Storico");
 
   expect(invokeMock).toHaveBeenCalledWith("list_runs");
+  expect(invokeMock).toHaveBeenCalledWith("history_summary");
   expect(screen.getByRole("heading", { name: "Storico" })).toBeTruthy();
   expect(await screen.findByText("Seconda")).toBeTruthy();
-  const aside = screen.getByRole("complementary", { name: "Come leggere lo storico" });
+  const aside = screen.getByRole("complementary", { name: "Riepilogo dello storico" });
   expect(aside.textContent).not.toContain("Cosa succede");
   expect(within(aside).getByText("Copie fatte").previousElementSibling?.textContent).toBe("2");
-  expect(within(aside).getByText("Riuscite").previousElementSibling?.textContent).toBe("1");
+  expect(within(aside).getByText("Con errore").previousElementSibling?.textContent).toBe("1");
+  expect(within(aside).getByText("Foto di Anna")).toBeTruthy();
+});
+
+test("if the summary cannot be read the rows still show and the panel keeps its legend", async () => {
+  backend({
+    list_runs: () => [{ ...doneRun, syncName: "Prima" }],
+    history_summary: () => {
+      throw "boom";
+    },
+  });
+  render(App);
+
+  await click("Storico");
+
+  expect(await screen.findByText("Prima")).toBeTruthy();
+  const aside = screen.getByRole("complementary", { name: "Riepilogo dello storico" });
+  expect(within(aside).queryByText("Copie fatte")).toBeNull();
+  expect(within(aside).getByText("Cosa vogliono dire le etichette")).toBeTruthy();
 });
 
 test("a failed list_runs says so instead of showing an empty history", async () => {

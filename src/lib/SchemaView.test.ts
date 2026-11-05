@@ -32,10 +32,11 @@ test("before the folders are chosen it asks for them and shows no numbers", () =
   expect(screen.queryByText("Nessun file viene cancellato in B")).toBeNull();
 });
 
-test("mirror: red Specchio chip, an Eliminati da B counter and no 'nothing is deleted' reassurance", () => {
+test("mirror: Specchio chip in its own colour (not Errore's), an Eliminati da B counter and no 'nothing is deleted' reassurance", () => {
   render(SchemaView, { model: { ...picked, mirror: true, counts: { new: 148, updated: 3, deleted: 12 } } });
 
   expect(screen.getByText("Specchio").className).toContain("mirror");
+  expect(screen.getByText("Specchio").className).not.toContain("err");
   expect(screen.getByText("12").nextElementSibling?.textContent).toBe("Eliminati da B");
   expect(screen.queryByText("Nessun file viene cancellato in B")).toBeNull();
   expect(screen.queryByText("Copia", { selector: ".chip" })).toBeNull();

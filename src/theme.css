@@ -172,7 +172,6 @@ h3 {
   color: var(--fg);
   font-size: 17px;
   font-weight: 700;
-  white-space: nowrap;
   cursor: pointer;
 }
 .btn:not(:disabled):hover {

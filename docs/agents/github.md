@@ -19,9 +19,9 @@ Triggers: push to `main` and `slice/**`, every pull request, manual `workflow_di
 
 | Job | Runner | Steps | Artifact |
 |---|---|---|---|
-| windows | windows-latest | `npm run check`, `npm test`, `npm run build`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, `npm run portable` | `colombo-sync-windows`: `colombo-sync.exe` |
-| macos | macos-15 | same checks, then `npx tauri build --bundles app,dmg` (ad-hoc signed, `bundle.macOS.signingIdentity` = `-`, not notarized) | `colombo-sync-macos`: `ColomboSync-macos.zip` (the `.app`) and the `.dmg` |
-| linux | ubuntu-latest | same checks (after installing `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`), then `npx tauri build --bundles appimage` | `colombo-sync-linux`: `*.AppImage` |
+| windows | windows-latest | `npm run check`, `npm run format:check`, `npm test`, `npm run build`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, `npm run portable` | `colombo-sync-windows`: `colombo-sync.exe` |
+| macos | macos-15 | same checks (incl. `npm run format:check`), then `npx tauri build --bundles app,dmg` (ad-hoc signed, `bundle.macOS.signingIdentity` = `-`, not notarized) | `colombo-sync-macos`: `ColomboSync-macos.zip` (the `.app`) and the `.dmg` |
+| linux | ubuntu-latest | same checks (incl. `npm run format:check`, after installing `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`), then `npx tauri build --bundles appimage` | `colombo-sync-linux`: `*.AppImage` |
 
 On a push to `main` the package steps (`npm run portable`, `npx tauri build`) and the artifact uploads are skipped; the checks still run. Release mode always builds.
 

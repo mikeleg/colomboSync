@@ -17,6 +17,7 @@ Desktop app (Windows, macOS, Linux) that lets a non-technical user copy folder A
 ```
 npm test                              # Svelte tests (vitest, jsdom)
 npm run check                         # svelte-check / TypeScript
+npm run format                        # Prettier (Svelte/TS/CSS); CI runs format:check
 cd src-tauri && cargo fmt && cargo test
 cd src-tauri && cargo clippy --all-targets -- -D warnings
 npm run tauri dev                     # run the app in dev
@@ -41,6 +42,7 @@ First release build takes ~5 min. Unix-only code can't be compiled here (Windows
 ## Conventions
 - Test first; commit at every green (`feat(sN): …`). Full suite green before handing back.
 - Every slice branch gets `/code-review` before merge; it found real data-loss bugs every time (path rules incl. A inside B, links/aliases, normalization, MirrorGuard trusting the UI, overwriting unreadable files, non-atomic writes). Treat folder-safety code as hostile-input code.
-- `cargo fmt` + clippy clean; English identifiers, Italian UI strings copied from the prototype. New Italian copy not in the prototype: list it in the slice report and in scope.md "Decisions during implementation".
+- `cargo fmt` + clippy clean, `npm run format` (Prettier) clean; English identifiers, Italian UI strings copied from the prototype. New Italian copy not in the prototype: list it in the slice report and in scope.md "Decisions during implementation".
+- Svelte 5 per the official best practices (svelte.dev/docs/svelte/best-practices): `$derived`, not `$effect`, for computed state; `$effect` never forwards data to a parent or writes state that could be derived; every `{#each}` keyed; no `svelte-ignore` without a comment saying why.
 - On this machine shell heredocs/Python halve backslashes in source text: edit files with the Edit/Write tools. In TS tests use `String.raw` for Windows paths.
 - Minimum code for the criteria; no traits/abstractions with a single implementation.

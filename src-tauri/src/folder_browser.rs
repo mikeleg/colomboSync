@@ -1,9 +1,11 @@
 //! Lists drives (Windows) or the home folder and the mounted disks (macOS, Linux) and the
-//! subfolders for the click-first folder picker.
+//! subfolders for the click-first folder picker, and creates a new subfolder from it.
 //! A folder that cannot be opened is reported in the listing (never a panic or a failed command).
 
+use crate::error_messages::Explanation;
 use serde::Serialize;
 use std::fs::DirEntry;
+use std::io;
 use std::path::Path;
 
 const CANNOT_OPEN: &str =
@@ -56,6 +58,101 @@ pub fn browse(path: &str) -> FolderListing {
         parent,
         folders,
         error,
+    }
+}
+
+/// Creates the folder `name` directly inside `parent` and returns its path. The name is hostile
+/// input and the Windows rules apply on every OS (the folder may end up on a stick Windows
+/// reads): one plain name, never a path. Fails when it already exists; never creates `parent`.
+pub fn create_folder(parent: &str, name: &str) -> Result<String, Explanation> {
+    let name = checked_name(name)?;
+    let parent = Path::new(parent.trim());
+    if !parent.is_absolute() {
+        return Err(explain_create_error(&io::Error::from(
+            io::ErrorKind::NotFound,
+        )));
+    }
+    let path = parent.join(name);
+    std::fs::create_dir(&path).map_err(|e| explain_create_error(&e))?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// The trimmed name when it is something Windows accepts as a single folder name.
+fn checked_name(name: &str) -> Result<&str, Explanation> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("Scrivi un nome per la nuova cartella.".into());
+    }
+    if name.len() > 255 {
+        return Err("Il nome è troppo lungo.".into());
+    }
+    if name
+        .chars()
+        .any(|c| c.is_control() || "<>:\"/\\|?*".contains(c))
+    {
+        return Err(Explanation {
+            title: "Il nome non può contenere questi caratteri: \\ / : * ? \" < > |".into(),
+            advice: "Scrivi solo il nome della cartella, senza percorso.".into(),
+        });
+    }
+    if name.ends_with('.') || is_reserved_name(name) {
+        return Err(Explanation {
+            title: "Questo nome non si può usare.".into(),
+            advice: "Scegline un altro: niente punto in fondo, né nomi come CON o NUL.".into(),
+        });
+    }
+    Ok(name)
+}
+
+/// Device names Windows keeps for itself, with or without an extension (`NUL.txt`).
+fn is_reserved_name(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or_default().trim_end();
+    let stem = stem.to_uppercase();
+    if matches!(
+        stem.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) {
+        return true;
+    }
+    let Some(number) = stem
+        .strip_prefix("COM")
+        .or_else(|| stem.strip_prefix("LPT"))
+    else {
+        return false;
+    };
+    let mut chars = number.chars();
+    matches!(
+        (chars.next(), chars.next()),
+        (Some('1'..='9' | '¹' | '²' | '³'), None)
+    )
+}
+
+fn explain_create_error(error: &io::Error) -> Explanation {
+    let (title, advice) = match error.kind() {
+        io::ErrorKind::AlreadyExists => (
+            "Esiste già una cartella con questo nome.",
+            "Scegli un altro nome.",
+        ),
+        io::ErrorKind::NotFound => (
+            "Non trovo la cartella in cui creare la nuova.",
+            "Il disco è collegato?",
+        ),
+        io::ErrorKind::PermissionDenied => (
+            "Non ho il permesso di creare una cartella qui.",
+            "Scegli un altro posto o controlla i permessi.",
+        ),
+        io::ErrorKind::ReadOnlyFilesystem => (
+            "Il disco è in sola lettura: non posso crearci cartelle.",
+            "Scegli un altro disco.",
+        ),
+        _ => (
+            "Non riesco a creare la cartella.",
+            "Controlla che il disco o la rete siano collegati e riprova.",
+        ),
+    };
+    Explanation {
+        title: title.into(),
+        advice: advice.into(),
     }
 }
 
@@ -183,6 +280,140 @@ mod tests {
             .collect();
 
         assert_eq!(names, ["Alfa", "beta"]);
+    }
+
+    fn refused(name: &str) -> Explanation {
+        let dir = tempfile::tempdir().unwrap();
+        let error = create_folder(dir.path().to_str().unwrap(), name).unwrap_err();
+        assert_eq!(
+            std::fs::read_dir(dir.path()).unwrap().count(),
+            0,
+            "{name:?} must create nothing"
+        );
+        error
+    }
+
+    #[test]
+    fn a_new_folder_is_created_directly_inside_the_parent_and_its_path_returned() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let path = create_folder(dir.path().to_str().unwrap(), "  Foto 2024  ").unwrap();
+
+        assert_eq!(Path::new(&path), dir.path().join("Foto 2024"));
+        assert!(dir.path().join("Foto 2024").is_dir());
+    }
+
+    #[test]
+    fn a_missing_or_unusable_name_is_refused_before_touching_the_disk() {
+        assert_eq!(refused("").title, "Scrivi un nome per la nuova cartella.");
+        assert_eq!(
+            refused("  \t ").title,
+            "Scrivi un nome per la nuova cartella."
+        );
+        for name in [
+            ".", "..", "Foto.", "Foto. ", "...", "CON", "con", "Nul.txt", "COM1", "com9.log",
+            "LPT3", "COM¹", "CONIN$", "aux ",
+        ] {
+            assert!(
+                refused(name)
+                    .title
+                    .starts_with("Questo nome non si può usare"),
+                "{name:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_name_that_is_a_path_or_has_characters_windows_refuses_is_refused() {
+        for name in [
+            r"a\b", "a/b", r"..\evil", "../evil", "/abs", r"C:\x", "a:b", "a*b", "a?b", "a\"b",
+            "a<b", "a>b", "a|b", "a\0b", "a\nb", "a\u{7f}b",
+        ] {
+            assert!(
+                refused(name).title.starts_with("Il nome non può contenere"),
+                "{name:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn dots_and_reserved_words_inside_a_longer_name_are_fine() {
+        let dir = tempfile::tempdir().unwrap();
+        let parent = dir.path().to_str().unwrap();
+        for name in [
+            ".nascosta",
+            "Foto.2024",
+            "CONTO",
+            "COM10",
+            "COM",
+            "LPT0",
+            "a b",
+            "Città",
+        ] {
+            assert!(create_folder(parent, name).is_ok(), "{name:?}");
+        }
+    }
+
+    #[test]
+    fn a_name_longer_than_255_bytes_is_refused() {
+        assert_eq!(refused(&"a".repeat(256)).title, "Il nome è troppo lungo.");
+        let dir = tempfile::tempdir().unwrap();
+        assert!(create_folder(dir.path().to_str().unwrap(), &"a".repeat(255)).is_ok());
+    }
+
+    #[test]
+    fn an_existing_folder_or_file_is_never_reused() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("Foto")).unwrap();
+        std::fs::write(dir.path().join("nota.txt"), "x").unwrap();
+        let parent = dir.path().to_str().unwrap();
+
+        for name in ["Foto", "nota.txt"] {
+            let e = create_folder(parent, name).unwrap_err();
+            assert_eq!(e.title, "Esiste già una cartella con questo nome.");
+            assert_eq!(e.advice, "Scegli un altro nome.");
+        }
+    }
+
+    #[test]
+    fn a_parent_that_is_not_there_is_an_error_and_is_not_created() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("non-esiste");
+
+        let e = create_folder(missing.to_str().unwrap(), "Foto").unwrap_err();
+
+        assert_eq!(e.title, "Non trovo la cartella in cui creare la nuova.");
+        assert_eq!(e.advice, "Il disco è collegato?");
+        assert!(!missing.exists());
+        assert!(create_folder("", "Foto").is_err());
+    }
+
+    #[test]
+    fn the_os_error_decides_the_message() {
+        let explain = |kind| explain_create_error(&std::io::Error::from(kind));
+        assert_eq!(
+            explain(std::io::ErrorKind::PermissionDenied).title,
+            "Non ho il permesso di creare una cartella qui."
+        );
+        assert_eq!(
+            explain(std::io::ErrorKind::ReadOnlyFilesystem).title,
+            "Il disco è in sola lettura: non posso crearci cartelle."
+        );
+        assert_eq!(
+            explain(std::io::ErrorKind::TimedOut).title,
+            "Non riesco a creare la cartella."
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn a_write_protected_windows_disk_is_read_only() {
+        const ERROR_WRITE_PROTECT: i32 = 19;
+        let e = explain_create_error(&std::io::Error::from_raw_os_error(ERROR_WRITE_PROTECT));
+        assert_eq!(
+            e.title,
+            "Il disco è in sola lettura: non posso crearci cartelle."
+        );
     }
 
     #[test]

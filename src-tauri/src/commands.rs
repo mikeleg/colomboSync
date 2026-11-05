@@ -160,6 +160,12 @@ pub async fn browse_folders(path: String) -> Result<FolderListing, String> {
     blocking(move || Ok(folder_browser::browse(&path))).await
 }
 
+/// A new folder `name` inside `parent`, whose path is returned. Blocking thread, like browsing.
+#[tauri::command]
+pub async fn create_folder(parent: String, name: String) -> Result<String, Explanation> {
+    blocking(move || folder_browser::create_folder(&parent, &name)).await
+}
+
 /// The app runs as administrator: mapped network drives are then not visible.
 #[tauri::command]
 pub fn is_elevated() -> bool {

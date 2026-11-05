@@ -34,6 +34,7 @@ pub fn run() {
             commands::run_sync,
             commands::cancel_run,
             commands::browse_folders,
+            commands::create_folder,
             commands::list_syncs,
             commands::save_sync,
             commands::default_sync_name,

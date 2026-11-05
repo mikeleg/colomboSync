@@ -56,3 +56,4 @@ Source: spike of 2026-11-04 on the GitHub runners (`macos-latest` = macOS 26.6, 
 
 ## Error lines in the log (Registro)
 - `engine::error_lines` marks, for the log window, the lines rsync wrote under its own program name (not translated): GNU `rsync: …`, `rsync error: …`, `rsync warning: …`; openrsync `rsync(<pid>): error: …` / `rsync(<pid>): warning: …` (from `log.c` of both projects, not from a capture). Itemize lines never match (they start with their code). The text after the prefix is never read. `rsync_integration.rs` checks that a real failing run has at least one such line.
+- Known and accepted: rsync lines that carry no program-name prefix (GNU's `file has vanished: "…"`, for example) are not highlighted, because telling them apart would mean reading rsync's translated text; the `rsync warning`/`rsync error` summary lines that follow them are. Lines of an error that are mixed up by the pty, or that hold a newline in a file name, are not handled either.

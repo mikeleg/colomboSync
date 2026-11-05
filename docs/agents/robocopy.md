@@ -28,3 +28,4 @@ Source: spike of 2026-11-03 (see `docs/backlog/colombo-sync/scope.md`, Decisions
 
 ## Error lines in the log (Registro)
 - The log window marks a line as an error when it holds `<n> (0x<hex>)` (any `n`, any label before it) and is not a file line (file lines start with a tab). The sentence Windows writes on the next line is not marked.
+- Known and accepted: `ERROR: RETRY LIMIT EXCEEDED.` carries no error code, so it is not highlighted (finding it would mean reading a localized label); the `ERROR <n> (0x…)` line before it is.

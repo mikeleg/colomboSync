@@ -55,6 +55,11 @@ pub fn latest_per_sync(runs: &[Run]) -> Vec<(u64, &Run)> {
 /// Longest log tail shown: 2 MiB of the file.
 const MAX_LOG_BYTES: u64 = 2 * 1024 * 1024;
 const TRUNCATED_NOTICE: &str = "… (mostro solo l’ultima parte del registro)\n";
+/// Heads the error lines found in the cut part, above `TRUNCATED_NOTICE`.
+const EARLY_ERRORS_TITLE: &str = "Errori nella parte non mostrata del registro:\n";
+const MAX_EARLY_ERRORS: usize = 200;
+/// How much of the cut part is read at a time (even: UTF-16 units stay whole).
+const SCAN_CHUNK_BYTES: usize = 256 * 1024;
 
 /// What the log window shows of a run's log: the text, and which of its lines (from 0, as
 /// `str::lines` splits it) are engine errors, for the UI to highlight.
@@ -68,14 +73,18 @@ pub struct RunLog {
 /// A run's log as text (robocopy's `/UNILOG`, UTF-16LE with BOM, or rsync's UTF-8 output), only
 /// if the file is inside `logs_dir`. Long logs are cut to their last part.
 pub fn read_log(logs_dir: &Path, file: &Path) -> io::Result<RunLog> {
-    let text = read_log_capped(logs_dir, file, MAX_LOG_BYTES)?;
+    read_log_capped(logs_dir, file, MAX_LOG_BYTES)
+}
+
+fn read_log_capped(logs_dir: &Path, file: &Path, max_bytes: u64) -> io::Result<RunLog> {
+    let text = read_text_capped(logs_dir, file, max_bytes)?;
     Ok(RunLog {
         error_lines: engine::error_lines(&text),
         text,
     })
 }
 
-fn read_log_capped(logs_dir: &Path, file: &Path, max_bytes: u64) -> io::Result<String> {
+fn read_text_capped(logs_dir: &Path, file: &Path, max_bytes: u64) -> io::Result<String> {
     let lower = |p: &Path| PathBuf::from(p.to_string_lossy().to_lowercase());
     let file = file.canonicalize()?;
     if !lower(&file).starts_with(lower(&logs_dir.canonicalize()?)) {
@@ -92,14 +101,60 @@ fn read_log_capped(logs_dir: &Path, file: &Path, max_bytes: u64) -> io::Result<S
         return Ok(engine::decode_log(&bytes));
     }
     // Start on a UTF-16 unit boundary, then drop the cut line.
-    input.seek(SeekFrom::Start((len - max_bytes) & !1))?;
+    let start = (len - max_bytes) & !1;
+    let (mut early_errors, unfinished_line) = errors_before(&mut input, start)?;
+    input.seek(SeekFrom::Start(start))?;
     let mut tail = Vec::new();
     input.read_to_end(&mut tail)?;
     let text = engine::decode_log(&tail);
-    let from_next_line = text
-        .split_once('\n')
-        .map_or(text.as_str(), |(_, rest)| rest);
-    Ok(format!("{TRUNCATED_NOTICE}{from_next_line}"))
+    let from_next_line = match text.split_once('\n') {
+        Some((rest_of_cut_line, rest)) => {
+            // The dropped line began in the part before `start`: it is judged whole.
+            let cut_line = format!("{unfinished_line}{rest_of_cut_line}");
+            let cut_line = cut_line.trim_end_matches('\r');
+            if early_errors.len() < MAX_EARLY_ERRORS && engine::is_error_line(cut_line) {
+                early_errors.push(cut_line.to_string());
+            }
+            rest
+        }
+        None => text.as_str(),
+    };
+    let title = if early_errors.is_empty() {
+        String::new()
+    } else {
+        format!("{EARLY_ERRORS_TITLE}{}\n", early_errors.join("\n"))
+    };
+    Ok(format!("{title}{TRUNCATED_NOTICE}{from_next_line}"))
+}
+
+/// The error lines (at most `MAX_EARLY_ERRORS`, without line end) in the first `end` bytes of a
+/// log, read in chunks so a huge log is never held whole; and the unfinished line the part ends
+/// with. `end` is on a UTF-16 unit boundary. A multi-byte character split between two chunks
+/// reads as a replacement character, which cannot change whether the line is an error.
+fn errors_before(input: &mut File, end: u64) -> io::Result<(Vec<String>, String)> {
+    input.seek(SeekFrom::Start(0))?;
+    let mut errors = Vec::new();
+    let mut unfinished = String::new();
+    let mut chunk = vec![0; SCAN_CHUNK_BYTES];
+    let mut left = end;
+    while left > 0 && errors.len() < MAX_EARLY_ERRORS {
+        let n = left.min(SCAN_CHUNK_BYTES as u64) as usize;
+        input.read_exact(&mut chunk[..n])?;
+        left -= n as u64;
+        let text = format!("{unfinished}{}", engine::decode_log(&chunk[..n]));
+        let Some((complete, rest)) = text.rsplit_once('\n') else {
+            unfinished = text;
+            continue;
+        };
+        for line in complete.split('\n') {
+            let line = line.trim_end_matches('\r');
+            if errors.len() < MAX_EARLY_ERRORS && engine::is_error_line(line) {
+                errors.push(line.to_string());
+            }
+        }
+        unfinished = rest.to_string();
+    }
+    Ok((errors, unfinished))
 }
 
 #[cfg(test)]
@@ -237,11 +292,9 @@ mod tests {
         assert!(read_log(dir.path(), &file).is_err());
     }
 
-    #[test]
-    fn read_log_says_which_lines_are_errors() {
-        let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("x.log");
-        let (error, fine) = if cfg!(windows) {
+    /// An error line and a file line, as the engine of this platform writes them.
+    fn error_and_file_lines() -> (&'static str, &'static str) {
+        if cfg!(windows) {
             (
                 "2026/11/04 11:58:26 ERROR 5 (0x00000005) Copying File E:\\a.jpg",
                 "\t\t 5\tD:\\Foto\\a.jpg",
@@ -251,7 +304,14 @@ mod tests {
                 "rsync: [sender] send_files failed to open \"/A/a.jpg\": Permission denied (13)",
                 ">f+++++++++ a.jpg",
             )
-        };
+        }
+    }
+
+    #[test]
+    fn read_log_says_which_lines_are_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("x.log");
+        let (error, fine) = error_and_file_lines();
         fs::write(&file, unilog(&format!("{fine}\r\n{error}\r\n{fine}\r\n"))).unwrap();
 
         let log = read_log(dir.path(), &file).unwrap();
@@ -286,7 +346,7 @@ mod tests {
 
         // About 10 lines: 2 bytes per character in UTF-16, 1 in UTF-8.
         let cap = if cfg!(windows) { 200 } else { 100 };
-        let shown = read_log_capped(dir.path(), &file, cap).unwrap();
+        let shown = read_log_capped(dir.path(), &file, cap).unwrap().text;
 
         assert!(shown.starts_with("… (mostro solo l’ultima parte del registro)\n"));
         assert!(shown.ends_with("riga 100\r\n"));
@@ -294,5 +354,115 @@ mod tests {
         assert!(shown.lines().count() < 20);
         // No half line after the notice.
         assert!(shown.lines().nth(1).unwrap().starts_with("riga "));
+    }
+
+    /// A log of an early error followed by many file lines, and the cap that keeps only the end.
+    fn early_error_log(error: &str, fine: &str) -> (String, u64) {
+        let files: String = (1..=100).map(|n| format!("{fine} {n}\r\n")).collect();
+        // About 10 lines: 2 bytes per character in UTF-16, 1 in UTF-8.
+        (
+            format!("{fine}\r\n{error}\r\n{files}"),
+            if cfg!(windows) { 400 } else { 200 },
+        )
+    }
+
+    #[test]
+    fn an_error_in_the_part_that_is_cut_is_listed_above_the_notice() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("long.log");
+        let (error, fine) = error_and_file_lines();
+        let (text, cap) = early_error_log(error, fine);
+        fs::write(&file, unilog(&text)).unwrap();
+
+        let log = read_log_capped(dir.path(), &file, cap).unwrap();
+
+        let top = format!("{EARLY_ERRORS_TITLE}{error}\n{TRUNCATED_NOTICE}");
+        assert!(log.text.starts_with(&top), "{}", log.text);
+        assert!(log.text.ends_with(&format!("{fine} 100\r\n")));
+        assert!(!log.text.contains(&format!("{fine} 1\r\n")));
+        // Line 0 is the title; the error is line 1.
+        assert_eq!(log.error_lines, [1]);
+    }
+
+    #[test]
+    fn an_error_line_cut_in_half_is_still_listed_whole() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("long.log");
+        let (error, fine) = error_and_file_lines();
+        let (text, _) = early_error_log(error, fine);
+        fs::write(&file, unilog(&text)).unwrap();
+        // The log is cut 5 characters into the error line.
+        let unit = if cfg!(windows) { 2 } else { 1 };
+        let bom = if cfg!(windows) { 2 } else { 0 };
+        let total = bom + unit * text.len() as u64;
+        let cut_at = bom + unit * (fine.len() as u64 + 2 + 5);
+
+        let log = read_log_capped(dir.path(), &file, total - cut_at).unwrap();
+
+        assert_eq!(log.text.matches(error).count(), 1, "{}", log.text);
+        assert!(
+            log.text
+                .starts_with(&format!("{EARLY_ERRORS_TITLE}{error}\n"))
+        );
+        assert_eq!(log.error_lines, [1]);
+    }
+
+    #[test]
+    fn at_most_200_errors_of_the_cut_part_are_listed() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("long.log");
+        let (error, fine) = error_and_file_lines();
+        let errors: String = (1..=300).map(|n| format!("{error} {n}\r\n")).collect();
+        let files: String = (1..=50).map(|n| format!("{fine} {n}\r\n")).collect();
+        fs::write(&file, unilog(&format!("{errors}{files}"))).unwrap();
+        let cap = if cfg!(windows) { 200 } else { 100 };
+
+        let log = read_log_capped(dir.path(), &file, cap).unwrap();
+
+        // The title, then the first 200 errors, then the notice and the end of the log.
+        assert_eq!(log.error_lines, (1..=200).collect::<Vec<_>>());
+        assert!(log.text.lines().nth(200).unwrap().ends_with(" 200"));
+        assert_eq!(
+            log.text.lines().nth(201).unwrap(),
+            TRUNCATED_NOTICE.trim_end()
+        );
+    }
+
+    #[test]
+    fn errors_are_found_in_every_chunk_of_a_cut_part_bigger_than_one_chunk() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("long.log");
+        let (error, fine) = error_and_file_lines();
+        // Several chunks of file lines, an error in each of the first three (the chunk size is not
+        // a multiple of the line length, so lines straddle the chunk ends).
+        let lines_per_error = SCAN_CHUNK_BYTES / 20;
+        let text: String = (0..4 * lines_per_error)
+            .map(|n| match n {
+                n if n % lines_per_error == 7 => format!("{error}\r\n"),
+                _ => format!("{fine} {n}\r\n"),
+            })
+            .collect();
+        fs::write(&file, unilog(&text)).unwrap();
+
+        let log = read_log_capped(dir.path(), &file, 400).unwrap();
+
+        assert!(log.text.starts_with(EARLY_ERRORS_TITLE));
+        assert_eq!(log.text.matches(error).count(), 4);
+        assert_eq!(log.error_lines, [1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn a_log_with_no_error_in_the_cut_part_has_no_title() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("long.log");
+        let (error, fine) = error_and_file_lines();
+        let files: String = (1..=100).map(|n| format!("{fine} {n}\r\n")).collect();
+        fs::write(&file, unilog(&format!("{files}{error}\r\n"))).unwrap();
+        let cap = if cfg!(windows) { 400 } else { 200 };
+
+        let log = read_log_capped(dir.path(), &file, cap).unwrap();
+
+        assert!(log.text.starts_with(TRUNCATED_NOTICE));
+        assert_eq!(log.error_lines.len(), 1, "only the error in the shown end");
     }
 }

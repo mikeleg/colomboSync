@@ -30,7 +30,7 @@
       <section>
         <h2>Riepilogo</h2>
         <div class="counts">
-          {#each numbers as [label, value]}
+          {#each numbers as [label, value] (label)}
             <div class="cnt"><b>{formatNumber(value)}</b><span>{label}</span></div>
           {/each}
         </div>

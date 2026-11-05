@@ -14,8 +14,16 @@
   let modeFilter = $state("");
   let periodDays = $state("");
 
-  /** A run belongs to its saved sync by id; old lines without one, by name. */
-  const syncKey = (run: Run) => (run.syncId != null ? `id:${run.syncId}` : `name:${run.syncName}`);
+  /** Id of each name used by a run that has one (newest wins), so old lines without an id join their sync. */
+  const idByName = $derived(
+    new Map([...runs].reverse().flatMap((r): [string, number][] => (r.syncId != null ? [[r.syncName, r.syncId]] : []))),
+  );
+
+  /** A run belongs to its saved sync by id; old lines without one, by the id of a run with the same name, else by name. */
+  const syncKey = (run: Run) => {
+    const id = run.syncId ?? idByName.get(run.syncName);
+    return id != null ? `id:${id}` : `name:${run.syncName}`;
+  };
 
   const syncOptions = $derived(
     // runs are newest first: a renamed sync shows under its latest name.
@@ -24,13 +32,18 @@
     ),
   );
   const filtered = $derived.by(() => {
-    const since = periodDays ? Date.now() - Number(periodDays) * 86_400_000 : 0;
-    return runs.filter(
-      (r) =>
-        (!syncFilter || syncKey(r) === syncFilter) &&
-        (!outcomeFilter || r.outcome === outcomeFilter) &&
-        (!modeFilter || r.mode === modeFilter) &&
-        Date.parse(r.startedAt) >= since,
+    const since = Date.now() - Number(periodDays) * 86_400_000;
+    return (
+      runs
+        // The history only grows at the front: counting from the oldest run keeps a run's key when new ones arrive.
+        .map((run, i) => ({ run, key: runs.length - i }))
+        .filter(
+          ({ run: r }) =>
+            (!syncFilter || syncKey(r) === syncFilter) &&
+            (!outcomeFilter || r.outcome === outcomeFilter) &&
+            (!modeFilter || r.mode === modeFilter) &&
+            (!periodDays || Date.parse(r.startedAt) >= since),
+        )
     );
   });
   const isFiltered = $derived(!!(syncFilter || outcomeFilter || modeFilter || periodDays));
@@ -53,7 +66,7 @@
       Sincronizzazione
       <select bind:value={syncFilter}>
         <option value="">Tutte</option>
-        {#each syncOptions as [key, name]}
+        {#each syncOptions as [key, name] (key)}
           <option value={key}>{name}</option>
         {/each}
       </select>
@@ -95,7 +108,7 @@
   {/if}
 {/if}
 <ul class="runs">
-  {#each filtered as run}
+  {#each filtered as { run, key } (key)}
     <li class="run">
       <div class="top">
         <strong>{run.syncName}</strong>

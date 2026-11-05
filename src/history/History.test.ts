@@ -325,3 +325,22 @@ test("a deleted log file says it is no longer available", async () => {
 
   expect(await screen.findByText("Il registro di questa copia non è più disponibile.")).toBeTruthy();
 });
+
+test("with no period chosen, a run whose start time does not parse is still listed", () => {
+  render(History, { runs: [run({ syncName: "Strana", startedAt: "non è una data" }), run()], status: "ready" });
+
+  expect(names()).toEqual(["Strana", "Copia di Foto"]);
+});
+
+test("a sync that ran before and after ids existed is one entry showing all its runs", async () => {
+  render(History, {
+    runs: [run({ syncName: "Foto", syncId: 1 }), run({ syncName: "Foto" }), run({ syncName: "Altra" })],
+    status: "ready",
+  });
+  const options = within(screen.getByLabelText("Sincronizzazione")).getAllByRole("option");
+  expect(options.map((o) => o.textContent)).toEqual(["Tutte", "Altra", "Foto"]);
+
+  await pick("Sincronizzazione", options[2].getAttribute("value")!);
+
+  expect(names()).toEqual(["Foto", "Foto"]);
+});

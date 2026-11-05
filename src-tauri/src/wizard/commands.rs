@@ -2,10 +2,10 @@
 //! never freezes.
 
 use super::folder_browser::{self, FolderListing};
-use crate::engine::SyncMode;
 use crate::engine::preview_parser::Preview;
 use crate::run::runner::{self, PreviewMemo};
 use crate::shared::blocking::blocking;
+use crate::shared::domain::SyncMode;
 use crate::shared::error_messages::Explanation;
 use crate::shared::path_rules;
 use tauri::{AppHandle, Manager};

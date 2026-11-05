@@ -1,27 +1,16 @@
 //! `syncs.json`: the saved syncs, and what the home screen shows about each.
 
-use crate::engine::SyncMode;
-use crate::history::{self, Outcome};
+use crate::history;
+use crate::shared::domain::{Outcome, SavedSync, SyncMode};
 use crate::shared::error_messages;
 use crate::shared::storage::Storage;
 use chrono::Local;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::Path;
 use std::sync::{Mutex, PoisonError};
-
-/// A saved A→B pair (the glossary's `Sync`; not named so to avoid shadowing `std::marker::Sync`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SavedSync {
-    pub id: u64,
-    pub name: String,
-    pub source: String,
-    pub destination: String,
-    pub mode: SyncMode,
-}
 
 /// How the latest Run of a sync ended, for the home card.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -161,8 +150,7 @@ pub fn default_sync_name(source: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::history::Run;
-    use crate::shared::error_messages::{Cause, Folder};
+    use crate::shared::domain::{Cause, Folder, Run};
 
     fn sync(id: u64, name: &str) -> SavedSync {
         SavedSync {

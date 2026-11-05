@@ -2,13 +2,13 @@
 
 use super::mirror_guard;
 use super::progress::{Progress, StdoutFollower};
+use crate::engine;
 use crate::engine::preview_parser::{Counts, Preview};
-use crate::engine::{self, SyncMode};
-use crate::history::{self, Outcome, Run};
-use crate::shared::error_messages::{self, Cause, ENGINE_MISSING, Explanation, Folder, Moment};
+use crate::history;
+use crate::shared::domain::{Cause, Folder, Outcome, Run, SavedSync, SyncMode};
+use crate::shared::error_messages::{self, ENGINE_MISSING, Explanation, Moment};
 use crate::shared::path_rules;
 use crate::shared::storage::Storage;
-use crate::syncs::sync_store::SavedSync;
 use chrono::Local;
 use std::fs;
 use std::io::{self, Read};

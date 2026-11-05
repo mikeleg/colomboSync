@@ -2,24 +2,10 @@
 //! (`ERROR 53 (0x00000035)`), never from the labels around it: those are localized. Only the
 //! cause (code + folder) is kept; the texts are made from it when they are needed.
 
+use super::domain::{Cause, Folder, Outcome, Run};
 use super::path_rules;
-use crate::history::{Outcome, Run};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::io;
-
-/// A and B of a Sync.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Folder {
-    A,
-    B,
-}
-
-/// What went wrong: a mapped Windows error code, and the folder it is about.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Cause {
-    pub code: u32,
-    pub folder: Folder,
-}
 
 /// What the user reads: the sentence that says what happened, and what to do about it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -328,7 +314,7 @@ fn mount_point(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::SyncMode;
+    use crate::shared::domain::SyncMode;
 
     const A: &str = r"D:\Foto";
     const NAS_B: &str = r"\\NAS\Backup";

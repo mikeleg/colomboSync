@@ -6,14 +6,6 @@ pub mod preview_parser;
 pub mod robocopy;
 pub mod rsync;
 
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SyncMode {
-    Copy,
-    Mirror,
-}
-
 /// A dry run that has ended.
 pub struct Finished {
     /// Exit code of the engine process.

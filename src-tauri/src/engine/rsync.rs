@@ -3,8 +3,7 @@
 //! only the process calls are Unix-only. Facts and per-platform quirks: `docs/agents/rsync.md`.
 
 use super::preview_parser::Preview;
-use crate::engine::SyncMode;
-use crate::shared::error_messages::{Cause, Folder};
+use crate::shared::domain::{Cause, Folder, SyncMode};
 use std::path::Path;
 
 /// `-rt`: recurse and keep modification times (so the next run finds nothing to do); no

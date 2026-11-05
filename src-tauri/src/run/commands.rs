@@ -3,10 +3,9 @@
 
 use super::runner::{self, ActiveRun, PreviewMemo};
 use crate::engine::preview_parser::Counts;
-use crate::history::Run;
+use crate::shared::domain::{Run, SavedSync};
 use crate::shared::error_messages::{self, Explanation};
 use crate::shared::storage::Storage;
-use crate::syncs::sync_store::SavedSync;
 use serde::Serialize;
 use tauri::async_runtime::spawn_blocking;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -74,9 +73,7 @@ pub fn cancel_run(app: AppHandle, active: State<'_, ActiveRun>, exit_when_done: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::SyncMode;
-    use crate::history::Outcome;
-    use crate::shared::error_messages::{Cause, Folder};
+    use crate::shared::domain::{Cause, Folder, Outcome, SyncMode};
 
     #[test]
     fn a_failed_run_goes_to_the_ui_with_its_explanation_next_to_the_stored_fields() {

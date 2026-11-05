@@ -1,13 +1,11 @@
 //! Runs the real `robocopy.exe` on temp folders.
 #![cfg(windows)]
 
-use colombo_sync_lib::engine::SyncMode;
-use colombo_sync_lib::history::{Outcome, Run};
 use colombo_sync_lib::run::mirror_guard;
 use colombo_sync_lib::run::runner::{self, ActiveRun};
-use colombo_sync_lib::shared::error_messages::{self, Cause, Folder};
+use colombo_sync_lib::shared::domain::{Cause, Folder, Outcome, Run, SavedSync, SyncMode};
+use colombo_sync_lib::shared::error_messages;
 use colombo_sync_lib::shared::storage::Storage;
-use colombo_sync_lib::syncs::sync_store::SavedSync;
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, SystemTime};

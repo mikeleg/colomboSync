@@ -1,8 +1,8 @@
 //! Thin `#[tauri::command]` wrappers for the saved syncs.
 
-use super::sync_store::{self, ListedSyncs, SavedSync};
-use crate::engine::SyncMode;
+use super::sync_store::{self, ListedSyncs};
 use crate::shared::blocking::blocking;
+use crate::shared::domain::{SavedSync, SyncMode};
 use crate::shared::storage::Storage;
 
 #[tauri::command]

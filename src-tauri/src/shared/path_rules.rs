@@ -108,7 +108,7 @@ pub(crate) fn normalize_windows(path: &str) -> String {
     } else if let Some(rest) = path.strip_prefix(r"\\?\") {
         path = rest.to_string();
     }
-    let unc = path.starts_with(r"\\");
+    let unc = is_unc(&path);
     let root_parts = if unc { 2 } else { 1 };
     let mut parts: Vec<&str> = Vec::new();
     for part in path.split('\\') {
@@ -124,6 +124,11 @@ pub(crate) fn normalize_windows(path: &str) -> String {
     }
     let joined = parts.join("\\");
     if unc { format!(r"\\{joined}") } else { joined }
+}
+
+/// A network share: `\\server\share`.
+pub(crate) fn is_unc(path: &str) -> bool {
+    path.starts_with(r"\\")
 }
 
 /// Characters Windows does not allow in a file or folder name (also controls), whatever the OS.

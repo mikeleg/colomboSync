@@ -162,7 +162,13 @@ pub fn card_note(run: &Run) -> Option<String> {
         Outcome::Error => Some(
             run.cause
                 .and_then(|cause| reason(cause, &run.source, &run.destination))
-                .map_or_else(|| GENERIC_NOTE.to_string(), |r| r.note),
+                .map_or_else(
+                    || GENERIC_NOTE.to_string(),
+                    |r| {
+                        r.note
+                            .unwrap_or_else(|| format!("{}. {}", capitalized(&r.what), r.advice))
+                    },
+                ),
         ),
     }
 }
@@ -177,8 +183,8 @@ struct Reason {
     /// A sentence that starts in lower case and has no full stop: "non trovo la cartella A (…)".
     what: String,
     advice: String,
-    /// The same thing for the home card, said about the last time.
-    note: String,
+    /// The home card's text when it is not just `what` and `advice`, said about the last time.
+    note: Option<String>,
 }
 
 fn reason(cause: Cause, source: &str, destination: &str) -> Option<Reason> {
@@ -188,18 +194,19 @@ fn reason(cause: Cause, source: &str, destination: &str) -> Option<Reason> {
     };
     let (what, advice) = match cause.code {
         53 | 67 => {
-            let (lower, upper) = unreachable_name(path);
+            let name = unreachable_name(path);
             return Some(Reason {
-                what: format!("{lower} non è raggiungibile"),
+                what: format!("{name} non è raggiungibile"),
                 advice: "Controlla la connessione e riprova.".into(),
-                note: format!(
-                    "{upper} non era raggiungibile. Controlla che sia collegato e riprova."
-                ),
+                note: Some(format!(
+                    "{} non era raggiungibile. Controlla che sia collegato e riprova.",
+                    capitalized(&name)
+                )),
             });
         }
         2 | 3 => (
             format!("non trovo la cartella {name} ({path})"),
-            if is_network(path) {
+            if path_rules::is_unc(path) {
                 "La cartella di rete è raggiungibile?"
             } else {
                 DISK_CONNECTED
@@ -216,9 +223,9 @@ fn reason(cause: Cause, source: &str, destination: &str) -> Option<Reason> {
         _ => return None,
     };
     Some(Reason {
-        note: format!("{}. {advice}", capitalized(&what)),
         what,
         advice: advice.into(),
+        note: None,
     })
 }
 
@@ -252,7 +259,9 @@ fn folder_of(line: &str, source: &str, destination: &str) -> Folder {
     match (mentions(&line, source), mentions(&line, destination)) {
         (true, false) => Folder::A,
         (false, true) => Folder::B,
-        _ if is_network(source.trim()) && !is_network(destination.trim()) => Folder::A,
+        _ if path_rules::is_unc(source.trim()) && !path_rules::is_unc(destination.trim()) => {
+            Folder::A
+        }
         _ => Folder::B,
     }
 }
@@ -271,30 +280,22 @@ fn mentions(line: &str, path: &str) -> bool {
         })
 }
 
-fn is_network(path: &str) -> bool {
-    path.starts_with(r"\\")
-}
-
-/// "la cartella di rete \\NAS" or "il disco D:", lower case and capitalized.
-fn unreachable_name(path: &str) -> (String, String) {
-    if is_network(path) {
+/// "la cartella di rete \\NAS" or "il disco D:", in lower case.
+fn unreachable_name(path: &str) -> String {
+    if path_rules::is_unc(path) {
         let server = path
             .trim_start_matches('\\')
             .split('\\')
             .next()
             .unwrap_or("");
-        let tag = format!(r"\\{server}");
-        (
-            format!("la cartella di rete {tag}"),
-            format!("La cartella di rete {tag}"),
-        )
+        format!(r"la cartella di rete \\{server}")
     } else {
         let tag = if path.starts_with('/') {
             mount_point(path)
         } else {
             path.chars().take(2).collect::<String>().to_uppercase()
         };
-        (format!("il disco {tag}"), format!("Il disco {tag}"))
+        format!("il disco {tag}")
     }
 }
 
@@ -368,10 +369,6 @@ mod tests {
         )
     }
 
-    fn cause(log: &str, a: &str, b: &str) -> Option<Cause> {
-        find_cause(log, a, b)
-    }
-
     fn run_text(code: u32, folder: Folder, a: &str, b: &str) -> Explanation {
         describe(Some(Cause { code, folder }), a, b, Moment::Run)
     }
@@ -383,7 +380,7 @@ mod tests {
     #[test]
     fn error_53_is_found_by_code_in_any_language() {
         for text in [english(53, r"\\NAS\Backup\"), italian(53, r"\\NAS\Backup\")] {
-            assert_eq!(cause(&text, A, NAS_B), at(53, Folder::B));
+            assert_eq!(find_cause(&text, A, NAS_B), at(53, Folder::B));
         }
         let e = run_text(53, Folder::B, A, NAS_B);
         assert_eq!(
@@ -396,7 +393,7 @@ mod tests {
     #[test]
     fn error_67_is_an_unreachable_share_too() {
         assert_eq!(
-            cause(&italian(67, r"\\NAS\Backup\x\"), A, NAS_B),
+            find_cause(&italian(67, r"\\NAS\Backup\x\"), A, NAS_B),
             at(67, Folder::B)
         );
         assert_eq!(
@@ -423,7 +420,7 @@ mod tests {
                     r"D:\Foto\",
                 ),
             ] {
-                assert_eq!(cause(&text, A, r"E:\Backup"), at(code, Folder::A));
+                assert_eq!(find_cause(&text, A, r"E:\Backup"), at(code, Folder::A));
             }
             let e = run_text(code, Folder::A, A, r"E:\Backup");
             assert_eq!(
@@ -450,7 +447,7 @@ mod tests {
             log(5, "ERROR", "Copying File", r"E:\Backup\2024\a.jpg"),
             log(5, "ERRORE", "Copia file", r"E:\Backup\2024\a.jpg"),
         ] {
-            assert_eq!(cause(&text, A, r"E:\Backup"), at(5, Folder::B));
+            assert_eq!(find_cause(&text, A, r"E:\Backup"), at(5, Folder::B));
         }
         let e = run_text(5, Folder::B, A, r"E:\Backup");
         assert_eq!(
@@ -467,7 +464,7 @@ mod tests {
             "robocopy ha detto qualcosa senza codice\r\n".to_string(),
             String::new(),
         ] {
-            assert_eq!(cause(&text, A, r"E:\Backup"), None);
+            assert_eq!(find_cause(&text, A, r"E:\Backup"), None);
         }
         let e = describe(None, A, r"E:\Backup", Moment::Run);
         assert_eq!(
@@ -574,26 +571,35 @@ mod tests {
         // `D:\Foto 2` is a folder of its own: the error is about A, not about B (`D:\Foto`).
         let (a, b) = (r"D:\Foto 2", r"D:\Foto");
         let line = english(5, r"D:\Foto 2\a.jpg");
-        assert_eq!(cause(&line, a, b), at(5, Folder::A));
-        assert_eq!(cause(&english(5, r"D:\Foto 2\"), a, b), at(5, Folder::A));
-        assert_eq!(cause(&english(5, r"d:/foto/a.jpg"), a, b), at(5, Folder::B));
+        assert_eq!(find_cause(&line, a, b), at(5, Folder::A));
+        assert_eq!(
+            find_cause(&english(5, r"D:\Foto 2\"), a, b),
+            at(5, Folder::A)
+        );
+        assert_eq!(
+            find_cause(&english(5, r"d:/foto/a.jpg"), a, b),
+            at(5, Folder::B)
+        );
         // B is `D:\Foto2`: a sibling by name, not a parent.
         let line = english(5, r"D:\Foto2\a.jpg");
-        assert_eq!(cause(&line, A, r"D:\Foto2"), at(5, Folder::B));
+        assert_eq!(find_cause(&line, A, r"D:\Foto2"), at(5, Folder::B));
     }
 
     #[test]
     fn a_line_without_a_known_path_blames_the_share_then_b() {
         let line = english(53, r"\\ALTRO\x\");
-        assert_eq!(cause(&line, A, NAS_B), at(53, Folder::B));
-        assert_eq!(cause(&line, NAS_B, r"E:\Backup"), at(53, Folder::A));
-        assert_eq!(cause(&english(3, "x"), A, r"E:\Backup"), at(3, Folder::B));
+        assert_eq!(find_cause(&line, A, NAS_B), at(53, Folder::B));
+        assert_eq!(find_cause(&line, NAS_B, r"E:\Backup"), at(53, Folder::A));
+        assert_eq!(
+            find_cause(&english(3, "x"), A, r"E:\Backup"),
+            at(3, Folder::B)
+        );
     }
 
     #[test]
     fn the_first_mapped_error_wins() {
         let text = english(32, r"E:\a") + &english(5, r"E:\Backup\b") + &english(53, NAS_B);
-        assert_eq!(cause(&text, A, r"E:\Backup"), at(5, Folder::B));
+        assert_eq!(find_cause(&text, A, r"E:\Backup"), at(5, Folder::B));
     }
 
     fn run(outcome: Outcome, cause: Option<Cause>) -> Run {

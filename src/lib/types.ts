@@ -26,6 +26,8 @@ export interface Counts {
 }
 
 export interface Run {
+  /** The saved sync it belongs to; missing on lines written before syncs had ids. */
+  syncId?: number;
   syncName: string;
   source: string;
   destination: string;

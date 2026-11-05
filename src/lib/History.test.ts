@@ -137,6 +137,174 @@ test("Tab stays inside the log modal", async () => {
   expect(document.activeElement).toBe(logText);
 });
 
+const names = () => screen.queryAllByRole("listitem").map((r) => within(r).getByRole("strong").textContent);
+const pick = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
+
+const mixed = () => [
+  run({ syncName: "Foto", syncId: 1, outcome: "Ok", mode: "Copy" }),
+  run({ syncName: "Documenti", syncId: 2, outcome: "Error", mode: "Mirror" }),
+  run({ syncName: "Documenti", syncId: 2, outcome: "Cancelled", mode: "Copy" }),
+  run({ syncName: "Foto", syncId: 1, outcome: "Error", mode: "Mirror" }),
+];
+
+test("the filters sit above the list, all on 'tutte', with no counter or reset link", () => {
+  render(History, { runs: mixed(), status: "ready" });
+
+  expect((screen.getByLabelText("Sincronizzazione") as HTMLSelectElement).selectedOptions[0].textContent).toBe("Tutte");
+  expect((screen.getByLabelText("Esito") as HTMLSelectElement).selectedOptions[0].textContent).toBe("Tutti");
+  expect((screen.getByLabelText("Modalità") as HTMLSelectElement).selectedOptions[0].textContent).toBe("Tutte");
+  expect((screen.getByLabelText("Periodo") as HTMLSelectElement).selectedOptions[0].textContent).toBe("Sempre");
+  expect(names()).toHaveLength(4);
+  expect(screen.queryByText(/copie su|copia su/)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Togli i filtri" })).toBeNull();
+});
+
+test("Sincronizzazione lists each sync once and shows only its runs", async () => {
+  render(History, { runs: mixed(), status: "ready" });
+  const options = within(screen.getByLabelText("Sincronizzazione")).getAllByRole("option");
+  expect(options.map((o) => o.textContent)).toEqual(["Tutte", "Documenti", "Foto"]);
+
+  await pick("Sincronizzazione", options[2].getAttribute("value")!);
+
+  expect(names()).toEqual(["Foto", "Foto"]);
+});
+
+test("a renamed sync is still one entry: runs are matched by sync id", async () => {
+  render(History, {
+    runs: [run({ syncName: "Nuovo nome", syncId: 1 }), run({ syncName: "Vecchio nome", syncId: 1 }), run({ syncName: "Altra", syncId: 2 })],
+    status: "ready",
+  });
+  const options = within(screen.getByLabelText("Sincronizzazione")).getAllByRole("option");
+  expect(options).toHaveLength(3);
+
+  await pick("Sincronizzazione", options.find((o) => o.textContent === "Nuovo nome")!.getAttribute("value")!);
+
+  expect(names()).toEqual(["Nuovo nome", "Vecchio nome"]);
+});
+
+test("runs without a sync id are matched by name", async () => {
+  render(History, { runs: [run({ syncName: "A" }), run({ syncName: "B" }), run({ syncName: "A" })], status: "ready" });
+  const options = within(screen.getByLabelText("Sincronizzazione")).getAllByRole("option");
+  expect(options.map((o) => o.textContent)).toEqual(["Tutte", "A", "B"]);
+
+  await pick("Sincronizzazione", options[1].getAttribute("value")!);
+
+  expect(names()).toEqual(["A", "A"]);
+});
+
+test("Esito shows only OK, Errore or Annullato runs", async () => {
+  render(History, { runs: mixed(), status: "ready" });
+
+  await pick("Esito", "Error");
+  expect(screen.getAllByRole("listitem").map((r) => within(r).getByText("Errore").textContent)).toEqual(["Errore", "Errore"]);
+
+  await pick("Esito", "Ok");
+  expect(names()).toEqual(["Foto"]);
+
+  await pick("Esito", "Cancelled");
+  expect(names()).toEqual(["Documenti"]);
+});
+
+test("Modalità shows only Copia or Specchio runs", async () => {
+  render(History, { runs: mixed(), status: "ready" });
+
+  await pick("Modalità", "Mirror");
+  expect(names()).toEqual(["Documenti", "Foto"]);
+
+  await pick("Modalità", "Copy");
+  expect(names()).toEqual(["Foto", "Documenti"]);
+});
+
+test("Periodo counts back from now, by the start time of each run", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  try {
+    vi.setSystemTime(new Date("2026-11-05T12:00:00+01:00"));
+    render(History, {
+      runs: [
+        run({ syncName: "Ieri", startedAt: "2026-11-04T09:00:00+01:00" }),
+        run({ syncName: "Otto giorni fa", startedAt: "2026-10-28T09:00:00+01:00" }),
+        run({ syncName: "Quaranta giorni fa", startedAt: "2026-09-26T09:00:00+01:00" }),
+      ],
+      status: "ready",
+    });
+
+    await pick("Periodo", "7");
+    expect(names()).toEqual(["Ieri"]);
+
+    await pick("Periodo", "30");
+    expect(names()).toEqual(["Ieri", "Otto giorni fa"]);
+
+    await pick("Periodo", "");
+    expect(names()).toHaveLength(3);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("filters combine: a run must match all of them", async () => {
+  render(History, { runs: mixed(), status: "ready" });
+
+  await pick("Esito", "Error");
+  await pick("Modalità", "Mirror");
+  expect(names()).toEqual(["Documenti", "Foto"]);
+
+  const options = within(screen.getByLabelText("Sincronizzazione")).getAllByRole("option");
+  await pick("Sincronizzazione", options[1].getAttribute("value")!);
+  expect(names()).toEqual(["Documenti"]);
+});
+
+test("with a filter on, a counter and 'Togli i filtri' appear; the link puts everything back", async () => {
+  render(History, { runs: mixed(), status: "ready" });
+
+  await pick("Esito", "Error");
+  expect(screen.getByText("2 copie su 4")).toBeTruthy();
+
+  await pick("Esito", "Ok");
+  expect(screen.getByText("1 copia su 4")).toBeTruthy();
+
+  await pick("Modalità", "Mirror");
+  await fireEvent.click(screen.getByRole("button", { name: "Togli i filtri" }));
+
+  expect(names()).toHaveLength(4);
+  for (const label of ["Sincronizzazione", "Esito", "Modalità", "Periodo"]) {
+    expect((screen.getByLabelText(label) as HTMLSelectElement).value).toBe("");
+  }
+  expect(screen.queryByText(/copie su|copia su/)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Togli i filtri" })).toBeNull();
+});
+
+test("when nothing matches, a message replaces the list and the filters can be removed", async () => {
+  render(History, { runs: [run({ outcome: "Ok" })], status: "ready" });
+
+  await pick("Esito", "Error");
+
+  expect(screen.getByText("Nessuna copia con questi filtri.")).toBeTruthy();
+  expect(screen.getByText("0 copie su 1")).toBeTruthy();
+  expect(screen.queryByRole("listitem")).toBeNull();
+  await fireEvent.click(screen.getByRole("button", { name: "Togli i filtri" }));
+  expect(names()).toHaveLength(1);
+  expect(screen.queryByText("Nessuna copia con questi filtri.")).toBeNull();
+});
+
+test("the filters stay on while the Registro modal opens and closes", async () => {
+  invokeMock.mockResolvedValueOnce("x");
+  render(History, { runs: mixed(), status: "ready" });
+  await pick("Esito", "Error");
+
+  await fireEvent.click(screen.getAllByRole("button", { name: "Registro" })[0]);
+  await fireEvent.keyDown(window, { key: "Escape" });
+
+  expect((screen.getByLabelText("Esito") as HTMLSelectElement).value).toBe("Error");
+  expect(names()).toHaveLength(2);
+});
+
+test("with no runs there are no filters", () => {
+  render(History, { runs: [], status: "ready" });
+
+  expect(screen.queryByLabelText("Esito")).toBeNull();
+  expect(screen.queryByText("Nessuna copia con questi filtri.")).toBeNull();
+});
+
 test("a deleted log file says it is no longer available", async () => {
   invokeMock.mockRejectedValueOnce("os error 2");
   render(History, { runs: [run()], status: "ready" });

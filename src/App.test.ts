@@ -542,7 +542,7 @@ test("Storico lists the runs from Rust and swaps the schema for the summary pane
   expect(invokeMock).toHaveBeenCalledWith("list_runs");
   expect(invokeMock).toHaveBeenCalledWith("history_summary");
   expect(screen.getByRole("heading", { name: "Storico" })).toBeTruthy();
-  expect(await screen.findByText("Seconda")).toBeTruthy();
+  expect(await screen.findByText("Seconda", { selector: "strong" })).toBeTruthy();
   const aside = screen.getByRole("complementary", { name: "Riepilogo dello storico" });
   expect(aside.textContent).not.toContain("Cosa succede");
   expect(within(aside).getByText("Copie fatte").previousElementSibling?.textContent).toBe("2");
@@ -561,7 +561,7 @@ test("if the summary cannot be read the rows still show and the panel keeps its 
 
   await click("Storico");
 
-  expect(await screen.findByText("Prima")).toBeTruthy();
+  expect(await screen.findByText("Prima", { selector: "strong" })).toBeTruthy();
   const aside = screen.getByRole("complementary", { name: "Riepilogo dello storico" });
   expect(within(aside).queryByText("Copie fatte")).toBeNull();
   expect(within(aside).getByText("Cosa vogliono dire le etichette")).toBeTruthy();
@@ -591,13 +591,13 @@ test("while the history loads there are no old rows, and a late older answer is 
   expect(screen.getByText("Sto leggendo lo storico…")).toBeTruthy();
   await click("Sincronizzazioni");
   await click("Storico");
-  expect(await screen.findByText("Aggiornata")).toBeTruthy();
+  expect(await screen.findByText("Aggiornata", { selector: "strong" })).toBeTruthy();
 
   answerFirst([{ ...doneRun, syncName: "Vecchia" }]);
   await Promise.resolve();
 
-  expect(screen.queryByText("Vecchia")).toBeNull();
-  expect(screen.getByText("Aggiornata")).toBeTruthy();
+  expect(screen.queryByText("Vecchia", { selector: "strong" })).toBeNull();
+  expect(screen.getByText("Aggiornata", { selector: "strong" })).toBeTruthy();
 });
 
 test("closing the window during a run asks to stop the copy", async () => {

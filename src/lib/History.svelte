@@ -7,6 +7,37 @@
   let { runs, status }: { runs: Run[]; status: "loading" | "ready" | "error" } = $props();
 
   let viewing = $state<Run | null>(null);
+
+  // "" = no filter. Kept here, so they survive the Registro modal; not stored anywhere.
+  let syncFilter = $state("");
+  let outcomeFilter = $state("");
+  let modeFilter = $state("");
+  let periodDays = $state("");
+
+  /** A run belongs to its saved sync by id; old lines without one, by name. */
+  const syncKey = (run: Run) => (run.syncId != null ? `id:${run.syncId}` : `name:${run.syncName}`);
+
+  const syncOptions = $derived(
+    // runs are newest first: a renamed sync shows under its latest name.
+    [...new Map([...runs].reverse().map((r): [string, string] => [syncKey(r), r.syncName]))].sort((a, b) =>
+      a[1].localeCompare(b[1], "it"),
+    ),
+  );
+  const filtered = $derived.by(() => {
+    const since = periodDays ? Date.now() - Number(periodDays) * 86_400_000 : 0;
+    return runs.filter(
+      (r) =>
+        (!syncFilter || syncKey(r) === syncFilter) &&
+        (!outcomeFilter || r.outcome === outcomeFilter) &&
+        (!modeFilter || r.mode === modeFilter) &&
+        Date.parse(r.startedAt) >= since,
+    );
+  });
+  const isFiltered = $derived(!!(syncFilter || outcomeFilter || modeFilter || periodDays));
+
+  function clearFilters() {
+    syncFilter = outcomeFilter = modeFilter = periodDays = "";
+  }
 </script>
 
 <h1 id="h">Storico</h1>
@@ -16,8 +47,55 @@
 {:else if status === "error"}
   <p class="err-msg" role="alert">Non riesco a leggere lo storico.</p>
 {/if}
+{#if runs.length > 0}
+  <div class="filters">
+    <label>
+      Sincronizzazione
+      <select bind:value={syncFilter}>
+        <option value="">Tutte</option>
+        {#each syncOptions as [key, name]}
+          <option value={key}>{name}</option>
+        {/each}
+      </select>
+    </label>
+    <label>
+      Esito
+      <select bind:value={outcomeFilter}>
+        <option value="">Tutti</option>
+        <option value="Ok">{outcomeChip.Ok.label}</option>
+        <option value="Error">{outcomeChip.Error.label}</option>
+        <option value="Cancelled">{outcomeChip.Cancelled.label}</option>
+      </select>
+    </label>
+    <label>
+      Modalità
+      <select bind:value={modeFilter}>
+        <option value="">Tutte</option>
+        <option value="Copy">{modeChip.Copy.label}</option>
+        <option value="Mirror">{modeChip.Mirror.label}</option>
+      </select>
+    </label>
+    <label>
+      Periodo
+      <select bind:value={periodDays}>
+        <option value="">Sempre</option>
+        <option value="7">Ultimi 7 giorni</option>
+        <option value="30">Ultimi 30 giorni</option>
+      </select>
+    </label>
+  </div>
+  {#if isFiltered}
+    <p class="found">
+      <span role="status">{filtered.length} {filtered.length === 1 ? "copia" : "copie"} su {runs.length}</span>
+      <button type="button" class="link" onclick={clearFilters}>Togli i filtri</button>
+    </p>
+    {#if filtered.length === 0}
+      <p class="muted">Nessuna copia con questi filtri.</p>
+    {/if}
+  {/if}
+{/if}
 <ul class="runs">
-  {#each runs as run}
+  {#each filtered as run}
     <li class="run">
       <div class="top">
         <strong>{run.syncName}</strong>
@@ -46,6 +124,38 @@
 {/if}
 
 <style>
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 18px;
+    margin-bottom: 18px;
+  }
+  .filters label {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    font-size: 14px;
+    color: var(--fg-2);
+  }
+  select {
+    min-height: 44px;
+    max-width: 100%;
+    padding: 6px 14px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+    font-size: 16px;
+    color: var(--fg);
+  }
+  .found {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    align-items: center;
+    margin-bottom: 14px;
+    color: var(--fg-2);
+  }
   .runs {
     list-style: none;
     margin: 0;

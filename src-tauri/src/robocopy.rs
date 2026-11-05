@@ -11,15 +11,14 @@ pub fn preview_args(mode: SyncMode, source: &str, destination: &str, log: &str) 
 }
 
 /// Arguments of the real run. `log` is the per-run log kept in `logs\`.
-///
-/// `/TEE` also streams every file line to stdout, in the console OEM code page (the UI follows
-/// the copy from there; `/UNICODE` does not change that on a pipe). Copy adds `/XX` so extras
-/// in B are not listed:
-/// every file line on stdout is then a file of A.
 pub fn run_args(mode: SyncMode, source: &str, destination: &str, log: &str) -> Vec<String> {
     args(mode, source, destination, log, false)
 }
 
+/// Shared builder for both runs. `dry_run` adds `/L`, otherwise `/TEE`. `/TEE` streams every file
+/// line to stdout in the console OEM code page; the UI follows the copy from there, and `/UNICODE`
+/// does not change that on a pipe. Copy adds `/XX` so extras in B are not listed: every file line
+/// on stdout is then a file of A.
 fn args(mode: SyncMode, source: &str, destination: &str, log: &str, dry_run: bool) -> Vec<String> {
     let mode_flag = match mode {
         SyncMode::Copy => "/E",
@@ -164,6 +163,93 @@ mod tests {
         for code in [8, 9, 16] {
             assert!(!is_success(code), "exit {code} must be failure");
         }
+    }
+
+    #[test]
+    fn full_argument_lists_are_pinned_for_every_mode_and_run() {
+        let (src, dst, log) = (r"C:\A", r"D:\B", r"C:\log.txt");
+        assert_eq!(
+            preview_args(SyncMode::Copy, src, dst, log),
+            [
+                r"C:\A",
+                r"D:\B",
+                "/E",
+                "/R:1",
+                "/W:1",
+                "/XX",
+                "/L",
+                "/NJH",
+                "/NJS",
+                "/NDL",
+                "/NC",
+                "/BYTES",
+                "/FP",
+                "/NP",
+                r"/UNILOG:C:\log.txt",
+            ]
+            .map(String::from)
+        );
+        assert_eq!(
+            run_args(SyncMode::Copy, src, dst, log),
+            [
+                r"C:\A",
+                r"D:\B",
+                "/E",
+                "/R:1",
+                "/W:1",
+                "/XX",
+                "/TEE",
+                "/NJH",
+                "/NJS",
+                "/NDL",
+                "/NC",
+                "/BYTES",
+                "/FP",
+                "/NP",
+                r"/UNILOG:C:\log.txt",
+            ]
+            .map(String::from)
+        );
+        assert_eq!(
+            preview_args(SyncMode::Mirror, src, dst, log),
+            [
+                r"C:\A",
+                r"D:\B",
+                "/MIR",
+                "/R:1",
+                "/W:1",
+                "/L",
+                "/NJH",
+                "/NJS",
+                "/NDL",
+                "/NC",
+                "/BYTES",
+                "/FP",
+                "/NP",
+                r"/UNILOG:C:\log.txt",
+            ]
+            .map(String::from)
+        );
+        assert_eq!(
+            run_args(SyncMode::Mirror, src, dst, log),
+            [
+                r"C:\A",
+                r"D:\B",
+                "/MIR",
+                "/R:1",
+                "/W:1",
+                "/TEE",
+                "/NJH",
+                "/NJS",
+                "/NDL",
+                "/NC",
+                "/BYTES",
+                "/FP",
+                "/NP",
+                r"/UNILOG:C:\log.txt",
+            ]
+            .map(String::from)
+        );
     }
 
     #[test]

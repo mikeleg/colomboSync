@@ -4,6 +4,7 @@
 use super::preview_parser::{self, Preview};
 use crate::shared::domain::{Cause, SyncMode};
 use crate::shared::error_messages;
+use std::path::Path;
 
 /// Arguments of the `/L` dry run. `log` receives the UTF-16LE `/UNILOG`.
 pub fn preview_args(mode: SyncMode, source: &str, destination: &str, log: &str) -> Vec<String> {
@@ -42,9 +43,13 @@ pub fn is_success(exit_code: i32) -> bool {
     (0..8).contains(&exit_code)
 }
 
-/// The preview of a `/L` log; B decides whether a file of A is New or Updated.
+/// The preview of a `/L` log; B decides whether a file of A is New or Updated. When B is not there
+/// yet nothing is in it, so every file is New without looking at the disk once per file.
 pub fn parse_preview(log: &str, source: &str, destination: &str) -> Preview {
-    preview_parser::parse(log, source, destination, |p| p.exists())
+    let destination_exists = Path::new(destination.trim()).is_dir();
+    preview_parser::parse(log, source, destination, |p| {
+        destination_exists && p.exists()
+    })
 }
 
 /// Files copied before a failed or stopped run ended. The last file line is the file in flight
@@ -369,6 +374,25 @@ mod tests {
             bytes.extend(unit.to_le_bytes());
         }
         assert_eq!(decode_log(&bytes), "è già\r\n");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn a_file_is_updated_only_where_the_destination_exists_and_holds_it() {
+        let temp = tempfile::tempdir().unwrap();
+        let (a, b) = (temp.path().join("A"), temp.path().join("B"));
+        let (a, b) = (a.to_str().unwrap(), b.to_str().unwrap());
+        let log = format!("\t\t 5\t{a}\\new.txt\r\n\t\t 5\t{a}\\updated.txt\r\n");
+
+        let without_b = parse_preview(&log, a, b);
+        assert_eq!(without_b.new.files, ["new.txt", "updated.txt"]);
+        assert_eq!(without_b.updated.count, 0);
+
+        std::fs::create_dir(b).unwrap();
+        std::fs::write(format!("{b}\\updated.txt"), "x").unwrap();
+        let with_b = parse_preview(&log, a, b);
+        assert_eq!(with_b.new.files, ["new.txt"]);
+        assert_eq!(with_b.updated.files, ["updated.txt"]);
     }
 
     #[test]

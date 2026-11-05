@@ -118,6 +118,90 @@ test("typing a path by hand is tucked away; Enter there behaves as Avanti", asyn
   expect(onenter).toHaveBeenCalledOnce();
 });
 
+const NUOVA = String.raw`D:\Nuova`;
+const creating = { ...props, id: "path-b", value: D, canCreate: true };
+
+/** Browsing as usual; `create_folder` answers with `create`. */
+function answerCreateWith(create: (args: { parent: string; name: string }) => Promise<string>) {
+  invokeMock.mockImplementation(async (cmd, args) =>
+    cmd === "create_folder"
+      ? create(args as { parent: string; name: string })
+      : (listings[(args as { path: string }).path] ?? listing("")),
+  );
+}
+
+test("Nuova cartella is offered only when the picker asks for it, and only inside a folder", async () => {
+  const { rerender } = render(FolderPicker, { ...props, value: D });
+  await screen.findByRole("button", { name: "Foto" });
+  expect(screen.queryByRole("button", { name: /Nuova cartella/ })).toBeNull();
+
+  await rerender({ ...creating, value: "" });
+  await screen.findByRole("button", { name: "Disco D:" });
+  expect(screen.queryByRole("button", { name: /Nuova cartella/ })).toBeNull();
+
+  await rerender(creating);
+  expect(await screen.findByRole("button", { name: /Nuova cartella/ })).toBeTruthy();
+});
+
+test("Nuova cartella asks for a name, creates it inside the folder being browsed and chooses it", async () => {
+  answerCreateWith(async ({ parent, name }) => `${parent}${name}`);
+  render(FolderPicker, creating);
+
+  await fireEvent.click(await screen.findByRole("button", { name: /Nuova cartella/ }));
+  await fireEvent.input(screen.getByLabelText("Nome della nuova cartella"), { target: { value: "Nuova" } });
+  await fireEvent.click(screen.getByRole("button", { name: "Crea" }));
+
+  expect(invokeMock).toHaveBeenCalledWith("create_folder", { parent: D, name: "Nuova" });
+  expect(await screen.findByText(NUOVA, { selector: "b" })).toBeTruthy();
+  expect((screen.getByLabelText("Percorso") as HTMLInputElement).value).toBe(NUOVA);
+  expect(screen.queryByLabelText("Nome della nuova cartella")).toBeNull();
+  expect(screen.getByRole("button", { name: /Nuova cartella/ })).toBeTruthy();
+});
+
+test("Enter in the name creates the folder too", async () => {
+  answerCreateWith(async ({ parent, name }) => `${parent}${name}`);
+  render(FolderPicker, creating);
+
+  await fireEvent.click(await screen.findByRole("button", { name: /Nuova cartella/ }));
+  const name = screen.getByLabelText("Nome della nuova cartella");
+  await fireEvent.input(name, { target: { value: "Nuova" } });
+  await fireEvent.keyDown(name, { key: "Enter" });
+
+  expect(await screen.findByText(NUOVA, { selector: "b" })).toBeTruthy();
+});
+
+test("a refused name shows Rust's message next to the input and keeps the folder and the name", async () => {
+  answerCreateWith(() =>
+    Promise.reject({ title: "Esiste già una cartella con questo nome.", advice: "Scegli un altro nome." }),
+  );
+  render(FolderPicker, creating);
+
+  await fireEvent.click(await screen.findByRole("button", { name: /Nuova cartella/ }));
+  await fireEvent.input(screen.getByLabelText("Nome della nuova cartella"), { target: { value: "Foto" } });
+  await fireEvent.click(screen.getByRole("button", { name: "Crea" }));
+
+  expect((await screen.findByRole("alert")).textContent).toContain(
+    "Esiste già una cartella con questo nome. Scegli un altro nome.",
+  );
+  expect((screen.getByLabelText("Nome della nuova cartella") as HTMLInputElement).value).toBe("Foto");
+  expect(screen.getByText(D, { selector: "b" })).toBeTruthy();
+  expect((screen.getByLabelText("Percorso") as HTMLInputElement).value).toBe(D);
+});
+
+test("Annulla closes the name without creating anything, and so does leaving the folder", async () => {
+  render(FolderPicker, creating);
+
+  await fireEvent.click(await screen.findByRole("button", { name: /Nuova cartella/ }));
+  await fireEvent.click(screen.getByRole("button", { name: "Annulla" }));
+  expect(screen.queryByLabelText("Nome della nuova cartella")).toBeNull();
+
+  await fireEvent.click(screen.getByRole("button", { name: /Nuova cartella/ }));
+  await fireEvent.click(await screen.findByRole("button", { name: "Foto" }));
+  await vi.waitFor(() => expect(screen.queryByLabelText("Nome della nuova cartella")).toBeNull());
+
+  expect(invokeMock).not.toHaveBeenCalledWith("create_folder", expect.anything());
+});
+
 test("a step error opens the manual section and focuses the input", async () => {
   const { rerender } = render(FolderPicker, props);
   const details = screen.getByText("Preferisci scrivere il percorso a mano?").closest("details")!;

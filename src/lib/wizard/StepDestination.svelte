@@ -11,4 +11,5 @@
   bind:value={path}
   {error}
   {onenter}
+  canCreate
 />

@@ -97,3 +97,17 @@ Copy and behaviour not in the prototype, decided while implementing; review with
   - Old: "File che in B sono più vecchi di quelli in A."
   - New: "File che ci sono sia in A sia in B ma sono diversi: verranno sostituiti con quelli di A."
   - Why: the group lists every differing file, not only older ones; the sentence must not promise that a newer copy in B is kept.
+
+## Decisions 2026-11-05 (improve-ui)
+- "Nuova cartella" (issue #2) is offered only in the **Dove** picker (B), not in Da dove (A) (owner). It shows while browsing inside a folder, not in the list of drives; it asks a name, creates the folder in the one being browsed with `std::fs::create_dir` (never the parents, never reuses an existing one) and chooses it. B's checks (`check_destination`) still run on Avanti as before; creating needs none.
+- The name is validated in Rust, with the Windows rules on every OS (the folder may be read by Windows later): trimmed; not empty; at most 255 bytes; none of `< > : " / \ | ? *` nor control characters (so never a path, `.` or `..`); no trailing dot; not a reserved device name (CON, PRN, AUX, NUL, CONIN$, CONOUT$, COM1-9, LPT1-9, also COM¹²³/LPT¹²³), with or without an extension. The parent must be an absolute path.
+- New Italian copy (not in the prototype). UI: button "Nuova cartella"; input label "Nome della nuova cartella"; placeholder "Per esempio: Backup"; buttons "Crea" and "Annulla". Messages (title / advice, shown together next to the input):
+  - "Scrivi un nome per la nuova cartella."
+  - "Il nome è troppo lungo."
+  - "Il nome non può contenere questi caratteri: \ / : * ? " < > |" / "Scrivi solo il nome della cartella, senza percorso."
+  - "Questo nome non si può usare." / "Scegline un altro: niente punto in fondo, né nomi come CON o NUL."
+  - "Esiste già una cartella con questo nome." / "Scegli un altro nome." (also shown when a file has that name)
+  - "Non trovo la cartella in cui creare la nuova." / "Il disco è collegato?"
+  - "Non ho il permesso di creare una cartella qui." / "Scegli un altro posto o controlla i permessi."
+  - "Il disco è in sola lettura: non posso crearci cartelle." / "Scegli un altro disco."
+  - "Non riesco a creare la cartella." / "Controlla che il disco o la rete siano collegati e riprova." (any other error)

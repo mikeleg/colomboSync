@@ -3,10 +3,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { Counts, Explanation, FolderListing, ListedSyncs, Preview, Run, RunProgress, RunReport, Sync, SyncMode } from "./types";
 
-/** Rejects with an `Explanation`; anything that is not one (the call itself failed) becomes a title. */
+/** Anything that is not an `Explanation` (the call itself failed) becomes a title. */
+const asExplanation = (e: unknown): Explanation =>
+  typeof e === "object" && e !== null && "title" in e ? (e as Explanation) : { title: String(e), advice: "" };
+
+/** Rejects with an `Explanation`. */
 export const previewSync = (source: string, destination: string, mode: SyncMode) =>
   invoke<Preview>("preview_sync", { source, destination, mode }).catch((e: unknown) => {
-    throw typeof e === "object" && e !== null && "title" in e ? (e as Explanation) : { title: String(e), advice: "" };
+    throw asExplanation(e);
   });
 
 /** Runs a saved sync; the run is recorded in the history under its id. */
@@ -23,6 +27,12 @@ export const defaultSyncName = (source: string) => invoke<string>("default_sync_
 
 /** Drives when `path` is empty, otherwise the subfolders of `path`. */
 export const browseFolders = (path: string) => invoke<FolderListing>("browse_folders", { path });
+
+/** Makes the folder `name` inside `parent` and resolves with its path; rejects with an `Explanation`. */
+export const createFolder = (parent: string, name: string) =>
+  invoke<string>("create_folder", { parent, name }).catch((e: unknown) => {
+    throw asExplanation(e);
+  });
 
 /** Rejects (with the Italian message to show) a B that is A itself or inside A. */
 export const checkDestination = (source: string, destination: string) =>

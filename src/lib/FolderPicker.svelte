@@ -1,8 +1,8 @@
 <script lang="ts">
   import { tick } from "svelte";
   import Icon from "./Icon.svelte";
-  import { browseFolders } from "./api";
-  import type { FolderListing } from "./types";
+  import { browseFolders, createFolder } from "./api";
+  import type { Explanation, FolderListing } from "./types";
 
   let {
     id,
@@ -11,6 +11,7 @@
     value = $bindable(),
     error,
     onenter,
+    canCreate = false,
   }: {
     id: string;
     label: string;
@@ -18,6 +19,8 @@
     value: string;
     error: string;
     onenter: () => void;
+    /** Offers "Nuova cartella" inside the folder being browsed. */
+    canCreate?: boolean;
   } = $props();
 
   let listing = $state<FolderListing>({ parent: "", folders: [], error: null });
@@ -25,6 +28,11 @@
   let head: HTMLElement;
   let input: HTMLInputElement;
   let lastLoad = 0;
+  let creating = $state(false);
+  let newName = $state("");
+  let createError = $state("");
+  let nameInput = $state<HTMLInputElement>();
+  let createBusy = false;
 
   const chosen = $derived(value.trim());
 
@@ -44,9 +52,40 @@
     head?.focus();
   }
 
+  async function startCreating() {
+    creating = true;
+    await tick();
+    nameInput?.focus();
+  }
+
+  function stopCreating() {
+    creating = false;
+    newName = "";
+    createError = "";
+  }
+
+  async function create() {
+    if (createBusy) return;
+    createBusy = true;
+    try {
+      pick(await createFolder(chosen, newName));
+    } catch (e) {
+      const { title, advice } = e as Explanation; // createFolder rejects with an Explanation
+      createError = `${title} ${advice}`.trim();
+    } finally {
+      createBusy = false;
+    }
+  }
+
   // The rows and the parent always follow the chosen path, however it got there (click or typing).
   $effect(() => {
     load(chosen);
+  });
+
+  // Choosing another folder (the new one included) closes the name box: it belongs to the folder it was opened in.
+  $effect(() => {
+    chosen;
+    stopCreating();
   });
 
   $effect(() => {
@@ -71,9 +110,38 @@
       {/if}
     </span>
     {#if chosen}
-      <button type="button" class="btn small" onclick={() => pick(listing.parent)}><Icon name="up" /> Livello superiore</button>
+      <div class="acts">
+        {#if canCreate && !listing.error && !creating}
+          <button type="button" class="btn small" onclick={startCreating}><Icon name="plus" /> Nuova cartella</button>
+        {/if}
+        <button type="button" class="btn small" onclick={() => pick(listing.parent)}><Icon name="up" /> Livello superiore</button>
+      </div>
     {/if}
   </div>
+  {#if creating}
+    <div class="newfolder">
+      <label class="f" for="{id}-new">Nome della nuova cartella</label>
+      <div class="newrow">
+        <input
+          type="text"
+          id="{id}-new"
+          bind:value={newName}
+          bind:this={nameInput}
+          placeholder="Per esempio: Backup"
+          autocomplete="off"
+          spellcheck="false"
+          aria-invalid={createError ? "true" : "false"}
+          onkeydown={(e) => {
+            if (e.key === "Enter") create();
+            else if (e.key === "Escape") stopCreating();
+          }}
+        />
+        <button type="button" class="btn primary" onclick={create}>Crea</button>
+        <button type="button" class="btn" onclick={stopCreating}>Annulla</button>
+      </div>
+      {#if createError}<div class="err-msg" role="alert">{createError}</div>{/if}
+    </div>
+  {/if}
   <div class="rows">
     {#each listing.folders as folder (folder.path)}
       <button type="button" class="row" onclick={() => pick(folder.path)}>
@@ -159,6 +227,24 @@
   .pickhead :global(.btn svg) {
     width: 20px;
     height: 20px;
+  }
+  .acts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .newfolder {
+    padding: 4px 18px 16px;
+  }
+  .newrow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .newrow input {
+    flex: 1 1 200px;
+    min-width: 0;
   }
   .rows {
     display: grid;

@@ -85,6 +85,8 @@ pub fn find_cause(log: &str, source: &str, destination: &str) -> Option<Cause> {
     })
 }
 
+const DISK_CONNECTED: &str = "Il disco è collegato?";
+
 /// Why A could not be read before the engine even started.
 pub fn explain_source_error(error: &io::Error, source: &str, destination: &str) -> Explanation {
     let code = windows_code(error)
@@ -95,6 +97,41 @@ pub fn explain_source_error(error: &io::Error, source: &str, destination: &str) 
         folder: Folder::A,
     });
     describe(cause, source, destination, Moment::Preview)
+}
+
+/// Why a new folder could not be created, from what the OS said.
+pub fn explain_create_error(error: &io::Error) -> Explanation {
+    let (title, advice) = match error.kind() {
+        io::ErrorKind::AlreadyExists => (
+            "Esiste già una cartella con questo nome.",
+            "Scegli un altro nome.",
+        ),
+        io::ErrorKind::NotFound => return explain_missing_parent(),
+        io::ErrorKind::PermissionDenied => (
+            "Non ho il permesso di creare una cartella qui.",
+            "Scegli un altro posto o controlla i permessi.",
+        ),
+        io::ErrorKind::ReadOnlyFilesystem => (
+            "Il disco è in sola lettura: non posso crearci cartelle.",
+            "Scegli un altro disco.",
+        ),
+        _ => (
+            "Non riesco a creare la cartella.",
+            "Controlla che il disco o la rete siano collegati e riprova.",
+        ),
+    };
+    Explanation {
+        title: title.into(),
+        advice: advice.into(),
+    }
+}
+
+/// The folder a new one should go in is not there (or is not a full path).
+pub fn explain_missing_parent() -> Explanation {
+    Explanation {
+        title: "Non trovo la cartella in cui creare la nuova.".into(),
+        advice: DISK_CONNECTED.into(),
+    }
 }
 
 /// The title and the advice for a failure; a generic one when the cause is unknown.
@@ -179,7 +216,7 @@ fn reason(cause: Cause, source: &str, destination: &str) -> Option<Reason> {
             if is_network(path) {
                 "La cartella di rete è raggiungibile?"
             } else {
-                "Il disco è collegato?"
+                DISK_CONNECTED
             },
         ),
         5 => (
@@ -295,6 +332,35 @@ mod tests {
 
     const A: &str = r"D:\Foto";
     const NAS_B: &str = r"\\NAS\Backup";
+
+    #[test]
+    fn the_os_error_decides_the_message_of_a_failed_folder_creation() {
+        let explain = |kind| explain_create_error(&io::Error::from(kind));
+        assert_eq!(
+            explain(io::ErrorKind::PermissionDenied).title,
+            "Non ho il permesso di creare una cartella qui."
+        );
+        assert_eq!(
+            explain(io::ErrorKind::ReadOnlyFilesystem).title,
+            "Il disco è in sola lettura: non posso crearci cartelle."
+        );
+        assert_eq!(
+            explain(io::ErrorKind::TimedOut).title,
+            "Non riesco a creare la cartella."
+        );
+        assert_eq!(explain(io::ErrorKind::NotFound), explain_missing_parent());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn a_write_protected_windows_disk_is_read_only() {
+        const ERROR_WRITE_PROTECT: i32 = 19;
+        let e = explain_create_error(&io::Error::from_raw_os_error(ERROR_WRITE_PROTECT));
+        assert_eq!(
+            e.title,
+            "Il disco è in sola lettura: non posso crearci cartelle."
+        );
+    }
 
     /// A real log: label wording changes with the Windows language, the code does not.
     fn log(code: u32, label: &str, what: &str, path: &str) -> String {

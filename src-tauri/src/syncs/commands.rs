@@ -1,15 +1,16 @@
 //! Thin `#[tauri::command]` wrappers for the saved syncs.
 
+use super::listing::{self, ListedSyncs};
 use crate::shared::blocking::blocking;
 use crate::shared::domain::{SavedSync, SyncMode};
 use crate::shared::storage::Storage;
-use crate::shared::sync_store::{self, ListedSyncs};
+use crate::shared::sync_store;
 
 #[tauri::command]
 pub async fn list_syncs() -> Result<ListedSyncs, String> {
     let storage = Storage::from_env()?;
     blocking(move || {
-        sync_store::list(&storage)
+        listing::list(&storage)
             .map_err(|_| "Non riesco a leggere le sincronizzazioni salvate.".to_string())
     })
     .await

@@ -39,23 +39,27 @@ pub async fn preview_sync(
     Ok(preview)
 }
 
+/// Runs `work` on a blocking thread, so a slow disk never freezes the UI.
+async fn blocking<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    spawn_blocking(work).await.map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub async fn list_runs() -> Result<Vec<Run>, String> {
     let storage = Storage::from_env()?;
-    spawn_blocking(move || history::read(&storage.history_file()).map_err(|e| e.to_string()))
-        .await
-        .map_err(|e| e.to_string())?
+    blocking(move || history::read(&storage.history_file()).map_err(|e| e.to_string())).await
 }
 
 /// The robocopy log of one run; fails when the file is gone or not inside the logs folder.
 #[tauri::command]
 pub async fn read_run_log(path: String) -> Result<String, String> {
     let storage = Storage::from_env()?;
-    spawn_blocking(move || {
+    blocking(move || {
         history::read_log(&storage.logs_dir(), Path::new(&path)).map_err(|e| e.to_string())
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 /// A finished Run as the result screen gets it: what is stored, plus what to tell the user when
@@ -121,12 +125,11 @@ pub fn cancel_run(app: AppHandle, active: State<'_, ActiveRun>, exit_when_done: 
 #[tauri::command]
 pub async fn list_syncs() -> Result<ListedSyncs, String> {
     let storage = Storage::from_env()?;
-    spawn_blocking(move || {
+    blocking(move || {
         sync_store::list(&storage)
             .map_err(|_| "Non riesco a leggere le sincronizzazioni salvate.".to_string())
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -137,12 +140,11 @@ pub async fn save_sync(
     mode: SyncMode,
 ) -> Result<SavedSync, String> {
     let storage = Storage::from_env()?;
-    spawn_blocking(move || {
+    blocking(move || {
         sync_store::add(&storage.syncs_file(), &name, &source, &destination, mode)
             .map_err(|e| format!("Non riesco a salvare la sincronizzazione: {e}"))
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -154,9 +156,7 @@ pub fn default_sync_name(source: String) -> String {
 /// mapped drive can take seconds to answer and must not freeze the UI.
 #[tauri::command]
 pub async fn browse_folders(path: String) -> Result<FolderListing, String> {
-    spawn_blocking(move || folder_browser::browse(&path))
-        .await
-        .map_err(|e| e.to_string())
+    blocking(move || Ok(folder_browser::browse(&path))).await
 }
 
 /// The app runs as administrator: mapped network drives are then not visible.

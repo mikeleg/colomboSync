@@ -99,8 +99,14 @@ const NATIVE_PADDED: bool = !cfg!(target_os = "macos");
 
 /// `destination_exists` is `false` when B is not there yet: openrsync's dry run then prints no
 /// `+` flags, so every copied file is New. `size_of` gives the size of a file of A, by its path
-/// relative to A (itemize lines carry no sizes).
-pub fn parse(log: &str, destination_exists: bool, size_of: impl Fn(&str) -> u64) -> Preview {
+/// relative to A (itemize lines carry no sizes). `is_folder_of_b` tells which deleted names are
+/// folders: openrsync on macOS 15 prints them without the trailing `/`.
+pub fn parse(
+    log: &str,
+    destination_exists: bool,
+    size_of: impl Fn(&str) -> u64,
+    is_folder_of_b: impl Fn(&str) -> bool,
+) -> Preview {
     let mut preview = Preview::default();
     let padded = is_padded(log);
     for line in log.lines() {
@@ -113,8 +119,8 @@ pub fn parse(log: &str, destination_exists: bool, size_of: impl Fn(&str) -> u64)
                 }
                 preview.bytes += size_of(name);
             }
-            Some(Item::Deleted { name }) => preview.deleted.add(name),
-            None => {}
+            Some(Item::Deleted { name }) if !is_folder_of_b(name) => preview.deleted.add(name),
+            Some(Item::Deleted { .. }) | None => {}
         }
     }
     preview
@@ -123,9 +129,13 @@ pub fn parse(log: &str, destination_exists: bool, size_of: impl Fn(&str) -> u64)
 /// The preview of a dry run's log; sizes and the existence of B are read from the disk.
 pub fn parse_preview(log: &str, source: &str, destination: &str) -> Preview {
     let source = Path::new(source.trim());
-    parse(log, Path::new(destination.trim()).is_dir(), |name| {
-        std::fs::metadata(source.join(name)).map_or(0, |meta| meta.len())
-    })
+    let destination = Path::new(destination.trim());
+    parse(
+        log,
+        destination.is_dir(),
+        |name| std::fs::metadata(source.join(name)).map_or(0, |meta| meta.len()),
+        |name| std::fs::symlink_metadata(destination.join(name)).is_ok_and(|meta| meta.is_dir()),
+    )
 }
 
 /// Files copied before a failed or stopped run ended. The log lists a file when rsync starts on
@@ -428,7 +438,7 @@ mod tests {
     #[test]
     fn both_rsync_flavours_give_the_same_preview() {
         for (platform, log) in [("openrsync", MACOS), ("GNU rsync", LINUX)] {
-            let preview = parse(log, true, sizes);
+            let preview = parse(log, true, sizes, |_| false);
 
             assert_eq!(
                 preview.new.files,
@@ -456,12 +466,12 @@ mod tests {
 
     #[test]
     fn a_destination_that_does_not_exist_makes_every_file_new() {
-        let preview = parse(MACOS_NO_B, false, sizes);
+        let preview = parse(MACOS_NO_B, false, sizes, |_| false);
         assert_eq!(preview.new.count, 6);
         assert_eq!(preview.updated.count, 0);
         assert_eq!(preview.deleted.count, 0);
         // The same lines into a B that exists are not new: no `+` flags.
-        assert_eq!(parse(MACOS_NO_B, true, sizes).updated.count, 6);
+        assert_eq!(parse(MACOS_NO_B, true, sizes, |_| false).updated.count, 6);
     }
 
     #[test]
@@ -478,7 +488,7 @@ created directory /tmp/B\n\
 *deleting   gone.txt\n\
 *deleting   gone-dir/\n\
 sending incremental file list\n";
-        let preview = parse(log, true, |_| 0);
+        let preview = parse(log, true, |_| 0, |_| false);
         assert_eq!(
             preview.new.files,
             [
@@ -496,8 +506,13 @@ sending incremental file list\n";
 
     #[test]
     fn crlf_and_an_empty_log_are_fine() {
-        assert_eq!(parse("", true, |_| 0), Preview::default());
-        let preview = parse(">f+++++++++ a.txt\r\n*deleting   b.txt\r\n", true, |_| 0);
+        assert_eq!(parse("", true, |_| 0, |_| false), Preview::default());
+        let preview = parse(
+            ">f+++++++++ a.txt\r\n*deleting   b.txt\r\n",
+            true,
+            |_| 0,
+            |_| false,
+        );
         assert_eq!(preview.new.files, ["a.txt"]);
         assert_eq!(preview.deleted.files, ["b.txt"]);
     }
@@ -606,13 +621,26 @@ sending incremental file list\n";
         let gnu = ">f+++++++++ new.txt\n*deleting     vecchio.txt\n*deleting   altro.txt\n";
         let open = ">f+++++++ new.txt\n*deleting   vecchio.txt\n*deleting altro.txt\n";
         for (log, name) in [(gnu, "GNU"), (open, "openrsync")] {
-            let preview = parse(log, true, |_| 0);
+            let preview = parse(log, true, |_| 0, |_| false);
             assert_eq!(
                 preview.deleted.files,
                 ["  vecchio.txt", "altro.txt"],
                 "{name}"
             );
         }
+    }
+
+    #[test]
+    fn a_deleted_folder_without_a_trailing_slash_is_not_a_file() {
+        // openrsync on macOS 15 prints `*deleting old-dir` (macOS 26 and GNU print `old-dir/`),
+        // so B tells which deleted names are folders.
+        let log = ">f+++++++ new.txt\n*deleting only-in-b.txt\n*deleting old-dir/inside.txt\n*deleting old-dir\n";
+        let preview = parse(log, true, |_| 0, |name| name == "old-dir");
+        assert_eq!(
+            preview.deleted.files,
+            ["only-in-b.txt", "old-dir/inside.txt"]
+        );
+        assert_eq!(preview.deleted.count, 2);
     }
 
     #[test]

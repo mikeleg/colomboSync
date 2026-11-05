@@ -1,11 +1,22 @@
 name: CI
 
+# Push / pull request / manual: checks on three OS, then CI artifacts for a quick look.
+# Called by release.yml with `release: true`: the same checks, then the release files
+# (renamed, universal dmg) uploaded as `release-<name>` artifacts instead of the CI ones.
+
 on:
   push:
     branches: [main, "slice/**"]
   pull_request:
   workflow_dispatch:
-  workflow_call: # the release workflow uses this as its test gate
+  workflow_call:
+    inputs:
+      release:
+        type: boolean
+        default: false
+      version:
+        type: string
+        default: ""
 
 jobs:
   build:
@@ -17,14 +28,20 @@ jobs:
         include:
           - name: windows
             os: windows-latest
+          # macOS 15 ships openrsync (what the engine targets); macOS 14 ships samba rsync 2.6.9.
+          # Explicit label: macos-latest jobs stayed queued with no runner (2026-11-04).
           - name: macos
-            os: macos-14 # macos-latest jobs stayed queued with no runner (2026-11-04)
+            os: macos-15
+          # Tests run on the latest Ubuntu (GNU rsync 3.4.1, like the fixtures). The release
+          # AppImage is built on 22.04: it only runs on distros with a glibc at least as new.
           - name: linux
-            os: ubuntu-22.04 # same baseline as the released AppImage
+            os: ${{ inputs.release && 'ubuntu-22.04' || 'ubuntu-latest' }}
     runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash
+    env:
+      VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v7
 
@@ -43,14 +60,28 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: macOS targets (universal binary)
+        if: runner.os == 'macOS' && inputs.release
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "src-tauri -> target"
+          # The runner image is part of the key: a release build on ubuntu-22.04 must not
+          # restore a target/ built on ubuntu-latest (glibc mismatch).
+          key: ${{ matrix.os }}
 
       - run: npm ci
       - run: npm run check
       - run: npm test
       - run: npm run build # generate_context! needs dist/ before any cargo step
+
+      # Kept on purpose: it documents which rsync the tests below ran against.
+      - name: Which rsync
+        if: runner.os != 'Windows'
+        run: |
+          which rsync
+          rsync --version
 
       - name: Rust checks
         working-directory: src-tauri
@@ -59,41 +90,112 @@ jobs:
           cargo clippy --all-targets -- -D warnings
           cargo test
 
-      # Windows: the portable exe, no installer.
+      # The runners have no Rosetta, so the Intel half of the universal dmg is never run:
+      # at least make sure it compiles warning-free.
+      - name: Rust checks for Intel
+        if: runner.os == 'macOS' && inputs.release
+        working-directory: src-tauri
+        run: cargo clippy --target x86_64-apple-darwin --all-targets -- -D warnings
+
+      # ---- Windows: the portable exe, no installer ----
       - name: Portable exe
         if: runner.os == 'Windows'
         run: npm run portable
 
+      - name: Release file (Windows)
+        if: runner.os == 'Windows' && inputs.release
+        run: |
+          mkdir release-files
+          cp src-tauri/target/release/colombo-sync.exe "release-files/ColomboSync-$VERSION-windows-x64.exe"
+
       - uses: actions/upload-artifact@v7
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && !inputs.release
         with:
           name: colombo-sync-windows
           path: src-tauri/target/release/colombo-sync.exe
 
-      # macOS: ad-hoc signed (`bundle.macOS.signingIdentity` is "-"), not notarized.
+      # ---- macOS: ad-hoc signed (`bundle.macOS.signingIdentity` is "-"), not notarized ----
       - name: App and dmg
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && !inputs.release
         run: |
           npx tauri build --bundles app,dmg
           cd src-tauri/target/release/bundle/macos
           ditto -c -k --keepParent ColomboSync.app ColomboSync-macos.zip
 
       - uses: actions/upload-artifact@v7
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && !inputs.release
         with:
           name: colombo-sync-macos
           path: |
             src-tauri/target/release/bundle/macos/ColomboSync-macos.zip
             src-tauri/target/release/bundle/dmg/*.dmg
 
+      - name: macOS universal dmg
+        if: runner.os == 'macOS' && inputs.release
+        run: |
+          # hdiutil sometimes fails with "Resource busy" on the runners: retry the build.
+          dmgdir=src-tauri/target/universal-apple-darwin/release/bundle/dmg
+          for attempt in 1 2 3; do
+            rm -rf "$dmgdir" # a failed attempt can leave a half-written dmg (or an rw.*.dmg) behind
+            npx tauri build --target universal-apple-darwin --bundles dmg && break
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            echo "dmg build failed, retrying"
+            sleep 10
+          done
+          dmgs=("$dmgdir"/*.dmg)
+          if [ "${#dmgs[@]}" != 1 ] || [ ! -f "${dmgs[0]}" ]; then
+            echo "::error::expected exactly one .dmg in $dmgdir, found ${#dmgs[@]}: ${dmgs[*]}"
+            exit 1
+          fi
+          mkdir release-files
+          cp "${dmgs[0]}" "release-files/ColomboSync-$VERSION-macos-universal.dmg"
+
+      - name: Assert the dmg holds a universal binary
+        if: runner.os == 'macOS' && inputs.release
+        run: |
+          mnt=$(mktemp -d)
+          # Detach on every exit path, so a failed lipo cannot leave the volume mounted.
+          trap 'hdiutil detach "$mnt" || hdiutil detach -force "$mnt" || true' EXIT
+          for attempt in 1 2 3; do
+            hdiutil attach -nobrowse -readonly -mountpoint "$mnt" release-files/*.dmg && break
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            echo "attach failed, retrying"
+            sleep 10
+          done
+          ok=1
+          for bin in "$mnt"/*.app/Contents/MacOS/*; do
+            info=$(lipo -info "$bin")
+            echo "$info"
+            case "$info" in *arm64*x86_64* | *x86_64*arm64*) ;; *) ok=0 ;; esac
+          done
+          if [ "$ok" != 1 ]; then
+            echo "::error::the dmg is not a universal (arm64 + x86_64) build"
+            exit 1
+          fi
+
+      # ---- Linux: AppImage ----
       - name: AppImage
         if: runner.os == 'Linux'
         env:
           APPIMAGE_EXTRACT_AND_RUN: 1 # no FUSE on the runner
         run: npx tauri build --bundles appimage
 
+      - name: Release file (Linux)
+        if: runner.os == 'Linux' && inputs.release
+        run: |
+          mkdir release-files
+          cp src-tauri/target/release/bundle/appimage/*.AppImage "release-files/ColomboSync-$VERSION-linux-x86_64.AppImage"
+
       - uses: actions/upload-artifact@v7
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && !inputs.release
         with:
           name: colombo-sync-linux
           path: src-tauri/target/release/bundle/appimage/*.AppImage
+
+      # ---- Release mode: one upload for all three OS ----
+      - uses: actions/upload-artifact@v7
+        if: inputs.release
+        with:
+          name: release-${{ matrix.name }}
+          path: release-files/*
+          if-no-files-found: error

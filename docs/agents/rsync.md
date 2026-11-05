@@ -1,10 +1,13 @@
 # rsync – facts the engine relies on (macOS and Linux)
 
-Source: spike of 2026-11-04 on the GitHub runners (`macos-latest` = macOS 26.6, `ubuntu-latest` = Ubuntu with rsync 3.4.1). Code: `src-tauri/src/rsync.rs`; fixtures in `src-tauri/tests/fixtures/rsync_preview_*.txt` are real captures. Don't contradict without a test proving otherwise.
+Source: spike of 2026-11-04 on the GitHub runners (`macos-latest` = macOS 26.6, `ubuntu-latest` = Ubuntu with rsync 3.4.1). CI tests on `macos-15` (macOS 15.8, openrsync) and `ubuntu-latest`; the "Which rsync" CI step prints `which rsync` / `rsync --version` in every run. Code: `src-tauri/src/rsync.rs`; fixtures in `src-tauri/tests/fixtures/rsync_preview_*.txt` are real captures. Don't contradict without a test proving otherwise.
 
 ## Which rsync
 - Binary: `rsync` found on `PATH` (`/usr/bin/rsync` on both).
-- **macOS ships openrsync, not GNU rsync**: `rsync --version` prints `openrsync: protocol version 29` / `rsync version 2.6.9 compatible`. Linux: GNU rsync 3.4.1, protocol 32.
+- **macOS ships openrsync, not GNU rsync**: `rsync --version` prints `openrsync: protocol version 29` / `rsync version 2.6.9 compatible`. Linux: GNU rsync 3.4.1, protocol 32 (Ubuntu 26.04; Ubuntu 24.04 ships 3.2.7).
+- **macOS 14 and older ship the original samba rsync 2.6.9** (`rsync  version 2.6.9  protocol version 29`, samba.org copyright), not openrsync; macOS 15 and later ship openrsync (macOS 15.8 and 26.x checked on runners). The engine targets openrsync and CI runs on `macos-15`, so samba rsync on macOS 14 is **not tested** (the suite did pass there on 2026-11-05, but nothing guarantees it).
+- **openrsync differs between macOS releases**: on 15.8 a deleted folder is printed as `*deleting old-dir` (no trailing `/`); on 26.x and GNU as `*deleting old-dir/`. The parser asks B (is that name a folder?) instead of trusting the slash; dry-run capture of 2026-11-05 on `macos-15`: `*deleting only-in-b.txt`, `*deleting old-dir/inside.txt`, `*deleting old-dir`, `>f+++++++ new.txt`.
+- Known, not fixed: live progress (`StdoutFollower`) and `partial_count` still treat `*deleting old-dir` as a file line on macOS 15. Impact is cosmetic (progress is capped at the total, and the folder name may show as the current file); not fixed because B can't be checked after the folder is deleted.
 - openrsync does **not** know `--mkpath`, `--protect-args`, and ignores `--modify-window` (a 1 s mtime difference is still reported with `--modify-window=2`). Don't use them.
 - openrsync *does* know `-8`, `--itemize-changes`, `--out-format`, `--delete`, `--dry-run`, `--log-file`.
 

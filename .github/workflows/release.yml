@@ -20,6 +20,19 @@ jobs:
       prerelease: ${{ steps.check.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # origin/main, to check the tag is on it
+
+      # A release must come from main: refuse a tag on a side branch. This checks ancestry only;
+      # the release-mode ci.yml run (the build job) is the test gate.
+      - name: Tag is on main
+        if: github.ref_type == 'tag'
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::tag $GITHUB_REF_NAME ($GITHUB_SHA) is not on main: merge first, then tag main"
+            exit 1
+          fi
 
       # package.json, tauri.conf.json and Cargo.toml must agree. On a tag, the tag
       # without the "v" must equal that version, or that version plus a pre-release
@@ -52,107 +65,13 @@ jobs:
           echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
           echo "Releasing $version (prerelease=$prerelease)"
 
-  gate:
+  # Same checks as push CI, then the release files (renamed, universal dmg) as `release-*` artifacts.
+  build:
     needs: version
     uses: ./.github/workflows/ci.yml
-
-  build:
-    needs: [version, gate]
-    name: build-${{ matrix.name }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: windows
-            os: windows-latest
-          - name: macos
-            os: macos-14 # macos-latest jobs stayed queued with no runner (2026-11-04)
-          - name: linux
-            os: ubuntu-22.04 # AppImage needs a glibc at least as old as the oldest target distro
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash
-    env:
-      VERSION: ${{ needs.version.outputs.version }}
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Linux libraries for Tauri
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: macOS targets (universal binary)
-        if: runner.os == 'macOS'
-        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "src-tauri -> target"
-
-      - run: npm ci
-
-      - name: Windows portable exe
-        if: runner.os == 'Windows'
-        run: |
-          npm run portable
-          mkdir release-files
-          cp src-tauri/target/release/colombo-sync.exe "release-files/ColomboSync-$VERSION-windows-x64.exe"
-
-      # Ad-hoc signed (`bundle.macOS.signingIdentity` is "-"), not notarized.
-      - name: macOS universal dmg
-        if: runner.os == 'macOS'
-        run: |
-          # hdiutil sometimes fails with "Resource busy" on the runners: retry the build.
-          for attempt in 1 2 3; do
-            npx tauri build --target universal-apple-darwin --bundles dmg && break
-            if [ "$attempt" = 3 ]; then exit 1; fi
-            echo "dmg build failed, retrying"
-            sleep 10
-          done
-          mkdir release-files
-          cp src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg "release-files/ColomboSync-$VERSION-macos-universal.dmg"
-
-      - name: Assert the dmg holds a universal binary
-        if: runner.os == 'macOS'
-        run: |
-          mnt=$(mktemp -d)
-          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" release-files/*.dmg
-          ok=1
-          for bin in "$mnt"/*.app/Contents/MacOS/*; do
-            info=$(lipo -info "$bin")
-            echo "$info"
-            case "$info" in *arm64*x86_64* | *x86_64*arm64*) ;; *) ok=0 ;; esac
-          done
-          hdiutil detach "$mnt"
-          if [ "$ok" != 1 ]; then
-            echo "::error::the dmg is not a universal (arm64 + x86_64) build"
-            exit 1
-          fi
-
-      - name: Linux AppImage
-        if: runner.os == 'Linux'
-        env:
-          APPIMAGE_EXTRACT_AND_RUN: 1 # no FUSE on the runner
-        run: |
-          npx tauri build --bundles appimage
-          mkdir release-files
-          cp src-tauri/target/release/bundle/appimage/*.AppImage "release-files/ColomboSync-$VERSION-linux-x86_64.AppImage"
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: release-${{ matrix.name }}
-          path: release-files/*
-          if-no-files-found: error
+    with:
+      release: true
+      version: ${{ needs.version.outputs.version }}
 
   release:
     # Tags only: a manual run stops after the builds.
@@ -184,9 +103,13 @@ jobs:
           cat SHA256SUMS.txt
 
       # Commits since the previous v* tag (all history for the first tag), feat and fix only.
+      # A final release (no "-" in the tag) skips the rc tags, so its notes cover everything
+      # since the previous final release.
       - name: Release notes
         run: |
-          prev=$(git describe --tags --abbrev=0 --match 'v*' "$TAG^" 2>/dev/null || true)
+          exclude=()
+          case "$TAG" in *-*) ;; *) exclude=(--exclude '*-*') ;; esac
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "${exclude[@]}" "$TAG^" 2>/dev/null || true)
           git log --no-merges --pretty='- %s' "${prev:+$prev..}$TAG" > commits.txt
           {
             echo "## Novità"
@@ -203,7 +126,20 @@ jobs:
         run: |
           flags=(--draft)
           if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
-          gh release create "$TAG" "${flags[@]}" \
-            --title "ColomboSync $VERSION" \
-            --notes-file notes.md \
-            release-files/*
+          # Re-running a failed run must not die on "release already exists".
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            # Only a draft may be overwritten: never touch a published release.
+            if [ "$(gh release view "$TAG" --json isDraft -q .isDraft)" != "true" ]; then
+              echo "::error::Release $TAG is already published; bump the version and tag again."
+              exit 1
+            fi
+            gh release upload "$TAG" --clobber release-files/*
+            gh release edit "$TAG" --draft --prerelease="$PRERELEASE" \
+              --title "ColomboSync $VERSION" \
+              --notes-file notes.md
+          else
+            gh release create "$TAG" "${flags[@]}" \
+              --title "ColomboSync $VERSION" \
+              --notes-file notes.md \
+              release-files/*
+          fi

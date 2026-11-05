@@ -93,3 +93,7 @@ Copy and behaviour not in the prototype, decided while implementing; review with
 - The repo stays **private for now** (owner): the README links to `https://github.com/mikeleg/colomboSync/releases/latest` and uses relative links, so they work for whoever has access. The shields.io release badge will not render while the repo is private.
 - Release notes are user-facing: install notes first, the generated `feat`/`fix` commit list at the end inside a collapsed `<details>` block ("Dettagli tecnici (modifiche)"; `release.yml`). The body of the existing beta draft is replaced by `docs/release-notes/v0.1.0-beta.1.md`.
 - New Italian copy (not in the prototype): `README.md` (all of it) and `docs/release-notes/v0.1.0-beta.1.md`; the install notes are copied unchanged from `.github/release-notes-it.md`. The screenshots `anteprima.png`, `home.png`, `mirror.png`, `copia.png`, `storico.png`, `chiaro.png` in `docs/screenshots/` are referenced but added separately.
+- Corrected the "Da aggiornare" group copy (`StepPreview.svelte`, mirrored in `prototype.html`). The engine (robocopy/rsync) replaces any file of B that differs from A, including when B's copy is newer (A always wins; `/XO` not used), so "più vecchi" was wrong.
+  - Old: "File che in B sono più vecchi di quelli in A."
+  - New: "File che ci sono sia in A sia in B ma sono diversi: verranno sostituiti con quelli di A."
+  - Why: the group lists every differing file, not only older ones; the sentence must not promise that a newer copy in B is kept.

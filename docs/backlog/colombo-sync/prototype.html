@@ -665,7 +665,7 @@ function viewPreview(){
     '<div class="final"><div class="btns"><button type="button" class="btn primary" data-act="saveEmpty">'+(w.savedId?'Torna all’elenco':'Salva e chiudi')+'</button>'+(w.savedId?'':'<button type="button" class="link" data-act="back">Indietro</button>')+'</div></div>';
   return '<p class="sum">'+(w.mirror?'Ecco cosa succederà in B':'Ecco cosa verrà fatto')+': <b>'+fmtN(p.n)+'</b> file nuovi, <b>'+fmtN(p.u)+'</b> da aggiornare'+(w.mirror?', <b>'+fmtN(p.d)+'</b> da cancellare':'')+'. Peso totale da copiare: <b>'+fmtSize(p.bytes)+'</b>.</p>'+
     grp('Da copiare (nuovi)','File che ci sono in A e non ci sono ancora in B.','',p.n,p.newList)+
-    grp('Da aggiornare','File che in B sono più vecchi di quelli in A.','',p.u,p.updList)+
+    grp('Da aggiornare','File che ci sono sia in A sia in B ma sono diversi: verranno sostituiti con quelli di A.','',p.u,p.updList)+
     (w.mirror?(p.d>0?grp('Da cancellare in B','File che ci sono solo in B. Verranno cancellati e non finiscono nel Cestino.','del',p.d,p.delList):'<p class="sum">In B non ci sono file in più: non verrà cancellato niente.</p>'):'')+
     (need?'<label class="ack" for="ack"><input type="checkbox" id="ack"'+(w.ack?' checked':'')+'><span>Ho capito: '+fmtN(p.d)+' file verranno cancellati da B</span></label>':'')+
     tech+

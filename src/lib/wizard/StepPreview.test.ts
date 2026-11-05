@@ -33,6 +33,14 @@ test("shows new and updated groups with counts, the files, and the start button"
   expect(screen.queryByText("Da cancellare in B")).toBeNull();
 });
 
+test("Da aggiornare says A replaces the files in B that differ, also the newer ones", () => {
+  render(StepPreview, { ...props, preview: preview(0, 1) });
+
+  expect(
+    screen.getByText("File che ci sono sia in A sia in B ma sono diversi: verranno sostituiti con quelli di A."),
+  ).toBeTruthy();
+});
+
 test("hides a group that has nothing in it", () => {
   render(StepPreview, { ...props, preview: preview(2, 0) });
 

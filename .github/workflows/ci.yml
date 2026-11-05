@@ -104,3 +104,20 @@ jobs:
         with:
           name: colombo-sync-linux
           path: src-tauri/target/release/bundle/appimage/*.AppImage
+
+  probe:
+    # TEMPORARY: which runner labels exist and which rsync they have.
+    name: probe-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-26, macos-latest, ubuntu-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: |
+          sw_vers || cat /etc/os-release
+          uname -m
+          which rsync
+          rsync --version
+          pgrep oahd || echo "no oahd (Rosetta not running yet)"
+          arch -x86_64 /usr/bin/true && echo "Rosetta works" || echo "no Rosetta"

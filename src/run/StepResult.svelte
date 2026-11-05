@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from "../shared/Icon.svelte";
-  import LogViewer from "../history/LogViewer.svelte";
+  import LogViewer from "../shared/LogViewer.svelte";
   import { formatDuration, formatNumber, partialText } from "../shared/format";
   import type { RunReport } from "../shared/types";
 

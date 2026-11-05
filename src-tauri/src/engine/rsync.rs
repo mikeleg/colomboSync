@@ -186,17 +186,24 @@ pub fn file_name(raw: &[u8]) -> String {
 }
 
 /// How a folder looks right now. B may well not exist yet (the run creates it), so it is
-/// `Missing` only when its parent is missing too: an unplugged disk, not a new folder.
-#[derive(PartialEq)]
+/// `Missing` only when its parent is missing too: an unplugged disk, not a new folder. A folder
+/// that is there but cannot be opened is `Denied`, not gone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Reach {
     Fine,
     Missing,
     Unreachable,
+    Denied,
 }
 
 fn reach(folder: Folder, path: &str) -> Reach {
+    let denied_or_fine = || {
+        let refused = std::fs::read_dir(path.trim())
+            .is_err_and(|e| e.kind() == std::io::ErrorKind::PermissionDenied);
+        if refused { Reach::Denied } else { Reach::Fine }
+    };
     match std::fs::metadata(path.trim()) {
-        Ok(_) => Reach::Fine,
+        Ok(_) => denied_or_fine(),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             if folder == Folder::B && !parent_is_missing(path) {
                 Reach::Fine
@@ -204,8 +211,8 @@ fn reach(folder: Folder, path: &str) -> Reach {
                 Reach::Missing
             }
         }
-        // Refused is not gone: the permission check tells that apart.
-        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => Reach::Fine,
+        // Refused is not gone: opening the folder tells that apart.
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => denied_or_fine(),
         Err(_) => Reach::Unreachable,
     }
 }
@@ -228,24 +235,27 @@ pub fn parent_is_missing(destination: &str) -> bool {
 /// out of reach. Every other failure stays generic ("apri il registro"). `_log` is there
 /// because robocopy's cause is in its log; rsync's text is never read.
 pub fn find_cause(exit_code: i32, _log: &str, source: &str, destination: &str) -> Option<Cause> {
-    let folders = [(Folder::A, source), (Folder::B, destination)];
-    let broken = folders
+    cause_from(
+        exit_code,
+        [
+            (Folder::A, reach(Folder::A, source)),
+            (Folder::B, reach(Folder::B, destination)),
+        ],
+    )
+}
+
+/// The rules of `find_cause` on what the two folders are like, A first. A folder that is gone or
+/// unreachable comes before one that is only refused, and a refused one is not "out of reach" for
+/// the socket and stream codes.
+fn cause_from(exit_code: i32, reaches: [(Folder, Reach); 2]) -> Option<Cause> {
+    let broken = reaches
         .iter()
-        .map(|(folder, path)| (*folder, reach(*folder, path)))
-        .find(|(_, reach)| *reach != Reach::Fine);
-    match (exit_code, broken) {
-        (10 | 12 | 30 | 35, Some((folder, _))) => Some(Cause { code: 53, folder }),
-        (3 | 11 | 23, Some((folder, Reach::Missing))) => Some(Cause { code: 3, folder }),
-        (3 | 11 | 23, _) => folders
-            .iter()
-            .find(|(_, path)| {
-                std::fs::read_dir(path.trim())
-                    .is_err_and(|e| e.kind() == std::io::ErrorKind::PermissionDenied)
-            })
-            .map(|(folder, _)| Cause {
-                code: 5,
-                folder: *folder,
-            }),
+        .find(|(_, reach)| matches!(reach, Reach::Missing | Reach::Unreachable));
+    let denied = reaches.iter().find(|(_, reach)| *reach == Reach::Denied);
+    match (exit_code, broken, denied) {
+        (10 | 12 | 30 | 35, Some(&(folder, _)), _) => Some(Cause { code: 53, folder }),
+        (3 | 11 | 23, Some(&(folder, Reach::Missing)), _) => Some(Cause { code: 3, folder }),
+        (3 | 11 | 23, _, Some(&(folder, _))) => Some(Cause { code: 5, folder }),
         _ => None,
     }
 }
@@ -616,6 +626,66 @@ sending incremental file list\n";
         for code in [1, 3, 10, 11, 12, 13, 23, 24, 30, 35] {
             assert_eq!(find_cause(code, "", a, b), None, "exit {code}");
         }
+    }
+
+    #[test]
+    fn what_the_two_folders_are_like_decides_the_cause() {
+        use Folder::{A, B};
+        use Reach::{Denied, Fine, Missing, Unreachable};
+        let cause = |code, folder| Some(Cause { code, folder });
+        for (code, a, b, expected) in [
+            (23, Fine, Fine, None),
+            // A refused folder is a permission problem, whichever folder it is; A comes first.
+            (23, Denied, Fine, cause(5, A)),
+            (23, Fine, Denied, cause(5, B)),
+            (23, Denied, Denied, cause(5, A)),
+            // ...but it is not out of reach for the socket and stream codes.
+            (12, Denied, Fine, None),
+            (10, Denied, Missing, cause(53, B)),
+            // A folder that is gone wins over one that is only refused.
+            (23, Denied, Missing, cause(3, B)),
+            (11, Missing, Denied, cause(3, A)),
+            // Unreachable is not missing: it explains nothing on its own for exit 23.
+            (23, Unreachable, Missing, None),
+            (23, Unreachable, Denied, cause(5, B)),
+            (12, Fine, Unreachable, cause(53, B)),
+            // Any other exit code has no cause.
+            (1, Missing, Denied, None),
+            (24, Denied, Denied, None),
+        ] {
+            assert_eq!(
+                cause_from(code, [(A, a), (B, b)]),
+                expected,
+                "exit {code}, A {a:?}, B {b:?}"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn a_folder_that_cannot_be_read_is_a_permission_cause_in_either_order() {
+        use std::fs::{self, Permissions};
+        use std::os::unix::fs::PermissionsExt;
+        let temp = tempfile::tempdir().unwrap();
+        let (a, b) = (temp.path().join("A"), temp.path().join("B"));
+        fs::create_dir(&a).unwrap();
+        fs::create_dir(&b).unwrap();
+        let lock = |path: &Path, mode| fs::set_permissions(path, Permissions::from_mode(mode));
+        lock(&a, 0o000).unwrap();
+        if fs::read_dir(&a).is_ok() {
+            return; // root opens anything: nothing to see here
+        }
+        let (a_path, b_path) = (a.to_str().unwrap(), b.to_str().unwrap());
+        let cause = |code, folder| Some(Cause { code, folder });
+
+        assert_eq!(find_cause(23, "", a_path, b_path), cause(5, Folder::A));
+        lock(&a, 0o755).unwrap();
+        lock(&b, 0o000).unwrap();
+        assert_eq!(find_cause(23, "", a_path, b_path), cause(5, Folder::B));
+        lock(&a, 0o000).unwrap();
+        assert_eq!(find_cause(11, "", a_path, b_path), cause(5, Folder::A));
+        lock(&a, 0o755).unwrap();
+        lock(&b, 0o755).unwrap();
     }
 
     #[test]

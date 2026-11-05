@@ -52,6 +52,13 @@ jobs:
       - run: npm test
       - run: npm run build # generate_context! needs dist/ before any cargo step
 
+      # Kept on purpose: it documents which rsync the tests below ran against.
+      - name: Which rsync
+        if: runner.os != 'Windows'
+        run: |
+          which rsync
+          rsync --version
+
       - name: Rust checks
         working-directory: src-tauri
         run: |

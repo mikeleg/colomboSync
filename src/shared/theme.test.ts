@@ -9,8 +9,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-const storage = (saved: string | null) =>
-  vi.stubGlobal("localStorage", { getItem: () => saved, setItem });
+const storage = (saved: string | null) => vi.stubGlobal("localStorage", { getItem: () => saved, setItem });
 
 test("at startup the saved theme is applied without writing anything back", () => {
   storage("dark");

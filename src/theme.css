@@ -41,7 +41,9 @@
   --shadow-win: 0 0 0 1px rgb(0 0 0 / 0.06), 0 24px 60px -28px rgb(0 0 0 / 0.45);
   --r: 28px;
   --r-s: 16px;
-  --font: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font:
+    "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue",
+    Arial, sans-serif;
   --mono: Consolas, "Cascadia Mono", "SF Mono", Menlo, monospace;
   color-scheme: light;
 }

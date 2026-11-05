@@ -43,7 +43,11 @@
     try {
       result = await browseFolders(path);
     } catch {
-      result = { parent: "", folders: [], error: "Non riesco ad aprire questa cartella. Il disco o la rete sono collegati?" };
+      result = {
+        parent: "",
+        folders: [],
+        error: "Non riesco ad aprire questa cartella. Il disco o la rete sono collegati?",
+      };
     }
     if (seq === lastLoad) listing = result;
   }
@@ -115,7 +119,9 @@
         {#if canCreate && !listing.error && !creating}
           <button type="button" class="btn small" onclick={startCreating}><Icon name="plus" /> Nuova cartella</button>
         {/if}
-        <button type="button" class="btn small" onclick={() => pick(listing.parent)}><Icon name="up" /> Livello superiore</button>
+        <button type="button" class="btn small" onclick={() => pick(listing.parent)}
+          ><Icon name="up" /> Livello superiore</button
+        >
       </div>
     {/if}
   </div>

@@ -8,7 +8,9 @@
   <p class="callout">I file nuovi e modificati vengono copiati in B. Non cancello mai niente in B.</p>
 {/if}
 <details class="adv">
-  <summary>Opzioni avanzate {#if mirror}<span class="chip mirror">Specchio attivo</span>{/if}</summary>
+  <summary
+    >Opzioni avanzate {#if mirror}<span class="chip mirror">Specchio attivo</span>{/if}</summary
+  >
   <div class="advbody">
     <label class="sw">
       <input type="checkbox" role="switch" bind:checked={mirror} />

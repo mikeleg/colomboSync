@@ -57,7 +57,8 @@
 
 <h1 id="h">Le tue sincronizzazioni</h1>
 <p class="lead">
-  Ogni sincronizzazione copia i file da una cartella (A) in un’altra (B). Prima di copiare ti mostro sempre cosa cambierà.
+  Ogni sincronizzazione copia i file da una cartella (A) in un’altra (B). Prima di copiare ti mostro sempre cosa
+  cambierà.
 </p>
 {#if syncs.length > 0}
   <ul class="list">
@@ -103,9 +104,13 @@
     {/each}
   </ul>
 {/if}
-{#if setAside}<p class="note aside">Le sincronizzazioni salvate non erano leggibili: ne ho messo da parte una copia.</p>{/if}
+{#if setAside}<p class="note aside">
+    Le sincronizzazioni salvate non erano leggibili: ne ho messo da parte una copia.
+  </p>{/if}
 {#if loadError}<div class="err-msg" role="alert">{loadError}</div>{/if}
-<button type="button" class="newcard" disabled={!!loadError} onclick={onnew}><Icon name="plus" />Nuova sincronizzazione</button>
+<button type="button" class="newcard" disabled={!!loadError} onclick={onnew}
+  ><Icon name="plus" />Nuova sincronizzazione</button
+>
 
 <style>
   .list {

@@ -66,7 +66,9 @@ test("the legend explains OK, Errore, Annullato and Specchio", () => {
   const legend = within(section("Cosa vogliono dire le etichette"));
 
   expect(legend.getByText("La copia è andata a buon fine.")).toBeTruthy();
-  expect(legend.getByText(/Interrotta per un problema \(di solito un disco o la rete\)\. I file già copiati restano\./)).toBeTruthy();
+  expect(
+    legend.getByText(/Interrotta per un problema \(di solito un disco o la rete\)\. I file già copiati restano\./),
+  ).toBeTruthy();
   expect(legend.getByText("Fermata a mano.")).toBeTruthy();
   expect(legend.getByText("In quella copia erano stati cancellati da B i file in più.")).toBeTruthy();
   for (const chip of ["OK", "Errore", "Annullato", "Specchio"]) expect(legend.getByText(chip)).toBeTruthy();
@@ -86,9 +88,15 @@ test("the Specchio chip has its own colour, not the one of Errore", () => {
 });
 
 test("empty history: a friendly message instead of zeros, and the legend stays", () => {
-  render(HistoryPanel, { summary: summary({ runs: 0, ok: 0, failed: 0, cancelled: 0, filesCopied: 0, filesDeleted: 0, syncs: [] }) });
+  render(HistoryPanel, {
+    summary: summary({ runs: 0, ok: 0, failed: 0, cancelled: 0, filesCopied: 0, filesDeleted: 0, syncs: [] }),
+  });
 
-  expect(screen.getByText("Non hai ancora fatto nessuna copia. Quando ne farai una, qui vedrai i numeri e lo stato di ogni sincronizzazione.")).toBeTruthy();
+  expect(
+    screen.getByText(
+      "Non hai ancora fatto nessuna copia. Quando ne farai una, qui vedrai i numeri e lo stato di ogni sincronizzazione.",
+    ),
+  ).toBeTruthy();
   expect(screen.queryByText("Copie fatte")).toBeNull();
   expect(screen.queryByRole("heading", { name: "Per sincronizzazione" })).toBeNull();
   expect(section("Cosa vogliono dire le etichette")).toBeTruthy();

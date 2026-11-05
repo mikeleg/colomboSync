@@ -86,9 +86,10 @@ function backend(handlers: Handlers = {}) {
 const calls = (cmd: string) => invokeMock.mock.calls.filter(([c]) => c === cmd);
 
 const click = (target: string | RegExp | HTMLElement) =>
-  fireEvent.click(typeof target === "object" && "tagName" in target ? target : screen.getByRole("button", { name: target }));
-const typeInto = (label: RegExp, value: string) =>
-  fireEvent.input(screen.getByLabelText(label), { target: { value } });
+  fireEvent.click(
+    typeof target === "object" && "tagName" in target ? target : screen.getByRole("button", { name: target }),
+  );
+const typeInto = (label: RegExp, value: string) => fireEvent.input(screen.getByLabelText(label), { target: { value } });
 
 async function goToPreview() {
   await click("Nuova sincronizzazione");
@@ -343,7 +344,11 @@ test("a sync that cannot be saved says so and does not leave the preview", async
 });
 
 test("Controlla e avvia on a saved sync goes straight to a fresh preview, never running by itself", async () => {
-  backend({ list_syncs: () => ({ syncs: [savedSync], setAside: false }), preview_sync: () => preview(3, 0), run_sync: () => doneRun });
+  backend({
+    list_syncs: () => ({ syncs: [savedSync], setAside: false }),
+    preview_sync: () => preview(3, 0),
+    run_sync: () => doneRun,
+  });
   render(App);
 
   await click(await screen.findByRole("button", { name: "Controlla e avvia Foto di Anna" }));
@@ -360,7 +365,11 @@ test("Controlla e avvia on a saved sync goes straight to a fresh preview, never 
 });
 
 test("running a saved sync again does not save it twice and runs that sync by its id", async () => {
-  backend({ list_syncs: () => ({ syncs: [savedSync], setAside: false }), preview_sync: () => preview(3, 0), run_sync: () => doneRun });
+  backend({
+    list_syncs: () => ({ syncs: [savedSync], setAside: false }),
+    preview_sync: () => preview(3, 0),
+    run_sync: () => doneRun,
+  });
   render(App);
   await click(await screen.findByRole("button", { name: "Controlla e avvia Foto di Anna" }));
 
@@ -574,7 +583,10 @@ test("a failed list_runs says so instead of showing an empty history", async () 
 
 test("while the history loads there are no old rows, and a late older answer is ignored", async () => {
   let answerFirst!: (list: RunList) => void;
-  const answers = [new Promise<RunList>((resolve) => (answerFirst = resolve)), Promise.resolve(runList([{ ...doneRun, syncName: "Aggiornata" }]))];
+  const answers = [
+    new Promise<RunList>((resolve) => (answerFirst = resolve)),
+    Promise.resolve(runList([{ ...doneRun, syncName: "Aggiornata" }])),
+  ];
   backend({ list_runs: () => answers.shift() });
   render(App);
 
@@ -635,7 +647,9 @@ test("turning on the mirror switch shows the red warning at once and the schema 
   await fireEvent.click(mirrorSwitch());
 
   expect(screen.getByRole("alert").textContent).toContain("Attenzione: questa opzione cancella dei file");
-  expect(screen.getByRole("alert").textContent).toContain("Prima di partire vedrai l’elenco dei file che verranno cancellati.");
+  expect(screen.getByRole("alert").textContent).toContain(
+    "Prima di partire vedrai l’elenco dei file che verranno cancellati.",
+  );
   const schema = screen.getByRole("complementary");
   expect(schema.textContent).toContain("Specchio");
   expect(schema.textContent).toContain("Eliminati da B");
@@ -857,7 +871,9 @@ test("running as administrator shows the banner about network drives", async () 
   render(App);
 
   expect(
-    await screen.findByText("Le unità di rete potrebbero non essere visibili: apri ColomboSync senza 'Esegui come amministratore'."),
+    await screen.findByText(
+      "Le unità di rete potrebbero non essere visibili: apri ColomboSync senza 'Esegui come amministratore'.",
+    ),
   ).toBeTruthy();
 });
 

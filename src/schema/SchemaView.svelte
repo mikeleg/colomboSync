@@ -9,7 +9,8 @@
 
   // Without motion (reduced-motion preference, or no matchMedia) every number is shown at once.
   const motionOK = () =>
-    typeof globalThis.matchMedia === "function" && globalThis.matchMedia("(prefers-reduced-motion: no-preference)").matches;
+    typeof globalThis.matchMedia === "function" &&
+    globalThis.matchMedia("(prefers-reduced-motion: no-preference)").matches;
 
   // The counters shown on screen: they count up to model.counts and always end on it exactly.
   let shown = $state<Counts | null>(untrack(() => (model.counts ? { ...model.counts } : null)));
@@ -99,11 +100,28 @@
 {@render node("A · Da copiare", model.source)}
 <div class="mid" class:mir={model.mirror} class:run={model.running}>
   <div class="arr">
-    <svg viewBox="0 0 44 64" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 44 64"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
       <path class="flow" d="M22 4v44" /><path d="M10 40l12 16 12-16" />
-      <g class="dots"><circle class="dot d1" cx="22" cy="4" r="3" /><circle class="dot d2" cx="22" cy="4" r="3" /><circle class="dot d3" cx="22" cy="4" r="3" /></g>
+      <g class="dots"
+        ><circle class="dot d1" cx="22" cy="4" r="3" /><circle class="dot d2" cx="22" cy="4" r="3" /><circle
+          class="dot d3"
+          cx="22"
+          cy="4"
+          r="3"
+        /></g
+      >
     </svg>
-    <span class="chip" class:copy={!model.mirror} class:mirror={model.mirror}>{model.mirror ? "Specchio" : "Copia"}</span>
+    <span class="chip" class:copy={!model.mirror} class:mirror={model.mirror}
+      >{model.mirror ? "Specchio" : "Copia"}</span
+    >
   </div>
   <div class="counts">
     <div class="cnt"><b>{value("new")}</b><span>Nuovi</span></div>
@@ -367,10 +385,14 @@
   }
   @keyframes ring {
     from {
-      box-shadow: var(--base), 0 0 0 0 color-mix(in srgb, var(--ring) 65%, transparent);
+      box-shadow:
+        var(--base),
+        0 0 0 0 color-mix(in srgb, var(--ring) 65%, transparent);
     }
     to {
-      box-shadow: var(--base), 0 0 0 var(--spread) color-mix(in srgb, var(--ring) 0%, transparent);
+      box-shadow:
+        var(--base),
+        0 0 0 var(--spread) color-mix(in srgb, var(--ring) 0%, transparent);
     }
   }
   @keyframes dissolve {

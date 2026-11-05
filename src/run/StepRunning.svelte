@@ -68,10 +68,12 @@
 </script>
 
 <div class="kicker">In corso</div>
-<h1 id="h">Sto copiando{#if progress}{" "}<span class="hn">{progress.syncName}</span>{/if}…</h1>
+<h1 id="h">
+  Sto copiando{#if progress}{" "}<span class="hn">{progress.syncName}</span>{/if}…
+</h1>
 <p class="lead">
-  Non spegnere il computer e non scollegare i dischi finché non ho finito. Puoi fermarti quando vuoi: i file già
-  copiati restano in B.
+  Non spegnere il computer e non scollegare i dischi finché non ho finito. Puoi fermarti quando vuoi: i file già copiati
+  restano in B.
 </p>
 <div class="runprog">
   <div class="rp-top"><b>{percent}%</b><span>{formatNumber(done)} di {formatNumber(total)} file</span></div>
@@ -98,7 +100,9 @@
     </div>
   </div>
 {:else}
-  <button type="button" class="btn" onclick={() => (confirming = true)} use:focus><Icon name="stop" />Ferma la copia</button>
+  <button type="button" class="btn" onclick={() => (confirming = true)} use:focus
+    ><Icon name="stop" />Ferma la copia</button
+  >
 {/if}
 
 <style>

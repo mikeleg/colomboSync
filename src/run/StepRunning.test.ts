@@ -76,7 +76,9 @@ test("Ferma la copia asks first; No, continua goes back without stopping", async
 
   await fireEvent.click(screen.getByRole("button", { name: "Ferma la copia" }));
 
-  expect(screen.getByRole("alertdialog").textContent).toContain("Vuoi fermare la copia? I file già copiati restano in B.");
+  expect(screen.getByRole("alertdialog").textContent).toContain(
+    "Vuoi fermare la copia? I file già copiati restano in B.",
+  );
   expect(cancelRun).not.toHaveBeenCalled();
 
   await fireEvent.click(screen.getByRole("button", { name: "No, continua" }));

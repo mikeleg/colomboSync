@@ -30,7 +30,9 @@ test("lead and one row per run, in the order given (newest first)", () => {
     status: "ready",
   });
 
-  expect(screen.getByText("Tutte le copie fatte, dalla più recente. Ogni riga ha il suo registro completo.")).toBeTruthy();
+  expect(
+    screen.getByText("Tutte le copie fatte, dalla più recente. Ogni riga ha il suo registro completo."),
+  ).toBeTruthy();
   const rows = screen.getAllByRole("listitem");
   expect(rows.map((r) => within(r).getByRole("strong").textContent)).toEqual(["Recente", "Vecchia"]);
   expect(rows[0].textContent).toContain("03/11/2026 08:05");
@@ -38,7 +40,10 @@ test("lead and one row per run, in the order given (newest first)", () => {
 });
 
 test("a row shows mode and outcome chips, counts and duration", () => {
-  render(History, { runs: [run({ new: 12000, updated: 3, deleted: 5, mode: "Mirror", outcome: "Error" })], status: "ready" });
+  render(History, {
+    runs: [run({ new: 12000, updated: 3, deleted: 5, mode: "Mirror", outcome: "Error" })],
+    status: "ready",
+  });
 
   const row = screen.getByRole("listitem");
   expect(within(row).getByText("Specchio")).toBeTruthy();
@@ -171,7 +176,11 @@ test("Sincronizzazione lists each sync once and shows only its runs", async () =
 
 test("a renamed sync is still one entry: runs are matched by sync id", async () => {
   render(History, {
-    runs: [run({ syncName: "Nuovo nome", syncId: 1 }), run({ syncName: "Vecchio nome", syncId: 1 }), run({ syncName: "Altra", syncId: 2 })],
+    runs: [
+      run({ syncName: "Nuovo nome", syncId: 1 }),
+      run({ syncName: "Vecchio nome", syncId: 1 }),
+      run({ syncName: "Altra", syncId: 2 }),
+    ],
     status: "ready",
   });
   const options = within(screen.getByLabelText("Sincronizzazione")).getAllByRole("option");
@@ -196,7 +205,10 @@ test("Esito shows only OK, Errore or Annullato runs", async () => {
   render(History, { runs: mixed(), status: "ready" });
 
   await pick("Esito", "Error");
-  expect(screen.getAllByRole("listitem").map((r) => within(r).getByText("Errore").textContent)).toEqual(["Errore", "Errore"]);
+  expect(screen.getAllByRole("listitem").map((r) => within(r).getByText("Errore").textContent)).toEqual([
+    "Errore",
+    "Errore",
+  ]);
 
   await pick("Esito", "Ok");
   expect(names()).toEqual(["Foto"]);

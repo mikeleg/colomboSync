@@ -94,7 +94,8 @@
   </header>
   {#if elevated}
     <p class="elevated" role="alert">
-      <Icon name="warn" />Le unità di rete potrebbero non essere visibili: apri ColomboSync senza 'Esegui come amministratore'.
+      <Icon name="warn" />Le unità di rete potrebbero non essere visibili: apri ColomboSync senza 'Esegui come
+      amministratore'.
     </p>
   {/if}
   <div class="layout">
@@ -128,9 +129,7 @@
 <style>
   .app {
     min-height: 100vh;
-    background:
-      radial-gradient(70% 55% at 85% 0%, var(--glow) 0%, transparent 70%),
-      var(--surface);
+    background: radial-gradient(70% 55% at 85% 0%, var(--glow) 0%, transparent 70%), var(--surface);
   }
   /* Mirror is the one risky mode: the whole page takes a red glow instead of the teal one. */
   .app.mirror {

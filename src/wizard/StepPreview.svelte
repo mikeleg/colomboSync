@@ -72,7 +72,8 @@
   </div>
   <div class="final">
     <div class="btns">
-      <button type="button" class="btn primary" onclick={onstop}>{saved ? "Torna all’elenco" : "Salva e chiudi"}</button>
+      <button type="button" class="btn primary" onclick={onstop}>{saved ? "Torna all’elenco" : "Salva e chiudi"}</button
+      >
       {#if !saved}<button type="button" class="link" onclick={onback}>Indietro</button>{/if}
     </div>
   </div>
@@ -86,14 +87,20 @@
       </div>
     {:else}
       <p class="sum">
-        {mirror ? "Ecco cosa succederà in B" : "Ecco cosa verrà fatto"}: <b>{formatNumber(preview.new.count)}</b> file nuovi,
-        <b>{formatNumber(preview.updated.count)}</b> da aggiornare{#if mirror}, <b>{formatNumber(preview.deleted.count)}</b> da cancellare{/if}.
-        Peso totale da copiare: <b>{formatSize(preview.bytes)}</b>.
+        {mirror ? "Ecco cosa succederà in B" : "Ecco cosa verrà fatto"}: <b>{formatNumber(preview.new.count)}</b> file
+        nuovi,
+        <b>{formatNumber(preview.updated.count)}</b> da aggiornare{#if mirror}, <b
+            >{formatNumber(preview.deleted.count)}</b
+          > da cancellare{/if}. Peso totale da copiare: <b>{formatSize(preview.bytes)}</b>.
       </p>
     {/if}
     <div class="groups">
       {@render group("Da copiare (nuovi)", "File che ci sono in A e non ci sono ancora in B.", preview.new)}
-      {@render group("Da aggiornare", "File che ci sono sia in A sia in B ma sono diversi: verranno sostituiti con quelli di A.", preview.updated)}
+      {@render group(
+        "Da aggiornare",
+        "File che ci sono sia in A sia in B ma sono diversi: verranno sostituiti con quelli di A.",
+        preview.updated,
+      )}
       {#if mirror}
         {@render group(
           "Da cancellare in B",
@@ -116,9 +123,13 @@
       {/if}
       <div class="btns">
         {#if !preview.blocked}
-          <button type="button" class="btn primary big" disabled={needsConsent && !consent} onclick={onstart}>Sì, avvia</button>
+          <button type="button" class="btn primary big" disabled={needsConsent && !consent} onclick={onstart}
+            >Sì, avvia</button
+          >
         {/if}
-        <button type="button" class="btn big" onclick={onstop}>{saved ? "No, torna all’elenco" : "No, salva e basta"}</button>
+        <button type="button" class="btn big" onclick={onstop}
+          >{saved ? "No, torna all’elenco" : "No, salva e basta"}</button
+        >
         {#if !saved}<button type="button" class="link" onclick={onback}>Indietro, cambio qualcosa</button>{/if}
       </div>
     </section>

@@ -63,7 +63,10 @@ test("lists one card per sync: A → B, mode chip, last time with outcome, or Ma
 });
 
 test("when the last outcome is Errore the button reads Riprova and the chip says Errore", async () => {
-  invokeMock.mockResolvedValue({ syncs: [{ ...foto, lastRun: { startedAt: "2026-11-01T18:05:00+01:00", outcome: "Error", note: unreachable } }], setAside: false });
+  invokeMock.mockResolvedValue({
+    syncs: [{ ...foto, lastRun: { startedAt: "2026-11-01T18:05:00+01:00", outcome: "Error", note: unreachable } }],
+    setAside: false,
+  });
   render(Home, props);
 
   await screen.findByRole("heading", { name: "Copia di Foto" });
@@ -76,7 +79,10 @@ test("when the last outcome is Errore the button reads Riprova and the chip says
 });
 
 test("a stopped run shows the Annullato chip and keeps Controlla e avvia", async () => {
-  invokeMock.mockResolvedValue({ syncs: [{ ...foto, lastRun: { startedAt: "2026-11-01T18:05:00+01:00", outcome: "Cancelled", note: stopped } }], setAside: false });
+  invokeMock.mockResolvedValue({
+    syncs: [{ ...foto, lastRun: { startedAt: "2026-11-01T18:05:00+01:00", outcome: "Cancelled", note: stopped } }],
+    setAside: false,
+  });
   render(Home, props);
 
   await screen.findByRole("heading", { name: "Copia di Foto" });
@@ -102,7 +108,9 @@ test("a damaged store set aside by Rust: empty state with a note and the new syn
   const onnew = vi.fn();
   render(Home, { ...props, onnew });
 
-  expect(await screen.findByText("Le sincronizzazioni salvate non erano leggibili: ne ho messo da parte una copia.")).toBeTruthy();
+  expect(
+    await screen.findByText("Le sincronizzazioni salvate non erano leggibili: ne ho messo da parte una copia."),
+  ).toBeTruthy();
   const newCard = screen.getByRole("button", { name: "Nuova sincronizzazione" }) as HTMLButtonElement;
   expect(newCard.disabled).toBe(false);
   await fireEvent.click(newCard);

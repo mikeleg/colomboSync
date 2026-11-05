@@ -88,7 +88,10 @@
     margin: 0 20px 20px;
     padding: 16px 18px;
     overflow: auto;
-    font: 13.5px/1.45 Consolas, "Cascadia Mono", monospace;
+    font:
+      13.5px/1.45 Consolas,
+      "Cascadia Mono",
+      monospace;
     background: var(--card-2);
     border-radius: var(--r-s);
     flex: 1;

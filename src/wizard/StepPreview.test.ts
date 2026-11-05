@@ -170,7 +170,9 @@ test("mirror: the consent checkbox sits in the same pinned footer as Sì, avvia,
   expect(footer.contains(screen.getByLabelText(/Ho capito/))).toBe(true);
   expect(footer.contains(screen.getByRole("button", { name: "Sì, avvia" }))).toBe(true);
   const groups = screen.getByText("Da copiare (nuovi)");
-  expect(groups.compareDocumentPosition(screen.getByLabelText(/Ho capito/)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(
+    groups.compareDocumentPosition(screen.getByLabelText(/Ho capito/)) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
 });
 
 test("mirror: the consent is asked again every time the preview is shown", async () => {

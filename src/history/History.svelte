@@ -109,11 +109,23 @@
         {#if run.partial != null}
           <div><dd>{partialText(run.partial)}</dd></div>
         {:else}
-          <div><dt>Nuovi</dt><dd>{formatNumber(run.new)}</dd></div>
-          <div><dt>Aggiornati</dt><dd>{formatNumber(run.updated)}</dd></div>
+          <div>
+            <dt>Nuovi</dt>
+            <dd>{formatNumber(run.new)}</dd>
+          </div>
+          <div>
+            <dt>Aggiornati</dt>
+            <dd>{formatNumber(run.updated)}</dd>
+          </div>
         {/if}
-        <div class:d={run.deleted > 0}><dt>Cancellati</dt><dd>{formatNumber(run.deleted)}</dd></div>
-        <div><dt>Durata</dt><dd>{formatDuration(run.durationMs)}</dd></div>
+        <div class:d={run.deleted > 0}>
+          <dt>Cancellati</dt>
+          <dd>{formatNumber(run.deleted)}</dd>
+        </div>
+        <div>
+          <dt>Durata</dt>
+          <dd>{formatDuration(run.durationMs)}</dd>
+        </div>
         <div class="lg"><button type="button" class="link" onclick={() => (viewing = run)}>Registro</button></div>
       </dl>
     </li>

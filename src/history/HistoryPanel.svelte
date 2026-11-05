@@ -7,14 +7,15 @@
   let { summary }: { summary: HistorySummary | null } = $props();
 
   const numbers = $derived(
-    summary && [
-      ["Copie fatte", summary.runs],
-      ["Riuscite", summary.ok],
-      ["Con errore", summary.failed],
-      ["Annullate", summary.cancelled],
-      ["File copiati", summary.filesCopied],
-      ["File cancellati in B", summary.filesDeleted],
-    ] as const,
+    summary &&
+      ([
+        ["Copie fatte", summary.runs],
+        ["Riuscite", summary.ok],
+        ["Con errore", summary.failed],
+        ["Annullate", summary.cancelled],
+        ["File copiati", summary.filesCopied],
+        ["File cancellati in B", summary.filesDeleted],
+      ] as const),
   );
 </script>
 
@@ -22,7 +23,8 @@
   {#if summary && numbers}
     {#if summary.runs === 0}
       <p class="empty">
-        Non hai ancora fatto nessuna copia. Quando ne farai una, qui vedrai i numeri e lo stato di ogni sincronizzazione.
+        Non hai ancora fatto nessuna copia. Quando ne farai una, qui vedrai i numeri e lo stato di ogni
+        sincronizzazione.
       </p>
     {:else}
       <section>
@@ -41,7 +43,9 @@
               <li>
                 <strong>{sync.name}</strong>
                 <span class="last">
-                  {sync.lastSuccess ? `Ultima copia riuscita: ${formatWhen(sync.lastSuccess)}` : "Nessuna copia riuscita finora."}
+                  {sync.lastSuccess
+                    ? `Ultima copia riuscita: ${formatWhen(sync.lastSuccess)}`
+                    : "Nessuna copia riuscita finora."}
                 </span>
                 {#if sync.warning}
                   <span class="warn"><Icon name="warn" />{sync.warning}</span>
@@ -57,10 +61,14 @@
     <h2>Cosa vogliono dire le etichette</h2>
     <p><span class="chip {outcomeChip.Ok.cls}">{outcomeChip.Ok.label}</span> La copia è andata a buon fine.</p>
     <p>
-      <span class="chip {outcomeChip.Error.cls}">{outcomeChip.Error.label}</span> Interrotta per un problema (di solito un disco o la rete). I file già copiati restano.
+      <span class="chip {outcomeChip.Error.cls}">{outcomeChip.Error.label}</span> Interrotta per un problema (di solito un
+      disco o la rete). I file già copiati restano.
     </p>
     <p><span class="chip {outcomeChip.Cancelled.cls}">{outcomeChip.Cancelled.label}</span> Fermata a mano.</p>
-    <p><span class="chip {modeChip.Mirror.cls}">{modeChip.Mirror.label}</span> In quella copia erano stati cancellati da B i file in più.</p>
+    <p>
+      <span class="chip {modeChip.Mirror.cls}">{modeChip.Mirror.label}</span> In quella copia erano stati cancellati da B
+      i file in più.
+    </p>
   </section>
 </div>
 

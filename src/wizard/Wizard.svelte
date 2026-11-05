@@ -73,9 +73,7 @@
   const stepId = $derived(STEPS[step].id);
 
   const previewCounts = $derived<Counts | null>(
-    preview
-      ? { new: preview.new.count, updated: preview.updated.count, deleted: preview.deleted.count }
-      : null,
+    preview ? { new: preview.new.count, updated: preview.updated.count, deleted: preview.deleted.count } : null,
   );
 
   const runTotal = $derived(previewCounts ? previewCounts.new + previewCounts.updated + previewCounts.deleted : 0);
@@ -243,7 +241,9 @@
   <ol class="steps" aria-label="Passi">
     {#each STEPS as s, i (s.id)}
       <li class:done={i < step} class:cur={i === step} aria-current={i === step ? "step" : undefined}>
-        <span class="n">{#if i < step}<Icon name="tick" />{:else}{i + 1}{/if}</span>
+        <span class="n"
+          >{#if i < step}<Icon name="tick" />{:else}{i + 1}{/if}</span
+        >
         <span>{s.label}</span>
       </li>
     {/each}

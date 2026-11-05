@@ -10,7 +10,8 @@
     onhome,
     onretry,
     onhistory,
-  }: { run: RunReport | null; failure: string; onhome: () => void; onretry: () => void; onhistory: () => void } = $props();
+  }: { run: RunReport | null; failure: string; onhome: () => void; onretry: () => void; onhistory: () => void } =
+    $props();
 
   let viewingLog = $state(false);
 

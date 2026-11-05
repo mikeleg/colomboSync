@@ -175,10 +175,14 @@ fn has_visible_folder_attributes(attributes: u32) -> bool {
         && attributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM) == 0
 }
 
-/// A folder (also a link to one) whose name does not start with a dot.
+/// A folder (also a link to one) whose name does not start with a dot. Only a link needs a stat
+/// of its own, to see where it points.
 #[cfg(unix)]
 fn is_visible_folder(entry: &DirEntry) -> bool {
-    !entry.file_name().to_string_lossy().starts_with('.') && entry.path().is_dir()
+    !entry.file_name().to_string_lossy().starts_with('.')
+        && entry
+            .file_type()
+            .is_ok_and(|kind| kind.is_dir() || (kind.is_symlink() && entry.path().is_dir()))
 }
 
 #[cfg(test)]

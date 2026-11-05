@@ -92,14 +92,7 @@ impl PreviewMemo {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn counts(new: usize, updated: usize, deleted: usize) -> Counts {
-        Counts {
-            new,
-            updated,
-            deleted,
-        }
-    }
+    use crate::engine::preview_parser::counts;
 
     #[test]
     fn a_mirror_run_takes_its_counts_from_the_matching_preview_once() {

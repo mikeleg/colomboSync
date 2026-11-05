@@ -91,15 +91,13 @@ fn when(started_at: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::domain::SyncMode;
+    use crate::shared::domain::{SyncMode, sample_run, sample_sync};
 
     fn saved(id: u64, name: &str) -> SavedSync {
         SavedSync {
             id,
             name: name.into(),
-            source: r"D:\Foto".into(),
-            destination: r"E:\Backup".into(),
-            mode: SyncMode::Copy,
+            ..sample_sync()
         }
     }
 
@@ -107,18 +105,9 @@ mod tests {
         Run {
             sync_id,
             sync_name: "Nome nello storico".into(),
-            source: r"D:\Foto".into(),
-            destination: r"E:\Backup".into(),
-            mode: SyncMode::Copy,
-            new: 10,
-            updated: 2,
-            deleted: 0,
-            duration_ms: 1,
             outcome,
             started_at: started_at.into(),
-            log_path: String::new(),
-            partial: None,
-            cause: None,
+            ..sample_run()
         }
     }
 
@@ -163,7 +152,7 @@ mod tests {
             (summary.runs, summary.ok, summary.failed, summary.cancelled),
             (5, 2, 2, 1)
         );
-        assert_eq!(summary.files_copied, 12 + 7 + 3 + 12);
+        assert_eq!(summary.files_copied, 13 + 7 + 3 + 13);
         assert_eq!(summary.files_deleted, 5);
     }
 

@@ -315,7 +315,7 @@ fn mount_point(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::domain::SyncMode;
+    use crate::shared::domain::sample_run;
 
     const A: &str = r"D:\Foto";
     const NAS_B: &str = r"\\NAS\Backup";
@@ -605,19 +605,11 @@ mod tests {
     fn run(outcome: Outcome, cause: Option<Cause>) -> Run {
         Run {
             sync_id: Some(1),
-            sync_name: "Foto".into(),
             source: A.into(),
             destination: NAS_B.into(),
-            mode: SyncMode::Copy,
-            new: 0,
-            updated: 0,
-            deleted: 0,
-            duration_ms: 1,
             outcome,
-            started_at: "2026-11-02T21:30:00+01:00".into(),
-            log_path: String::new(),
-            partial: None,
             cause,
+            ..sample_run()
         }
     }
 

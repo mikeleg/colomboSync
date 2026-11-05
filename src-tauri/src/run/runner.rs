@@ -212,6 +212,7 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::domain::sample_sync;
 
     #[test]
     fn run_enforces_the_path_rules_itself() {
@@ -221,11 +222,10 @@ mod tests {
             for mode in [SyncMode::Copy, SyncMode::Mirror] {
                 let active = ActiveRun::default();
                 let sync = SavedSync {
-                    id: 1,
-                    name: "Foto".into(),
                     source: a.into(),
                     destination: b.into(),
                     mode,
+                    ..sample_sync()
                 };
                 let result = run(&storage, &sync, Counts::default(), &active, |_| {});
                 assert_eq!(result.unwrap_err(), message);

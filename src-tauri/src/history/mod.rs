@@ -91,24 +91,13 @@ fn read_log_capped(logs_dir: &Path, file: &Path, max_bytes: u64) -> io::Result<S
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::domain::{Outcome, SyncMode};
+    use crate::shared::domain::{Outcome, sample_run};
 
     fn run(name: &str, outcome: Outcome) -> Run {
         Run {
-            sync_id: None,
             sync_name: name.into(),
-            source: r"D:\Foto".into(),
-            destination: r"E:\Backup".into(),
-            mode: SyncMode::Copy,
-            new: 12,
-            updated: 1,
-            deleted: 0,
-            duration_ms: 61_000,
             outcome,
-            started_at: "2026-11-02T21:30:00+01:00".into(),
-            log_path: r"C:\L\logs\x.log".into(),
-            partial: None,
-            cause: None,
+            ..sample_run()
         }
     }
 

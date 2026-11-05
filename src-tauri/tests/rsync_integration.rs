@@ -1,34 +1,18 @@
 //! Runs the real `rsync` on temp folders (macOS and Linux CI runners).
 #![cfg(unix)]
 
+mod common;
+
 use colombo_sync_lib::engine::preview_parser::Counts;
 use colombo_sync_lib::run::runner::{self, ActiveRun};
-use colombo_sync_lib::shared::domain::{Cause, Folder, Outcome, Run, SavedSync, SyncMode};
+use colombo_sync_lib::shared::domain::{Cause, Folder, Outcome, Run, SyncMode};
 use colombo_sync_lib::shared::error_messages;
 use colombo_sync_lib::shared::mirror_guard;
-use colombo_sync_lib::shared::storage::Storage;
 use colombo_sync_lib::wizard;
+use common::{path_str, run_mirror, saved, set_modified, storage_in, write};
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
-
-fn write(path: &Path, text: &str) {
-    fs::create_dir_all(path.parent().unwrap()).unwrap();
-    fs::write(path, text).unwrap();
-}
-
-fn path_str(path: &Path) -> &str {
-    path.to_str().unwrap()
-}
-
-fn set_modified(path: &Path, time: SystemTime) {
-    fs::File::options()
-        .write(true)
-        .open(path)
-        .unwrap()
-        .set_modified(time)
-        .unwrap();
-}
 
 /// A copy of a file of A in B that rsync finds identical (same size, same modification time).
 fn identical_in(b: &Path, a: &Path, relative: &str) {
@@ -38,16 +22,6 @@ fn identical_in(b: &Path, a: &Path, relative: &str) {
         &b.join(relative),
         fs::metadata(a.join(relative)).unwrap().modified().unwrap(),
     );
-}
-
-fn saved(name: &str, a: &Path, b: &Path) -> SavedSync {
-    SavedSync {
-        id: 7,
-        name: name.into(),
-        source: path_str(a).into(),
-        destination: path_str(b).into(),
-        mode: SyncMode::Copy,
-    }
 }
 
 fn sorted(files: &[String]) -> Vec<String> {
@@ -72,7 +46,7 @@ fn copy_keeps_extra_files_in_destination() {
     identical_in(&b, &a, "same.txt");
     write(&b.join("only-in-b.txt"), "extra");
     write(&b.join("sub").join("only-in-b-too.txt"), "extra");
-    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let storage = storage_in(temp.path());
 
     let preview = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy).unwrap();
 
@@ -135,7 +109,7 @@ fn a_destination_that_does_not_exist_yet_previews_everything_as_new_and_stays_un
     }
 
     // The first run creates B itself: not a failure, not a "folder not found".
-    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let storage = storage_in(temp.path());
     let counts = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy)
         .unwrap()
         .counts();
@@ -160,7 +134,7 @@ fn a_destination_whose_parent_is_missing_is_reported_and_never_created() {
     let a = temp.path().join("A");
     let b = temp.path().join("Backup").join("Foto"); // `Backup` is an unplugged disk
     write(&a.join("uno.txt"), "uno");
-    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let storage = storage_in(temp.path());
 
     let failure = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy).unwrap_err();
     assert_eq!(
@@ -204,7 +178,7 @@ fn an_rsync_failure_is_recorded_as_error() {
     let temp = tempfile::tempdir().unwrap();
     let missing = temp.path().join("non-esiste");
     let b = temp.path().join("B");
-    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let storage = storage_in(temp.path());
 
     let a = path_str(&missing);
     let failure = wizard::preview::preview(a, path_str(&b), SyncMode::Copy).unwrap_err();
@@ -251,7 +225,7 @@ fn run_reports_progress_with_the_current_file() {
     write(&a.join("uno.txt"), "uno");
     write(&a.join("è già.txt"), "tre");
     write(&b.join("only-in-b.txt"), "extra");
-    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let storage = storage_in(temp.path());
     let counts = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy)
         .unwrap()
         .counts();
@@ -294,7 +268,7 @@ fn cancel_kills_rsync_and_records_a_cancelled_run() {
         .unwrap()
         .set_len(3_000_000_000)
         .unwrap();
-    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let storage = storage_in(temp.path());
     let counts = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy)
         .unwrap()
         .counts();
@@ -335,7 +309,7 @@ fn the_active_run_is_freed_when_the_history_cannot_be_written() {
     let temp = tempfile::tempdir().unwrap();
     let (a, b) = (temp.path().join("A"), temp.path().join("B"));
     write(&a.join("uno.txt"), "uno");
-    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let storage = storage_in(temp.path());
     fs::create_dir_all(storage.history_file()).unwrap(); // a folder where the file should be
     let active = ActiveRun::default();
 
@@ -349,19 +323,6 @@ fn the_active_run_is_freed_when_the_history_cannot_be_written() {
 
     assert!(result.is_err());
     assert!(!active.is_running());
-}
-
-fn run_mirror(storage: &Storage, a: &Path, b: &Path, counts: Counts) -> Result<Run, String> {
-    runner::run(
-        storage,
-        &SavedSync {
-            mode: SyncMode::Mirror,
-            ..saved("Copia di A", a, b)
-        },
-        counts,
-        &ActiveRun::default(),
-        |_| {},
-    )
 }
 
 #[test]
@@ -403,7 +364,7 @@ fn mirror_deletes_extra_files_in_destination() {
     identical_in(&b, &a, "keep.txt");
     write(&b.join("only-in-b.txt"), "extra");
     write(&b.join("old-dir").join("inside.txt"), "extra");
-    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let storage = storage_in(temp.path());
 
     let preview = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Mirror).unwrap();
     assert_eq!(preview.deleted.count, 2);
@@ -433,7 +394,7 @@ fn mirror_with_a_missing_or_empty_source_is_blocked_and_never_run() {
     fs::create_dir_all(&empty).unwrap();
     write(&b.join("precious.txt"), "do not delete");
     let missing = temp.path().join("scollegato");
-    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let storage = storage_in(temp.path());
 
     // A that exists and is empty: the guard blocks the mirror.
     let preview =

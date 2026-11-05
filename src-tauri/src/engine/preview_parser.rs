@@ -49,6 +49,16 @@ impl Counts {
     }
 }
 
+/// `Counts` for the tests, in the order new, updated, deleted.
+#[cfg(test)]
+pub(crate) fn counts(new: usize, updated: usize, deleted: usize) -> Counts {
+    Counts {
+        new,
+        updated,
+        deleted,
+    }
+}
+
 impl Preview {
     pub fn counts(&self) -> Counts {
         Counts {
@@ -169,14 +179,7 @@ mod tests {
             preview.deleted.files,
             ["only-in-b.txt", r"sub\only-in-b-too.txt"]
         );
-        assert_eq!(
-            preview.counts(),
-            Counts {
-                new: 4,
-                updated: 1,
-                deleted: 2
-            }
-        );
+        assert_eq!(preview.counts(), counts(4, 1, 2));
         assert_eq!(preview.bytes, 7 + 22 + 12 + 3 + 15);
     }
 

@@ -1,34 +1,17 @@
 //! Runs the real `robocopy.exe` on temp folders.
 #![cfg(windows)]
 
+mod common;
+
 use colombo_sync_lib::run::runner::{self, ActiveRun};
-use colombo_sync_lib::shared::domain::{Cause, Folder, Outcome, Run, SavedSync, SyncMode};
+use colombo_sync_lib::shared::domain::{Cause, Folder, Outcome, Run, SyncMode};
 use colombo_sync_lib::shared::error_messages;
 use colombo_sync_lib::shared::mirror_guard;
-use colombo_sync_lib::shared::storage::Storage;
 use colombo_sync_lib::wizard;
+use common::{path_str, run_mirror, saved, set_modified, storage_in, write};
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
-
-fn write(path: &Path, text: &str) {
-    fs::create_dir_all(path.parent().unwrap()).unwrap();
-    fs::write(path, text).unwrap();
-}
-
-fn path_str(path: &Path) -> &str {
-    path.to_str().unwrap()
-}
-
-fn saved(name: &str, a: &Path, b: &Path) -> SavedSync {
-    SavedSync {
-        id: 7,
-        name: name.into(),
-        source: path_str(a).into(),
-        destination: path_str(b).into(),
-        mode: SyncMode::Copy,
-    }
-}
 
 #[test]
 fn copy_keeps_extra_files_in_destination() {
@@ -39,16 +22,14 @@ fn copy_keeps_extra_files_in_destination() {
     write(&a.join("updated.txt"), "versione nuova lunga");
     write(&a.join("same.txt"), "uguale");
     write(&b.join("updated.txt"), "old");
-    fs::File::options()
-        .write(true)
-        .open(b.join("updated.txt"))
-        .unwrap()
-        .set_modified(SystemTime::now() - Duration::from_secs(86_400 * 365))
-        .unwrap();
+    set_modified(
+        &b.join("updated.txt"),
+        SystemTime::now() - Duration::from_secs(86_400 * 365),
+    );
     fs::copy(a.join("same.txt"), b.join("same.txt")).unwrap();
     write(&b.join("only-in-b.txt"), "extra");
     write(&b.join("sub").join("only-in-b-too.txt"), "extra");
-    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let storage = storage_in(temp.path());
 
     let preview = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy).unwrap();
 
@@ -98,7 +79,7 @@ fn robocopy_failure_is_recorded_as_error() {
     let temp = tempfile::tempdir().unwrap();
     let missing = temp.path().join("non-esiste");
     let b = temp.path().join("B");
-    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let storage = storage_in(temp.path());
 
     let a = path_str(&missing);
     let failure = wizard::preview::preview(a, path_str(&b), SyncMode::Copy).unwrap_err();
@@ -145,7 +126,7 @@ fn run_reports_progress_with_the_current_file() {
     write(&a.join("uno.txt"), "uno");
     write(&a.join("è già.txt"), "tre");
     write(&b.join("only-in-b.txt"), "extra");
-    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let storage = storage_in(temp.path());
     let counts = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy)
         .unwrap()
         .counts();
@@ -188,7 +169,7 @@ fn cancel_kills_robocopy_and_records_a_cancelled_run() {
         .unwrap()
         .set_len(3_000_000_000)
         .unwrap();
-    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let storage = storage_in(temp.path());
     let counts = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy)
         .unwrap()
         .counts();
@@ -230,7 +211,7 @@ fn the_active_run_is_freed_when_the_history_cannot_be_written() {
     let temp = tempfile::tempdir().unwrap();
     let (a, b) = (temp.path().join("A"), temp.path().join("B"));
     write(&a.join("uno.txt"), "uno");
-    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let storage = storage_in(temp.path());
     fs::create_dir_all(storage.history_file()).unwrap(); // a folder where the file should be
     let active = ActiveRun::default();
 
@@ -244,24 +225,6 @@ fn the_active_run_is_freed_when_the_history_cannot_be_written() {
 
     assert!(result.is_err());
     assert!(!active.is_running());
-}
-
-fn run_mirror(
-    storage: &Storage,
-    a: &Path,
-    b: &Path,
-    counts: colombo_sync_lib::engine::preview_parser::Counts,
-) -> Result<Run, String> {
-    runner::run(
-        storage,
-        &SavedSync {
-            mode: SyncMode::Mirror,
-            ..saved("Copia di A", a, b)
-        },
-        counts,
-        &ActiveRun::default(),
-        |_| {},
-    )
 }
 
 #[test]
@@ -307,7 +270,7 @@ fn mirror_deletes_extra_files_in_destination() {
     fs::copy(a.join("keep.txt"), b.join("keep.txt")).unwrap();
     write(&b.join("only-in-b.txt"), "extra");
     write(&b.join("old-dir").join("inside.txt"), "extra");
-    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let storage = storage_in(temp.path());
 
     let preview = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Mirror).unwrap();
     assert_eq!(preview.deleted.count, 2);
@@ -337,7 +300,7 @@ fn mirror_with_a_missing_or_empty_source_is_blocked_and_never_run() {
     fs::create_dir_all(&empty).unwrap();
     write(&b.join("precious.txt"), "do not delete");
     let missing = temp.path().join("scollegato");
-    let storage = Storage::at(temp.path().join("ColomboSync"));
+    let storage = storage_in(temp.path());
 
     // A that exists and is empty: the guard blocks the mirror.
     let preview =

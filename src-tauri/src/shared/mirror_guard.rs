@@ -71,14 +71,7 @@ pub fn problem(source: &Path, counts: Counts) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn counts(new: usize, updated: usize, deleted: usize) -> Counts {
-        Counts {
-            new,
-            updated,
-            deleted,
-        }
-    }
+    use crate::engine::preview_parser::counts;
 
     #[test]
     fn blocks_when_source_missing_or_empty() {

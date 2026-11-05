@@ -148,15 +148,13 @@ pub fn default_sync_name(source: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::domain::{Cause, Folder, Run};
+    use crate::shared::domain::{Cause, Folder, Run, sample_run, sample_sync};
 
     fn sync(id: u64, name: &str) -> SavedSync {
         SavedSync {
             id,
             name: name.into(),
-            source: r"D:\Foto".into(),
-            destination: r"\\NAS\Backup".into(),
-            mode: SyncMode::Copy,
+            ..sample_sync()
         }
     }
 
@@ -292,15 +290,9 @@ mod tests {
             source: sync.source.clone(),
             destination: sync.destination.clone(),
             mode: sync.mode,
-            new: 1,
-            updated: 0,
-            deleted: 0,
-            duration_ms: 1,
             outcome,
             started_at: started_at.into(),
-            log_path: String::new(),
-            partial: None,
-            cause: None,
+            ..sample_run()
         }
     }
 

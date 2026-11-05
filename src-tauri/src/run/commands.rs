@@ -73,28 +73,20 @@ pub fn cancel_run(app: AppHandle, active: State<'_, ActiveRun>, exit_when_done: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::domain::{Cause, Folder, Outcome, SyncMode};
+    use crate::shared::domain::{Cause, Folder, Outcome, sample_run};
 
     #[test]
     fn a_failed_run_goes_to_the_ui_with_its_explanation_next_to_the_stored_fields() {
         let run = Run {
             sync_id: Some(1),
-            sync_name: "Foto".into(),
-            source: r"D:\Foto".into(),
             destination: r"\\NAS\Backup".into(),
-            mode: SyncMode::Copy,
-            new: 0,
-            updated: 0,
-            deleted: 0,
-            duration_ms: 1,
             outcome: Outcome::Error,
-            started_at: "2026-11-02T21:30:00+01:00".into(),
-            log_path: String::new(),
             partial: Some(0),
             cause: Some(Cause {
                 code: 53,
                 folder: Folder::B,
             }),
+            ..sample_run()
         };
         let report = RunReport {
             explanation: error_messages::explain_run(&run),

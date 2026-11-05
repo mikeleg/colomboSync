@@ -25,13 +25,8 @@ pub fn preview(source: &str, destination: &str, mode: SyncMode) -> Result<Previe
 
     // A that cannot be read says why (unplugged disk, share down, no permission): that is not
     // the same as an A with nothing in it, and the engine would only fail on it.
-    if let Err(error) = fs::metadata(source) {
-        return Err(error_messages::explain_source_error(
-            &error,
-            source,
-            destination,
-        ));
-    }
+    fs::metadata(source)
+        .map_err(|error| error_messages::explain_source_error(&error, source, destination))?;
     // An empty A would empty B: answer "blocked" without running the engine.
     if mode == SyncMode::Mirror
         && let Some(reason) = mirror_guard::source_problem(Path::new(source))
@@ -217,7 +212,6 @@ pub fn run(
     mut on_progress: impl FnMut(&Progress),
 ) -> Result<Run, String> {
     let (source, destination, mode) = (sync.source.as_str(), sync.destination.as_str(), sync.mode);
-    let sync_name = sync.name.clone();
     path_rules::check_destination(source, destination)?;
     if mode == SyncMode::Mirror
         && let Some(reason) = mirror_guard::problem(Path::new(source), counts)
@@ -225,7 +219,7 @@ pub fn run(
         return Err(reason.to_string());
     }
     let started = Local::now();
-    let log = storage.log_file(&sync_name, started.naive_local());
+    let log = storage.log_file(&sync.name, started.naive_local());
     fs::create_dir_all(storage.logs_dir()).map_err(|e| e.to_string())?;
 
     let clock = Instant::now();
@@ -265,7 +259,7 @@ pub fn run(
     let total = counts.new + counts.updated + counts.deleted;
     let mut follower = StdoutFollower::default();
     let progress = |follower: &StdoutFollower| Progress {
-        sync_name: sync_name.clone(),
+        sync_name: sync.name.clone(),
         done: follower.done().min(total),
         total,
         elapsed_ms: clock.elapsed().as_millis() as u64,

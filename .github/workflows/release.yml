@@ -64,120 +64,13 @@ jobs:
           echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
           echo "Releasing $version (prerelease=$prerelease)"
 
-  gate:
+  # Same checks as push CI, then the release files (renamed, universal dmg) as `release-*` artifacts.
+  build:
     needs: version
     uses: ./.github/workflows/ci.yml
-
-  build:
-    needs: [version, gate]
-    name: build-${{ matrix.name }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: windows
-            os: windows-latest
-          - name: macos
-            os: macos-15 # explicit label: macos-latest jobs stayed queued with no runner (2026-11-04)
-          - name: linux
-            os: ubuntu-22.04 # AppImage needs a glibc at least as old as the oldest target distro
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash
-    env:
-      VERSION: ${{ needs.version.outputs.version }}
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Linux libraries for Tauri
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: macOS targets (universal binary)
-        if: runner.os == 'macOS'
-        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "src-tauri -> target"
-
-      - run: npm ci
-
-      - name: Windows portable exe
-        if: runner.os == 'Windows'
-        run: |
-          npm run portable
-          mkdir release-files
-          cp src-tauri/target/release/colombo-sync.exe "release-files/ColomboSync-$VERSION-windows-x64.exe"
-
-      # Ad-hoc signed (`bundle.macOS.signingIdentity` is "-"), not notarized.
-      - name: macOS universal dmg
-        if: runner.os == 'macOS'
-        run: |
-          # hdiutil sometimes fails with "Resource busy" on the runners: retry the build.
-          dmgdir=src-tauri/target/universal-apple-darwin/release/bundle/dmg
-          for attempt in 1 2 3; do
-            rm -rf "$dmgdir" # a failed attempt can leave a half-written dmg (or an rw.*.dmg) behind
-            npx tauri build --target universal-apple-darwin --bundles dmg && break
-            if [ "$attempt" = 3 ]; then exit 1; fi
-            echo "dmg build failed, retrying"
-            sleep 10
-          done
-          dmgs=("$dmgdir"/*.dmg)
-          if [ "${#dmgs[@]}" != 1 ] || [ ! -f "${dmgs[0]}" ]; then
-            echo "::error::expected exactly one .dmg in $dmgdir, found ${#dmgs[@]}: ${dmgs[*]}"
-            exit 1
-          fi
-          mkdir release-files
-          cp "${dmgs[0]}" "release-files/ColomboSync-$VERSION-macos-universal.dmg"
-
-      - name: Assert the dmg holds a universal binary
-        if: runner.os == 'macOS'
-        run: |
-          mnt=$(mktemp -d)
-          # Detach on every exit path, so a failed lipo cannot leave the volume mounted.
-          trap 'hdiutil detach "$mnt" || hdiutil detach -force "$mnt" || true' EXIT
-          for attempt in 1 2 3; do
-            hdiutil attach -nobrowse -readonly -mountpoint "$mnt" release-files/*.dmg && break
-            if [ "$attempt" = 3 ]; then exit 1; fi
-            echo "attach failed, retrying"
-            sleep 10
-          done
-          ok=1
-          for bin in "$mnt"/*.app/Contents/MacOS/*; do
-            info=$(lipo -info "$bin")
-            echo "$info"
-            case "$info" in *arm64*x86_64* | *x86_64*arm64*) ;; *) ok=0 ;; esac
-          done
-          if [ "$ok" != 1 ]; then
-            echo "::error::the dmg is not a universal (arm64 + x86_64) build"
-            exit 1
-          fi
-
-      - name: Linux AppImage
-        if: runner.os == 'Linux'
-        env:
-          APPIMAGE_EXTRACT_AND_RUN: 1 # no FUSE on the runner
-        run: |
-          npx tauri build --bundles appimage
-          mkdir release-files
-          cp src-tauri/target/release/bundle/appimage/*.AppImage "release-files/ColomboSync-$VERSION-linux-x86_64.AppImage"
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: release-${{ matrix.name }}
-          path: release-files/*
-          if-no-files-found: error
+    with:
+      release: true
+      version: ${{ needs.version.outputs.version }}
 
   release:
     # Tags only: a manual run stops after the builds.

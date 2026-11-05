@@ -20,9 +20,9 @@ One tag → one GitHub Release with tested, checksummed binaries for Windows, ma
 
 ## Pipeline (`.github/workflows/release.yml`)
 1. **Trigger:** push of a tag `v*` (plus `workflow_dispatch` for a dry run that uploads artifacts but creates no release).
-2. **Gate:** reuse the CI matrix: fmt, clippy, cargo test, npm check/test on all three OS. Any red → no release.
-3. **Version check:** tag == the three version fields.
-4. **Build** per OS (table above), rename files to the release names.
+2. **Version check:** tag == the three version fields, tag on `main`.
+3. **Checks + build in one pass:** `release.yml` calls `ci.yml` with `release: true`: fmt, clippy, cargo test, npm check/test on all three OS, then each OS builds the release file (table above, renamed) in the same job. Any red → no release. The macOS job also runs clippy for `x86_64-apple-darwin` (no Rosetta on the runners, so the Intel half is never executed).
+4. **Release files** are uploaded as `release-<os>` artifacts.
 5. **Release job:** download the three artifacts, write `SHA256SUMS.txt`, create a **draft** GitHub Release with release notes from the commits since the previous tag (`feat(…)`/`fix(…)` grouped) + the Italian install notes below.
 6. **Publish by hand** after the smoke checklist: a person flips draft → published (pre-release for 0.x).
 

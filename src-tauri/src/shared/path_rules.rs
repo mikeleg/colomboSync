@@ -142,7 +142,7 @@ pub fn checked_name(name: &str) -> Result<&str, Explanation> {
     if name.is_empty() {
         return Err("Scrivi un nome per la nuova cartella.".into());
     }
-    if name.len() > 255 {
+    if name_length(name) > 255 {
         return Err("Il nome è troppo lungo.".into());
     }
     if name.chars().any(is_forbidden_in_name) {
@@ -158,6 +158,15 @@ pub fn checked_name(name: &str) -> Result<&str, Explanation> {
         });
     }
     Ok(name)
+}
+
+/// The length the file system limits to 255: UTF-16 units on NTFS, bytes on ext4 and APFS.
+fn name_length(name: &str) -> usize {
+    if cfg!(windows) {
+        name.encode_utf16().count()
+    } else {
+        name.len()
+    }
 }
 
 /// Device names Windows keeps for itself, with or without an extension (`NUL.txt`).
@@ -265,9 +274,26 @@ mod tests {
     }
 
     #[test]
-    fn a_name_longer_than_255_bytes_is_refused() {
+    fn an_ascii_name_longer_than_255_is_refused() {
         assert_eq!(refused(&"a".repeat(256)).title, "Il nome è troppo lungo.");
         assert!(checked_name(&"a".repeat(255)).is_ok());
+    }
+
+    /// NTFS counts UTF-16 units (200 here), ext4 and APFS count bytes (260 here).
+    #[test]
+    fn the_name_limit_is_the_one_of_the_file_system() {
+        let accented = format!("{}{}", "a".repeat(140), "è".repeat(60));
+        assert_eq!(accented.chars().count(), 200);
+
+        assert_eq!(checked_name(&accented).is_ok(), cfg!(windows));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn a_name_of_more_than_255_utf16_units_is_refused_on_windows() {
+        let astral = "😀".repeat(128); // 2 units each
+        assert_eq!(refused(&astral).title, "Il nome è troppo lungo.");
+        assert!(checked_name(&"😀".repeat(127)).is_ok());
     }
 
     #[test]

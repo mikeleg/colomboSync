@@ -81,3 +81,8 @@ Copy and behaviour not in the prototype, decided while implementing; review with
 - Scope change (user): macOS and Linux builds too. Engine there is **rsync** (Windows keeps robocopy). macOS app is **not signed** with an Apple Developer ID (ad-hoc signature only; first launch needs right-click → Apri). Linux ships as AppImage.
 - Repo on GitHub: `mikeleg/colomboSync` (private). GitHub Actions build and test Windows, macOS and Linux.
 - Look (user): "Eclissi" logo in teal (origami colours), dark Apple-style screens – design canvas https://claude.ai/artifact/Re562wrVhSASbEL78RWg1D replaces prototype.html for look only; prototype.html stays the source for flow and Italian copy. Nunito dropped for the system font.
+
+## Decisions 2026-11-05 (CI runners)
+- Probed on the runners: `macos-14` ships samba rsync 2.6.9, not openrsync; `macos-15` (15.8.2), `macos-26` and `macos-latest` (= macos-26) ship openrsync (protocol 29); `ubuntu-latest` is Ubuntu 26.04 with rsync 3.4.1, `ubuntu-24.04` has 3.2.7. `macos-latest` now gets runners, but the label is unreliable (it never did on 2026-11-04), so macOS is pinned to `macos-15`.
+- CI and the release build run on `macos-15` (tests against openrsync, what the engine targets); macOS 14 and older (samba rsync) are not tested. Linux: tests on `ubuntu-latest`; the release AppImage is built on `ubuntu-22.04` (glibc baseline).
+- No macOS runner has Rosetta (`arch -x86_64` fails), so the Intel half of the universal dmg is never run in CI.

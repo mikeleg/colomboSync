@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { readRunLog } from "./api";
-  import { formatWhen } from "./format";
-  import type { Run } from "./types";
+  import { formatWhen } from "../shared/format";
+  import type { Run } from "../shared/types";
 
   let { run, onclose }: { run: Run; onclose: () => void } = $props();
 

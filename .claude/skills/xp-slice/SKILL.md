@@ -56,5 +56,5 @@ All must pass. Run the slice's main flow by hand on the exe if you can, otherwis
 
 ## Boundaries
 - Only this slice. Respect its "Do not touch". Nothing from "Later".
-- Shared hot spots (merge conflicts): `src/App.svelte`, `src/lib/wizard/Wizard.svelte`, `StepPreview.svelte`, the `lib.rs` handler list and managed state, `commands.rs`, `runner.rs`, `engine.rs`. Keep edits there minimal and additive.
+- Shared hot spots (merge conflicts): `src/App.svelte`, `src/wizard/Wizard.svelte`, `StepPreview.svelte`, the `lib.rs` handler list and managed state, `commands.rs`, `runner.rs`, `engine.rs`. Keep edits there minimal and additive.
 - If an acceptance criterion contradicts the prototype or another slice, stop and report.

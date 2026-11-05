@@ -1,8 +1,9 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import Icon from "./Icon.svelte";
+  import Icon from "../shared/Icon.svelte";
   import { browseFolders, createFolder } from "./api";
-  import type { Explanation, FolderListing } from "./types";
+  import type { Explanation } from "../shared/types";
+  import type { FolderListing } from "./types";
 
   let {
     id,

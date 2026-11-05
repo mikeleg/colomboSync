@@ -1,9 +1,9 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import Icon from "./Icon.svelte";
-  import { formatNumber, isNetworkPath } from "./format";
+  import Icon from "../shared/Icon.svelte";
+  import { formatNumber, isNetworkPath } from "../shared/format";
   import type { SchemaModel } from "./schema";
-  import type { Counts } from "./types";
+  import type { Counts } from "../shared/types";
 
   let { model }: { model: SchemaModel } = $props();
 

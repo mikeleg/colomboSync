@@ -1,4 +1,4 @@
-import type { Counts, Outcome } from "./types";
+import type { Counts, Outcome } from "../shared/types";
 
 /** What SchemaView draws. Whoever owns the current screen builds it and hands it to App. */
 export interface SchemaModel {

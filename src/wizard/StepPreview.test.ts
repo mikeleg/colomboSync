@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { expect, test, vi } from "vitest";
-import type { Preview } from "../types";
+import type { Preview } from "./types";
 import StepPreview from "./StepPreview.svelte";
 
 const group = (count: number, files: string[] = []) => ({ count, files });

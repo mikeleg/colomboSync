@@ -3,7 +3,10 @@ import { listen } from "@tauri-apps/api/event";
 import { act, fireEvent, render, screen, within } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App.svelte";
-import type { HistorySummary, Preview, Run, RunList, RunReport, SyncSummary } from "./lib/types";
+import type { Run, RunReport } from "./shared/types";
+import type { HistorySummary, RunList } from "./history/types";
+import type { Preview } from "./wizard/types";
+import type { SyncSummary } from "./syncs/types";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));

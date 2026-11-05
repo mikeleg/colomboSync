@@ -1,10 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
-import { cancelRun, onRunProgress } from "../api";
-import type { RunProgress } from "../types";
+import { cancelRun, onRunProgress } from "./api";
+import type { RunProgress } from "./types";
 import StepRunning from "./StepRunning.svelte";
 
-vi.mock("../api", () => ({
+vi.mock("./api", () => ({
   cancelRun: vi.fn(() => Promise.resolve(true)),
   onRunProgress: vi.fn(() => Promise.resolve(() => {})),
 }));

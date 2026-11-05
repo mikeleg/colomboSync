@@ -34,7 +34,7 @@ First release build takes ~5 min. Unix-only code can't be compiled here (Windows
 ## Architecture rules
 - **Rust owns all logic, I/O and every user-facing message** (`Explanation {title, advice}`; history stores `Cause`s, not prose): engine args, running it, preview parsing, path rules, `syncs.json`, `history.jsonl`, logs in the data dir (`%LOCALAPPDATA%\ColomboSync`, `~/Library/Application Support/ColomboSync`, `$XDG_DATA_HOME`/`~/.local/share/ColomboSync`). One module per concern in `src-tauri/src/`, exposed through `#[tauri::command]`s registered in `lib.rs`.
 - **Engine boundary = `src-tauri/src/engine.rs`**: `cfg(windows)` re-exports `robocopy.rs`, `cfg(unix)` re-exports `rsync.rs`. Runner, history, MirrorGuard, UI never learn which engine runs. Other platform code is `cfg`-gated too.
-- **Svelte owns presentation**: one component per wizard step in `src/lib/wizard/`, other components in `src/lib/`, `SchemaView.svelte` in the side panel, theme tokens in `src/theme.css`. Talks to Rust only via `invoke` and events.
+- **Svelte owns presentation**: one folder per vertical slice under `src/` (`syncs/`, `wizard/` with one component per step, `run/`, `history/`, `schema/` for the `SchemaView.svelte` side panel), plus `shared/` for what two or more slices use. Each slice owns its components, tests, `api.ts` (the `invoke`/event wrappers) and `types.ts`. Theme tokens in `src/theme.css`. Talks to Rust only via `invoke` and events.
 - Domain logic stays free of Tauri types where possible, so it is unit-testable with plain `cargo test`.
 - No elevation, no installer, nothing from the backlog's "Later" section.
 

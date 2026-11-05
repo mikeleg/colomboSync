@@ -1,5 +1,5 @@
 <script lang="ts">
-  import FolderPicker from "../FolderPicker.svelte";
+  import FolderPicker from "./FolderPicker.svelte";
 
   let { path = $bindable(), error, onenter }: { path: string; error: string; onenter: () => void } = $props();
 </script>

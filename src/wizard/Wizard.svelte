@@ -1,16 +1,19 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import Icon from "../Icon.svelte";
-  import { checkDestination, defaultSyncName, onCloseRequested, previewSync, runSync, saveSync } from "../api";
-  import { formatNumber } from "../format";
-  import type { SchemaModel } from "../schema";
-  import type { Counts, Explanation, Preview, RunReport, Sync, SyncMode } from "../types";
+  import Icon from "../shared/Icon.svelte";
+  import { checkDestination, previewSync } from "./api";
+  import { defaultSyncName, saveSync } from "../syncs/api";
+  import { onCloseRequested, runSync } from "../run/api";
+  import { formatNumber } from "../shared/format";
+  import type { SchemaModel } from "../schema/schema";
+  import type { Counts, Explanation, RunReport, Sync, SyncMode } from "../shared/types";
+  import type { Preview } from "./types";
   import StepDestination from "./StepDestination.svelte";
   import StepName from "./StepName.svelte";
   import StepOptions from "./StepOptions.svelte";
   import StepPreview from "./StepPreview.svelte";
-  import StepResult from "./StepResult.svelte";
-  import StepRunning from "./StepRunning.svelte";
+  import StepResult from "../run/StepResult.svelte";
+  import StepRunning from "../run/StepRunning.svelte";
   import StepSource from "./StepSource.svelte";
 
   let {

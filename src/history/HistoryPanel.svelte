@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Icon from "./Icon.svelte";
-  import { formatNumber, formatWhen, modeChip, outcomeChip } from "./format";
+  import Icon from "../shared/Icon.svelte";
+  import { formatNumber, formatWhen, modeChip, outcomeChip } from "../shared/format";
   import type { HistorySummary } from "./types";
 
   /** From `list_runs`; null while it loads or when the history could not be read: then only the legend shows. */

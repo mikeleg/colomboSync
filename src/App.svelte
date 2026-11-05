@@ -1,15 +1,17 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { isElevated, listRuns } from "./lib/api";
-  import History from "./lib/History.svelte";
-  import HistoryPanel from "./lib/HistoryPanel.svelte";
-  import Home from "./lib/Home.svelte";
-  import Icon from "./lib/Icon.svelte";
-  import { emptySchema, type SchemaModel } from "./lib/schema";
-  import SchemaView from "./lib/SchemaView.svelte";
-  import ThemeSwitch from "./lib/ThemeSwitch.svelte";
-  import type { HistorySummary, Run, Sync } from "./lib/types";
-  import Wizard from "./lib/wizard/Wizard.svelte";
+  import { isElevated } from "./shared/api";
+  import { listRuns } from "./history/api";
+  import History from "./history/History.svelte";
+  import HistoryPanel from "./history/HistoryPanel.svelte";
+  import Home from "./syncs/Home.svelte";
+  import Icon from "./shared/Icon.svelte";
+  import { emptySchema, type SchemaModel } from "./schema/schema";
+  import SchemaView from "./schema/SchemaView.svelte";
+  import ThemeSwitch from "./shared/ThemeSwitch.svelte";
+  import type { Run, Sync } from "./shared/types";
+  import type { HistorySummary } from "./history/types";
+  import Wizard from "./wizard/Wizard.svelte";
 
   /** Started as administrator: mapped network drives are not visible then. */
   let elevated = $state(false);

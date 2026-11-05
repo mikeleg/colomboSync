@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import Icon from "../Icon.svelte";
-  import { cancelRun, onRunProgress } from "../api";
-  import { etaText, formatNumber } from "../format";
-  import type { RunProgress } from "../types";
+  import Icon from "../shared/Icon.svelte";
+  import { cancelRun, onRunProgress } from "./api";
+  import { etaText, formatNumber } from "../shared/format";
+  import type { RunProgress } from "./types";
 
   /**
    * `total` comes from the preview, so "0 di N file" shows before the first event.

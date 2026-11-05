@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import Icon from "./Icon.svelte";
+  import Icon from "../shared/Icon.svelte";
   import { listSyncs } from "./api";
-  import { formatWhen, isNetworkPath, modeChip, outcomeChip } from "./format";
-  import { emptySchema, type SchemaModel } from "./schema";
-  import type { Sync, SyncSummary } from "./types";
+  import { formatWhen, isNetworkPath, modeChip, outcomeChip } from "../shared/format";
+  import { emptySchema, type SchemaModel } from "../schema/schema";
+  import type { Sync } from "../shared/types";
+  import type { SyncSummary } from "./types";
 
   let {
     onnew,

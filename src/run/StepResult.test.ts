@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
-import type { RunReport } from "../types";
+import type { RunReport } from "../shared/types";
 import StepResult from "./StepResult.svelte";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));

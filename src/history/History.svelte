@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { formatDuration, formatNumber, formatWhen, modeChip, outcomeChip, partialText } from "./format";
+  import { formatDuration, formatNumber, formatWhen, modeChip, outcomeChip, partialText } from "../shared/format";
   import LogViewer from "./LogViewer.svelte";
-  import type { Run } from "./types";
+  import type { Run } from "../shared/types";
 
   /** Newest first, as returned by `list_runs`. */
   let { runs, status }: { runs: Run[]; status: "loading" | "ready" | "error" } = $props();

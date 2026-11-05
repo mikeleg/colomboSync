@@ -90,7 +90,7 @@
     </p>
   {/if}
   {@render group("Da copiare (nuovi)", "File che ci sono in A e non ci sono ancora in B.", preview.new)}
-  {@render group("Da aggiornare", "File che in B sono più vecchi di quelli in A.", preview.updated)}
+  {@render group("Da aggiornare", "File che ci sono sia in A sia in B ma sono diversi: verranno sostituiti con quelli di A.", preview.updated)}
   {#if mirror}
     {@render group(
       "Da cancellare in B",

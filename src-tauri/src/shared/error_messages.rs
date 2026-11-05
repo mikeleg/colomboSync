@@ -179,6 +179,24 @@ pub fn explain_run(run: &Run) -> Option<Explanation> {
         .then(|| describe(run.cause, &run.source, &run.destination, Moment::Run))
 }
 
+/// A Run as the UI gets it (result screen, Storico and its log window): what is stored, plus what
+/// to tell the user when it failed.
+#[derive(Serialize)]
+pub struct RunReport {
+    #[serde(flatten)]
+    run: Run,
+    explanation: Option<Explanation>,
+}
+
+impl From<Run> for RunReport {
+    fn from(run: Run) -> Self {
+        RunReport {
+            explanation: explain_run(&run),
+            run,
+        }
+    }
+}
+
 struct Reason {
     /// A sentence that starts in lower case and has no full stop: "non trovo la cartella A (…)".
     what: String,

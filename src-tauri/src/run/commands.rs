@@ -4,21 +4,11 @@
 use super::runner::{self, ActiveRun};
 use crate::engine::preview_parser::Counts;
 use crate::shared::blocking::blocking;
-use crate::shared::domain::{Run, SavedSync};
-use crate::shared::error_messages::{self, Explanation};
+use crate::shared::domain::SavedSync;
+use crate::shared::error_messages::RunReport;
 use crate::shared::storage::Storage;
 use crate::wizard::preview::PreviewMemo;
-use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
-
-/// A finished Run as the result screen gets it: what is stored, plus what to tell the user when
-/// it failed.
-#[derive(Serialize)]
-pub struct RunReport {
-    #[serde(flatten)]
-    run: Run,
-    explanation: Option<Explanation>,
-}
 
 #[tauri::command]
 pub async fn run_sync(
@@ -53,10 +43,7 @@ pub async fn run_sync(
     if app.state::<ActiveRun>().exit_when_done() {
         app.exit(0);
     }
-    run.map(|run| RunReport {
-        explanation: error_messages::explain_run(&run),
-        run,
-    })
+    run.map(RunReport::from)
 }
 
 /// Stops the running copy; `exit_when_done` when the user confirmed closing the window. Returns
@@ -73,7 +60,7 @@ pub fn cancel_run(app: AppHandle, active: State<'_, ActiveRun>, exit_when_done: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::domain::{Cause, Folder, Outcome, sample_run};
+    use crate::shared::domain::{Cause, Folder, Outcome, Run, sample_run};
 
     #[test]
     fn a_failed_run_goes_to_the_ui_with_its_explanation_next_to_the_stored_fields() {
@@ -88,12 +75,7 @@ mod tests {
             }),
             ..sample_run()
         };
-        let report = RunReport {
-            explanation: error_messages::explain_run(&run),
-            run,
-        };
-
-        let json = serde_json::to_value(&report).unwrap();
+        let json = serde_json::to_value(RunReport::from(run)).unwrap();
 
         assert_eq!(json["syncName"], "Foto");
         assert_eq!(json["outcome"], "Error");

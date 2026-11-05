@@ -16,9 +16,12 @@ export const previewSync = (source: string, destination: string, mode: SyncMode)
 /** Drives when `path` is empty, otherwise the subfolders of `path`. */
 export const browseFolders = (path: string) => invoke<FolderListing>("browse_folders", { path });
 
-/** Makes the folder `name` inside `parent` and resolves with its path; rejects with an `Explanation`. */
-export const createFolder = (parent: string, name: string) =>
-  invoke<string>("create_folder", { parent, name }).catch((e: unknown) => {
+/**
+ * Makes the folder `name` inside `parent` as a B for the folder A `source` and resolves with its
+ * path; rejects with an `Explanation` (also when the new folder would be inside A).
+ */
+export const createFolder = (source: string, parent: string, name: string) =>
+  invoke<string>("create_folder", { source, parent, name }).catch((e: unknown) => {
     throw asExplanation(e);
   });
 

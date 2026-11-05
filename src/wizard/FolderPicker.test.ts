@@ -119,7 +119,8 @@ test("typing a path by hand is tucked away; Enter there behaves as Avanti", asyn
 });
 
 const NUOVA = String.raw`D:\Nuova`;
-const creating = { ...props, id: "path-b", value: D, canCreate: true };
+const SORGENTE = String.raw`C:\Sorgente`;
+const creating = { ...props, id: "path-b", value: D, canCreate: true, source: SORGENTE };
 
 /** Browsing as usual; `create_folder` answers with `create`. */
 function answerCreateWith(create: (args: { parent: string; name: string }) => Promise<string>) {
@@ -151,7 +152,7 @@ test("Nuova cartella asks for a name, creates it inside the folder being browsed
   await fireEvent.input(screen.getByLabelText("Nome della nuova cartella"), { target: { value: "Nuova" } });
   await fireEvent.click(screen.getByRole("button", { name: "Crea" }));
 
-  expect(invokeMock).toHaveBeenCalledWith("create_folder", { parent: D, name: "Nuova" });
+  expect(invokeMock).toHaveBeenCalledWith("create_folder", { source: SORGENTE, parent: D, name: "Nuova" });
   expect(await screen.findByText(NUOVA, { selector: "b" })).toBeTruthy();
   expect((screen.getByLabelText("Percorso") as HTMLInputElement).value).toBe(NUOVA);
   expect(screen.queryByLabelText("Nome della nuova cartella")).toBeNull();
@@ -200,6 +201,19 @@ test("Annulla closes the name without creating anything, and so does leaving the
   await vi.waitFor(() => expect(screen.queryByLabelText("Nome della nuova cartella")).toBeNull());
 
   expect(invokeMock).not.toHaveBeenCalledWith("create_folder", expect.anything());
+});
+
+test("typing another path closes the name box, and coming back to the folder does not bring it back", async () => {
+  render(FolderPicker, creating);
+
+  await fireEvent.click(await screen.findByRole("button", { name: /Nuova cartella/ }));
+  await fireEvent.input(screen.getByLabelText("Nome della nuova cartella"), { target: { value: "Vecchio" } });
+  await fireEvent.input(screen.getByLabelText("Percorso"), { target: { value: FOTO } });
+  expect(screen.queryByLabelText("Nome della nuova cartella")).toBeNull();
+
+  await fireEvent.click(await screen.findByRole("button", { name: /Livello superiore/ }));
+  await screen.findByRole("button", { name: "Foto" });
+  expect(screen.queryByLabelText("Nome della nuova cartella")).toBeNull();
 });
 
 test("a step error opens the manual section and focuses the input", async () => {

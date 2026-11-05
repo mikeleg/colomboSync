@@ -1,7 +1,12 @@
 <script lang="ts">
   import FolderPicker from "./FolderPicker.svelte";
 
-  let { path = $bindable(), error, onenter }: { path: string; error: string; onenter: () => void } = $props();
+  let {
+    path = $bindable(),
+    source,
+    error,
+    onenter,
+  }: { path: string; source: string; error: string; onenter: () => void } = $props();
 </script>
 
 <FolderPicker
@@ -12,4 +17,5 @@
   {error}
   {onenter}
   canCreate
+  {source}
 />

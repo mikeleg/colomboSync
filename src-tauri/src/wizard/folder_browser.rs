@@ -61,16 +61,19 @@ pub fn browse(path: &str) -> FolderListing {
     }
 }
 
-/// Creates the folder `name` directly inside `parent` and returns its path. The name is hostile
-/// input and the Windows rules apply on every OS (the folder may end up on a stick Windows
-/// reads): one plain name, never a path. Fails when it already exists; never creates `parent`.
-pub fn create_folder(parent: &str, name: &str) -> Result<String, Explanation> {
+/// Creates the folder `name` directly inside `parent` and returns its path. It is a new B for the
+/// folder A `source`: a folder that `check_destination` would refuse (A itself, inside A) is not
+/// created at all. The name is hostile input and the Windows rules apply on every OS (the folder
+/// may end up on a stick Windows reads): one plain name, never a path. Fails when it already
+/// exists; never creates `parent`.
+pub fn create_folder(source: &str, parent: &str, name: &str) -> Result<String, Explanation> {
     let name = path_rules::checked_name(name)?;
     let parent = Path::new(parent.trim());
     if !parent.is_absolute() {
         return Err(error_messages::explain_missing_parent());
     }
     let path = parent.join(name);
+    path_rules::check_destination(source, &path.to_string_lossy())?;
     std::fs::create_dir(&path).map_err(|e| error_messages::explain_create_error(&e))?;
     Ok(path.to_string_lossy().into_owned())
 }
@@ -205,9 +208,48 @@ mod tests {
         assert_eq!(names, ["Alfa", "beta"]);
     }
 
+    /// A source that has nothing to do with the temp folders the tests create in.
+    const ELSEWHERE: &str = if cfg!(windows) {
+        r"Z:\Sorgente"
+    } else {
+        "/sorgente-inesistente"
+    };
+
+    #[test]
+    fn a_folder_inside_the_source_is_never_created() {
+        let source = tempfile::tempdir().unwrap();
+        let sub = source.path().join("sotto");
+        std::fs::create_dir(&sub).unwrap();
+        let source_path = source.path().to_str().unwrap();
+
+        let inside = create_folder(source_path, source_path, "Backup").unwrap_err();
+        let deeper = create_folder(source_path, sub.to_str().unwrap(), "Backup").unwrap_err();
+
+        assert_eq!(inside, Explanation::from(path_rules::INSIDE_SOURCE));
+        assert_eq!(deeper, Explanation::from(path_rules::INSIDE_SOURCE));
+        assert!(!source.path().join("Backup").exists());
+        assert!(!sub.join("Backup").exists());
+    }
+
+    #[test]
+    fn a_folder_next_to_the_source_is_created() {
+        let parent = tempfile::tempdir().unwrap();
+        let source = parent.path().join("Foto");
+        std::fs::create_dir(&source).unwrap();
+
+        let made = create_folder(
+            source.to_str().unwrap(),
+            parent.path().to_str().unwrap(),
+            "Copia",
+        )
+        .unwrap();
+
+        assert!(Path::new(&made).is_dir());
+    }
+
     fn refused(name: &str) -> Explanation {
         let dir = tempfile::tempdir().unwrap();
-        let error = create_folder(dir.path().to_str().unwrap(), name).unwrap_err();
+        let error = create_folder(ELSEWHERE, dir.path().to_str().unwrap(), name).unwrap_err();
         assert_eq!(
             std::fs::read_dir(dir.path()).unwrap().count(),
             0,
@@ -220,7 +262,7 @@ mod tests {
     fn a_new_folder_is_created_directly_inside_the_parent_and_its_path_returned() {
         let dir = tempfile::tempdir().unwrap();
 
-        let path = create_folder(dir.path().to_str().unwrap(), "  Foto 2024  ").unwrap();
+        let path = create_folder(ELSEWHERE, dir.path().to_str().unwrap(), "  Foto 2024  ").unwrap();
 
         assert_eq!(Path::new(&path), dir.path().join("Foto 2024"));
         assert!(dir.path().join("Foto 2024").is_dir());
@@ -243,7 +285,7 @@ mod tests {
         let parent = dir.path().to_str().unwrap();
 
         for name in ["Foto", "nota.txt"] {
-            let e = create_folder(parent, name).unwrap_err();
+            let e = create_folder(ELSEWHERE, parent, name).unwrap_err();
             assert_eq!(e.title, "Esiste già una cartella con questo nome.");
             assert_eq!(e.advice, "Scegli un altro nome.");
         }
@@ -254,12 +296,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let missing = dir.path().join("non-esiste");
 
-        let e = create_folder(missing.to_str().unwrap(), "Foto").unwrap_err();
+        let e = create_folder(ELSEWHERE, missing.to_str().unwrap(), "Foto").unwrap_err();
 
         assert_eq!(e.title, "Non trovo la cartella in cui creare la nuova.");
         assert_eq!(e.advice, "Il disco è collegato?");
         assert!(!missing.exists());
-        assert!(create_folder("", "Foto").is_err());
+        assert!(create_folder(ELSEWHERE, "", "Foto").is_err());
     }
 
     #[test]

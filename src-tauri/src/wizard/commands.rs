@@ -40,8 +40,13 @@ pub async fn browse_folders(path: String) -> Result<FolderListing, String> {
     blocking(move || Ok(folder_browser::browse(&path))).await
 }
 
-/// A new folder `name` inside `parent`, whose path is returned. Blocking thread, like browsing.
+/// A new folder `name` inside `parent` to be used as B for the folder A `source`, whose path is
+/// returned. Blocking thread, like browsing.
 #[tauri::command]
-pub async fn create_folder(parent: String, name: String) -> Result<String, Explanation> {
-    blocking(move || folder_browser::create_folder(&parent, &name)).await
+pub async fn create_folder(
+    source: String,
+    parent: String,
+    name: String,
+) -> Result<String, Explanation> {
+    blocking(move || folder_browser::create_folder(&source, &parent, &name)).await
 }

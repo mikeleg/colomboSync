@@ -13,6 +13,7 @@
     error,
     onenter,
     canCreate = false,
+    source = "",
   }: {
     id: string;
     label: string;
@@ -22,6 +23,8 @@
     onenter: () => void;
     /** Offers "Nuova cartella" inside the folder being browsed. */
     canCreate?: boolean;
+    /** The folder A: Rust refuses to create a new folder that would not be a valid B next to it. */
+    source?: string;
   } = $props();
 
   let listing = $state<FolderListing>({ parent: "", folders: [], error: null });
@@ -29,13 +32,15 @@
   let head: HTMLElement;
   let input: HTMLInputElement;
   let lastLoad = 0;
-  let creating = $state(false);
+  /** The folder the name box was opened in: the box belongs to it and goes away with any other choice. */
+  let creatingIn = $state<string | null>(null);
   let newName = $state("");
   let createError = $state("");
   let nameInput = $state<HTMLInputElement>();
   let createBusy = false;
 
   const chosen = $derived(value.trim());
+  const creating = $derived(creatingIn === chosen);
 
   async function load(path: string) {
     const seq = ++lastLoad;
@@ -53,18 +58,19 @@
   }
 
   function pick(path: string) {
+    stopCreating();
     value = path;
     head?.focus();
   }
 
   async function startCreating() {
-    creating = true;
+    creatingIn = chosen;
     await tick();
     nameInput?.focus();
   }
 
   function stopCreating() {
-    creating = false;
+    creatingIn = null;
     newName = "";
     createError = "";
   }
@@ -73,7 +79,7 @@
     if (createBusy) return;
     createBusy = true;
     try {
-      pick(await createFolder(chosen, newName));
+      pick(await createFolder(source, chosen, newName));
     } catch (e) {
       const { title, advice } = e as Explanation; // createFolder rejects with an Explanation
       createError = `${title} ${advice}`.trim();
@@ -85,12 +91,6 @@
   // The rows and the parent always follow the chosen path, however it got there (click or typing).
   $effect(() => {
     load(chosen);
-  });
-
-  // Choosing another folder (the new one included) closes the name box: it belongs to the folder it was opened in.
-  $effect(() => {
-    chosen;
-    stopCreating();
   });
 
   $effect(() => {

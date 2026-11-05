@@ -254,7 +254,7 @@
     {#if stepId === "source"}
       <StepSource bind:path={source} {error} onenter={next} />
     {:else if stepId === "destination"}
-      <StepDestination bind:path={destination} {error} onenter={next} />
+      <StepDestination bind:path={destination} source={source.trim()} {error} onenter={next} />
     {:else if stepId === "name"}
       <StepName bind:name {error} onedit={editName} onenter={next} />
     {:else if stepId === "options"}

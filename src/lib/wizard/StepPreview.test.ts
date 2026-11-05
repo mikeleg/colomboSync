@@ -163,6 +163,16 @@ test("mirror: extras in B are a red group 'Da cancellare in B' and Sì, avvia wa
   expect(start.disabled).toBe(true);
 });
 
+test("mirror: the consent checkbox sits in the same pinned footer as Sì, avvia, after the file groups", () => {
+  render(StepPreview, { ...mirrorProps, preview: mirrorPreview(2, { new: group(5, ["a"]) }) });
+
+  const footer = screen.getByRole("region", { name: "Avviare adesso?" });
+  expect(footer.contains(screen.getByLabelText(/Ho capito/))).toBe(true);
+  expect(footer.contains(screen.getByRole("button", { name: "Sì, avvia" }))).toBe(true);
+  const groups = screen.getByText("Da copiare (nuovi)");
+  expect(groups.compareDocumentPosition(screen.getByLabelText(/Ho capito/)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
 test("mirror: the consent is asked again every time the preview is shown", async () => {
   const first = render(StepPreview, { ...mirrorProps, preview: mirrorPreview(2, { new: group(5, ["a"]) }) });
   await fireEvent.click(screen.getByLabelText(/Ho capito/));

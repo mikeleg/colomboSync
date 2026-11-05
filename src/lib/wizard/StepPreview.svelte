@@ -76,48 +76,52 @@
     </div>
   </div>
 {:else if preview}
-  {#if preview.blocked}
-    <div class="guard">
-      <Warnbox>
-        <p>{preview.blocked}</p>
-      </Warnbox>
-    </div>
-  {:else}
-    <p class="sum">
-      {mirror ? "Ecco cosa succederà in B" : "Ecco cosa verrà fatto"}: <b>{formatNumber(preview.new.count)}</b> file nuovi,
-      <b>{formatNumber(preview.updated.count)}</b> da aggiornare{#if mirror}, <b>{formatNumber(preview.deleted.count)}</b> da cancellare{/if}.
-      Peso totale da copiare: <b>{formatSize(preview.bytes)}</b>.
-    </p>
-  {/if}
-  {@render group("Da copiare (nuovi)", "File che ci sono in A e non ci sono ancora in B.", preview.new)}
-  {@render group("Da aggiornare", "File che ci sono sia in A sia in B ma sono diversi: verranno sostituiti con quelli di A.", preview.updated)}
-  {#if mirror}
-    {@render group(
-      "Da cancellare in B",
-      "File che ci sono solo in B. Verranno cancellati e non finiscono nel Cestino.",
-      preview.deleted,
-      true,
-    )}
-    {#if preview.deleted.count === 0 && !preview.blocked}
-      <p class="sum">In B non ci sono file in più: non verrà cancellato niente.</p>
+  <div class="preview">
+    {#if preview.blocked}
+      <div class="guard">
+        <Warnbox>
+          <p>{preview.blocked}</p>
+        </Warnbox>
+      </div>
+    {:else}
+      <p class="sum">
+        {mirror ? "Ecco cosa succederà in B" : "Ecco cosa verrà fatto"}: <b>{formatNumber(preview.new.count)}</b> file nuovi,
+        <b>{formatNumber(preview.updated.count)}</b> da aggiornare{#if mirror}, <b>{formatNumber(preview.deleted.count)}</b> da cancellare{/if}.
+        Peso totale da copiare: <b>{formatSize(preview.bytes)}</b>.
+      </p>
     {/if}
-  {/if}
-  {#if needsConsent && !preview.blocked}
-    <label class="ack">
-      <input type="checkbox" bind:checked={consent} />
-      <span>Ho capito: {formatNumber(preview.deleted.count)} file verranno cancellati da B</span>
-    </label>
-  {/if}
-  <section class="final" aria-labelledby={preview.blocked ? undefined : "fq"}>
-    {#if !preview.blocked}<h2 id="fq">Avviare adesso?</h2>{/if}
-    <div class="btns">
-      {#if !preview.blocked}
-        <button type="button" class="btn primary big" disabled={needsConsent && !consent} onclick={onstart}>Sì, avvia</button>
+    <div class="groups">
+      {@render group("Da copiare (nuovi)", "File che ci sono in A e non ci sono ancora in B.", preview.new)}
+      {@render group("Da aggiornare", "File che ci sono sia in A sia in B ma sono diversi: verranno sostituiti con quelli di A.", preview.updated)}
+      {#if mirror}
+        {@render group(
+          "Da cancellare in B",
+          "File che ci sono solo in B. Verranno cancellati e non finiscono nel Cestino.",
+          preview.deleted,
+          true,
+        )}
+        {#if preview.deleted.count === 0 && !preview.blocked}
+          <p class="sum">In B non ci sono file in più: non verrà cancellato niente.</p>
+        {/if}
       {/if}
-      <button type="button" class="btn big" onclick={onstop}>{saved ? "No, torna all’elenco" : "No, salva e basta"}</button>
-      {#if !saved}<button type="button" class="link" onclick={onback}>Indietro, cambio qualcosa</button>{/if}
     </div>
-  </section>
+    <section class="final footer" aria-labelledby={preview.blocked ? undefined : "fq"}>
+      {#if !preview.blocked}<h2 id="fq">Avviare adesso?</h2>{/if}
+      {#if needsConsent && !preview.blocked}
+        <label class="ack">
+          <input type="checkbox" bind:checked={consent} />
+          <span>Ho capito: {formatNumber(preview.deleted.count)} file verranno cancellati da B</span>
+        </label>
+      {/if}
+      <div class="btns">
+        {#if !preview.blocked}
+          <button type="button" class="btn primary big" disabled={needsConsent && !consent} onclick={onstart}>Sì, avvia</button>
+        {/if}
+        <button type="button" class="btn big" onclick={onstop}>{saved ? "No, torna all’elenco" : "No, salva e basta"}</button>
+        {#if !saved}<button type="button" class="link" onclick={onback}>Indietro, cambio qualcosa</button>{/if}
+      </div>
+    </section>
+  </div>
 {/if}
 
 <style>
@@ -225,7 +229,7 @@
     border-radius: 20px;
     background: color-mix(in srgb, var(--danger) 20%, transparent);
     color: var(--on-danger-soft);
-    margin: 16px 0;
+    margin: 0 0 16px;
     cursor: pointer;
     font-size: 17px;
     font-weight: 700;
@@ -282,5 +286,26 @@
   }
   .back {
     margin-top: 12px;
+  }
+  /* Summary on top, groups in the middle (scroll when the window is short), the start box pinned at the bottom. */
+  .preview {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .groups {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    /* Room inside the box so the shadows of the group cards are not cut off. */
+    padding: 12px 12px 24px;
+    margin: 0 -12px;
+  }
+  .footer {
+    flex: none;
+    margin-top: 16px;
+    position: sticky;
+    bottom: 0;
   }
 </style>

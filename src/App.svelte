@@ -55,7 +55,7 @@
   }
 </script>
 
-<div class="app" class:mirror={view === "wizard" && schema.mirror}>
+<div class="app" class:mirror={view === "wizard" && schema.mirror} class:fill={view === "wizard"}>
   <header class="topbar">
     <div class="brand">
       <!-- "Eclissi": A (teal) partly covered by B (the page colour, with a faint rim). -->
@@ -93,7 +93,7 @@
     </p>
   {/if}
   <div class="layout">
-    <main class="screen">
+    <main class="screen" class:fill={view === "wizard"}>
       {#if view === "home"}
         <Home onnew={() => openWizard()} onrun={openWizard} onschema={(model) => (schema = model)} />
       {:else if view === "history"}
@@ -200,6 +200,28 @@
   }
   .screen {
     min-width: 0;
+  }
+  .screen.fill {
+    display: flex;
+    flex-direction: column;
+  }
+  /* Wide window: the wizard fills the window, so only its groups scroll and the start box stays at the bottom.
+     Narrow window: the side panel sits above the wizard, so the page scrolls and the start box sticks instead. */
+  @media (min-width: 901px) {
+    .app.fill {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .app.fill .layout {
+      flex: 1;
+      min-height: 0;
+      grid-template-rows: minmax(0, 1fr);
+      align-items: stretch;
+    }
+    .app.fill .screen {
+      min-height: 0;
+    }
   }
   .schema {
     background: var(--panel);

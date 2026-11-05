@@ -1,9 +1,9 @@
 //! Robocopy engine: argument builder, exit-code rules, `/UNILOG` decoding and, on Windows, the
 //! hidden process calls. The text rules are plain functions, tested on every platform.
 
+use super::preview_parser::{self, Preview};
 use crate::engine::SyncMode;
-use crate::error_messages::{self, Cause};
-use crate::preview_parser::{self, Preview};
+use crate::shared::error_messages::{self, Cause};
 
 /// Arguments of the `/L` dry run. `log` receives the UTF-16LE `/UNILOG`.
 pub fn preview_args(mode: SyncMode, source: &str, destination: &str, log: &str) -> Vec<String> {

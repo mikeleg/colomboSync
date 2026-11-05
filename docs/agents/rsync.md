@@ -1,6 +1,6 @@
 # rsync – facts the engine relies on (macOS and Linux)
 
-Source: spike of 2026-11-04 on the GitHub runners (`macos-latest` = macOS 26.6, `ubuntu-latest` = Ubuntu with rsync 3.4.1). CI tests on `macos-15` (macOS 15.8, openrsync) and `ubuntu-latest`; the "Which rsync" CI step prints `which rsync` / `rsync --version` in every run. Code: `src-tauri/src/rsync.rs`; fixtures in `src-tauri/tests/fixtures/rsync_preview_*.txt` are real captures. Don't contradict without a test proving otherwise.
+Source: spike of 2026-11-04 on the GitHub runners (`macos-latest` = macOS 26.6, `ubuntu-latest` = Ubuntu with rsync 3.4.1). CI tests on `macos-15` (macOS 15.8, openrsync) and `ubuntu-latest`; the "Which rsync" CI step prints `which rsync` / `rsync --version` in every run. Code: `src-tauri/src/engine/rsync.rs`; fixtures in `src-tauri/tests/fixtures/rsync_preview_*.txt` are real captures. Don't contradict without a test proving otherwise.
 
 ## Which rsync
 - Binary: `rsync` found on `PATH` (`/usr/bin/rsync` on both).

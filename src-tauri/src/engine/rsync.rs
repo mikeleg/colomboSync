@@ -2,9 +2,9 @@
 //! the process calls. The text rules are plain functions, so they are tested on every platform;
 //! only the process calls are Unix-only. Facts and per-platform quirks: `docs/agents/rsync.md`.
 
+use super::preview_parser::Preview;
 use crate::engine::SyncMode;
-use crate::error_messages::{Cause, Folder};
-use crate::preview_parser::Preview;
+use crate::shared::error_messages::{Cause, Folder};
 use std::path::Path;
 
 /// `-rt`: recurse and keep modification times (so the next run finds nothing to do); no
@@ -422,11 +422,11 @@ mod tests {
     // A and B hold new.txt, `with space.txt`, `è già.txt`, sub/deep.txt (new), updated.txt (older
     // in B), same.txt (identical), a symlink (skipped); B also holds only-in-b.txt,
     // sub/only-in-b-too.txt and old-dir/inside.txt (extra).
-    const MACOS: &str = include_str!("../tests/fixtures/rsync_preview_macos.txt");
-    const LINUX: &str = include_str!("../tests/fixtures/rsync_preview_linux.txt");
+    const MACOS: &str = include_str!("../../tests/fixtures/rsync_preview_macos.txt");
+    const LINUX: &str = include_str!("../../tests/fixtures/rsync_preview_linux.txt");
     // The same dry run into a B that does not exist: openrsync prints no `+` flags there.
     const MACOS_NO_B: &str =
-        include_str!("../tests/fixtures/rsync_preview_macos_missing_destination.txt");
+        include_str!("../../tests/fixtures/rsync_preview_macos_missing_destination.txt");
 
     fn sizes(name: &str) -> u64 {
         HashMap::from([("new.txt", 7), ("updated.txt", 22), ("sub/deep.txt", 12)])

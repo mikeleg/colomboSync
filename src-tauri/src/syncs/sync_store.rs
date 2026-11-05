@@ -1,9 +1,9 @@
 //! `syncs.json`: the saved syncs, and what the home screen shows about each.
 
 use crate::engine::SyncMode;
-use crate::error_messages;
 use crate::history::{self, Outcome};
-use crate::storage::Storage;
+use crate::shared::error_messages;
+use crate::shared::storage::Storage;
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -147,11 +147,22 @@ pub fn list(storage: &Storage) -> io::Result<ListedSyncs> {
     Ok(ListedSyncs { syncs, set_aside })
 }
 
+/// "Copia di <last folder of A>"; for a drive root, "Copia di disco D:".
+pub fn default_sync_name(source: &str) -> String {
+    let trimmed = source.trim().trim_end_matches(['\\', '/']);
+    let last = trimmed.rsplit(['\\', '/']).next().unwrap_or(trimmed);
+    if last.ends_with(':') {
+        format!("Copia di disco {last}")
+    } else {
+        format!("Copia di {last}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error_messages::{Cause, Folder};
     use crate::history::Run;
+    use crate::shared::error_messages::{Cause, Folder};
 
     fn sync(id: u64, name: &str) -> SavedSync {
         SavedSync {
@@ -439,6 +450,14 @@ mod tests {
         assert!(chrono::NaiveDateTime::parse_from_str(stamp, "%Y%m%d-%H%M%S").is_ok());
         // The next listing finds nothing damaged any more.
         assert!(!list(&storage).unwrap().set_aside);
+    }
+
+    #[test]
+    fn default_name_is_copia_di_last_folder_of_a() {
+        assert_eq!(default_sync_name(r"D:\Foto"), "Copia di Foto");
+        assert_eq!(default_sync_name(r"D:\Foto\2024\"), "Copia di 2024");
+        assert_eq!(default_sync_name(r"\\NAS\Condivisa\Foto"), "Copia di Foto");
+        assert_eq!(default_sync_name(r"D:\"), "Copia di disco D:");
     }
 
     #[test]

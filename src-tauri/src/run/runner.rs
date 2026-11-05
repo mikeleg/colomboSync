@@ -1,14 +1,14 @@
 //! A Preview or a Run end to end: copy engine + parser + storage + history. No Tauri types.
 
+use super::mirror_guard;
+use super::progress::{Progress, StdoutFollower};
+use crate::engine::preview_parser::{Counts, Preview};
 use crate::engine::{self, SyncMode};
-use crate::error_messages::{self, Cause, ENGINE_MISSING, Explanation, Folder, Moment};
 use crate::history::{self, Outcome, Run};
-use crate::mirror_guard;
-use crate::path_rules;
-use crate::preview_parser::{Counts, Preview};
-use crate::progress::{Progress, StdoutFollower};
-use crate::storage::Storage;
-use crate::sync_store::SavedSync;
+use crate::shared::error_messages::{self, Cause, ENGINE_MISSING, Explanation, Folder, Moment};
+use crate::shared::path_rules;
+use crate::shared::storage::Storage;
+use crate::syncs::sync_store::SavedSync;
 use chrono::Local;
 use std::fs;
 use std::io::{self, Read};
@@ -305,17 +305,6 @@ pub fn run(
     Ok(run)
 }
 
-/// "Copia di <last folder of A>"; for a drive root, "Copia di disco D:".
-pub fn default_sync_name(source: &str) -> String {
-    let trimmed = source.trim().trim_end_matches(['\\', '/']);
-    let last = trimmed.rsplit(['\\', '/']).next().unwrap_or(trimmed);
-    if last.ends_with(':') {
-        format!("Copia di disco {last}")
-    } else {
-        format!("Copia di {last}")
-    }
-}
-
 fn read_log(path: &Path) -> String {
     fs::read(path)
         .map(|bytes| engine::decode_log(&bytes))
@@ -430,14 +419,6 @@ mod tests {
             }
         }
         assert!(!storage.history_file().exists());
-    }
-
-    #[test]
-    fn default_name_is_copia_di_last_folder_of_a() {
-        assert_eq!(default_sync_name(r"D:\Foto"), "Copia di Foto");
-        assert_eq!(default_sync_name(r"D:\Foto\2024\"), "Copia di 2024");
-        assert_eq!(default_sync_name(r"\\NAS\Condivisa\Foto"), "Copia di Foto");
-        assert_eq!(default_sync_name(r"D:\"), "Copia di disco D:");
     }
 
     #[test]

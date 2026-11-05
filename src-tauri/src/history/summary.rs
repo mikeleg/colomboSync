@@ -1,7 +1,7 @@
 //! The numbers beside the Storico: totals over `history.jsonl` and the state of each sync.
 
 use crate::history::{self, Outcome, Run};
-use crate::sync_store::SavedSync;
+use crate::syncs::sync_store::SavedSync;
 use chrono::DateTime;
 use serde::Serialize;
 

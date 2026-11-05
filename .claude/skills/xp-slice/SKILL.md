@@ -33,7 +33,7 @@ Rules while coding:
 - **Edit files with the Edit/Write tools.** On this machine shell heredocs and Python halve backslashes in source text. In TS tests write Windows paths with `String.raw`.
 - **Messages belong to Rust.** A user-facing failure is an `Explanation {title, advice}` made in Rust from a `Cause {code, folder}` and the `Moment` (preview/run). History stores the `Cause`, never prose; the UI never builds sentences. Map by engine exit code or error code, never by English/localized text.
 - **Folder-safety code is hostile-input code.** Reviews found data-loss bugs in every slice: A inside B (both directions), links/aliases/symlinks, `..`/case/Unicode normalization, MirrorGuard trusting what the UI sent (use Rust's `PreviewMemo`), overwriting a file that can't be read, writing `syncs.json`/`history.jsonl` non-atomically (write temp + rename). Write a test for each before you rely on it.
-- **Platform code is `cfg`-gated** and goes through `engine.rs`; shared code never names robocopy or rsync. You can't compile Unix code on Windows: keep it small, then use CI (step 5).
+- **Platform code is `cfg`-gated** and goes through `engine/mod.rs`; shared code never names robocopy or rsync. You can't compile Unix code on Windows: keep it small, then use CI (step 5).
 - **New Italian copy** not in the prototype: keep a list for the report.
 
 ## 4. Integrate (local, Windows)
@@ -56,5 +56,5 @@ All must pass. Run the slice's main flow by hand on the exe if you can, otherwis
 
 ## Boundaries
 - Only this slice. Respect its "Do not touch". Nothing from "Later".
-- Shared hot spots (merge conflicts): `src/App.svelte`, `src/wizard/Wizard.svelte`, `StepPreview.svelte`, the `lib.rs` handler list and managed state, `commands.rs`, `runner.rs`, `engine.rs`. Keep edits there minimal and additive.
+- Shared hot spots (merge conflicts): `src/App.svelte`, `src/wizard/Wizard.svelte`, `StepPreview.svelte`, the `lib.rs` handler list and managed state, the slices' `commands.rs`, `run/runner.rs`, `engine/mod.rs`. Keep edits there minimal and additive.
 - If an acceptance criterion contradicts the prototype or another slice, stop and report.

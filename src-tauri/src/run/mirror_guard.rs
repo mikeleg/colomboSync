@@ -2,7 +2,7 @@
 //! Cheap on purpose: one `read_dir`, no walk of the tree. Each check answers with the Italian
 //! reason to show, or `None` when the mirror may go on.
 
-use crate::preview_parser::Counts;
+use crate::engine::preview_parser::Counts;
 use std::fs;
 use std::path::Path;
 

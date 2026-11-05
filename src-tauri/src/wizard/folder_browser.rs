@@ -2,8 +2,8 @@
 //! subfolders for the click-first folder picker, and creates a new subfolder from it.
 //! A folder that cannot be opened is reported in the listing (never a panic or a failed command).
 
-use crate::error_messages::{self, Explanation};
-use crate::path_rules;
+use crate::shared::error_messages::{self, Explanation};
+use crate::shared::path_rules;
 use serde::Serialize;
 use std::fs::DirEntry;
 use std::path::Path;

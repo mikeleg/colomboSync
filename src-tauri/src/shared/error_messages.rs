@@ -2,8 +2,8 @@
 //! (`ERROR 53 (0x00000035)`), never from the labels around it: those are localized. Only the
 //! cause (code + folder) is kept; the texts are made from it when they are needed.
 
+use super::path_rules;
 use crate::history::{Outcome, Run};
-use crate::path_rules;
 use serde::{Deserialize, Serialize};
 use std::io;
 

@@ -3,7 +3,7 @@
 //! Linux paths start with `/` and the links on them are resolved first, as far as the disk has
 //! the folders: `/Volumes/Macintosh HD` is the root itself, whatever it is called.
 
-use crate::error_messages::Explanation;
+use super::error_messages::Explanation;
 
 pub const NOT_ABSOLUTE: &str = "Scrivi il percorso completo, che inizia con /.";
 pub const SAME_FOLDER: &str = "La destinazione è la stessa cartella da copiare. Scegline un’altra.";

@@ -1,7 +1,10 @@
 //! `history.jsonl`: append-only, one `Run` per line.
 
+pub mod commands;
+pub mod summary;
+
 use crate::engine::{self, SyncMode};
-use crate::error_messages::Cause;
+use crate::shared::error_messages::Cause;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
@@ -344,7 +347,7 @@ mod tests {
         let failed = Run {
             cause: Some(Cause {
                 code: 53,
-                folder: crate::error_messages::Folder::B,
+                folder: crate::shared::error_messages::Folder::B,
             }),
             ..run("n", Outcome::Error)
         };

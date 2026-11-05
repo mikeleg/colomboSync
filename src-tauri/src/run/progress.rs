@@ -68,13 +68,13 @@ fn file_name(raw: &[u8]) -> String {
 
 #[cfg(unix)]
 fn is_file_line(line: &[u8]) -> bool {
-    crate::rsync::is_file_line(&String::from_utf8_lossy(line))
+    crate::engine::rsync::is_file_line(&String::from_utf8_lossy(line))
 }
 
 #[cfg(unix)]
 fn file_name(raw: &[u8]) -> String {
     let text = String::from_utf8_lossy(raw);
-    crate::rsync::file_name(&text)
+    crate::engine::rsync::file_name(&text)
         .unwrap_or_default()
         .to_string()
 }

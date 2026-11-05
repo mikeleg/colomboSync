@@ -2,7 +2,7 @@
 //! `~/Library/Application Support/ColomboSync` on macOS, `$XDG_DATA_HOME/ColomboSync` or
 //! `~/.local/share/ColomboSync` on Linux.
 
-use crate::path_rules;
+use super::path_rules;
 use chrono::NaiveDateTime;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};

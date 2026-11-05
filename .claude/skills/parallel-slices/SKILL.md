@@ -10,7 +10,7 @@ The orchestrator (main thread) plans, delegates and verifies. Subagents write co
 ## 1. Pick the wave
 From the dependency graph at the top of `docs/backlog/colombo-sync/backlog.md`: every slice whose "Blocked by" is merged on `main`. Slices that touch the same files (see hot spots) are **not** parallel – sequence them.
 
-Conflict hot spots: `src/App.svelte`, `src/wizard/Wizard.svelte`, `StepPreview.svelte`, `src-tauri/src/lib.rs` (handler list and managed state), `commands.rs`, `runner.rs`, `engine.rs`.
+Conflict hot spots: `src/App.svelte`, `src/wizard/Wizard.svelte`, `StepPreview.svelte`, `src-tauri/src/lib.rs` (handler list and managed state), the slices' `commands.rs`, `run/runner.rs`, `engine/mod.rs`.
 
 ## 2. One worktree per slice (never Claude's `isolation: "worktree"`)
 ```

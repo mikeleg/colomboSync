@@ -2,12 +2,12 @@
 #![cfg(windows)]
 
 use colombo_sync_lib::engine::SyncMode;
-use colombo_sync_lib::error_messages::{self, Cause, Folder};
 use colombo_sync_lib::history::{Outcome, Run};
-use colombo_sync_lib::mirror_guard;
-use colombo_sync_lib::runner::{self, ActiveRun};
-use colombo_sync_lib::storage::Storage;
-use colombo_sync_lib::sync_store::SavedSync;
+use colombo_sync_lib::run::mirror_guard;
+use colombo_sync_lib::run::runner::{self, ActiveRun};
+use colombo_sync_lib::shared::error_messages::{self, Cause, Folder};
+use colombo_sync_lib::shared::storage::Storage;
+use colombo_sync_lib::syncs::sync_store::SavedSync;
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
@@ -251,7 +251,7 @@ fn run_mirror(
     storage: &Storage,
     a: &Path,
     b: &Path,
-    counts: colombo_sync_lib::preview_parser::Counts,
+    counts: colombo_sync_lib::engine::preview_parser::Counts,
 ) -> Result<Run, String> {
     runner::run(
         storage,

@@ -23,7 +23,8 @@ jobs:
         with:
           fetch-depth: 0 # origin/main, to check the tag is on it
 
-      # A release must come from code that went through main's CI: refuse a tag on a side branch.
+      # A release must come from main: refuse a tag on a side branch. This checks ancestry only;
+      # the release-mode ci.yml run (the build job) is the test gate.
       - name: Tag is on main
         if: github.ref_type == 'tag'
         run: |
@@ -127,6 +128,11 @@ jobs:
           if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
           # Re-running a failed run must not die on "release already exists".
           if gh release view "$TAG" > /dev/null 2>&1; then
+            # Only a draft may be overwritten: never touch a published release.
+            if [ "$(gh release view "$TAG" --json isDraft -q .isDraft)" != "true" ]; then
+              echo "::error::Release $TAG is already published; bump the version and tag again."
+              exit 1
+            fi
             gh release upload "$TAG" --clobber release-files/*
             gh release edit "$TAG" --draft --prerelease="$PRERELEASE" \
               --title "ColomboSync $VERSION" \

@@ -67,6 +67,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "src-tauri -> target"
+          # The runner image is part of the key: a release build on ubuntu-22.04 must not
+          # restore a target/ built on ubuntu-latest (glibc mismatch).
+          key: ${{ matrix.os }}
 
       - run: npm ci
       - run: npm run check

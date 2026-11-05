@@ -3,6 +3,7 @@
 use crate::engine::{self, SyncMode};
 use crate::error_messages::Cause;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -71,6 +72,19 @@ pub fn read(file: &Path) -> io::Result<Vec<Run>> {
     Ok(runs)
 }
 
+/// The latest run of each sync, in the order of `runs` (newest first, as `read` returns them): the
+/// first run seen of a sync is its latest. Runs without a sync id (written before syncs had ids)
+/// belong to no sync.
+pub fn latest_per_sync(runs: &[Run]) -> Vec<(u64, &Run)> {
+    let mut seen = HashSet::new();
+    runs.iter()
+        .filter_map(|run| {
+            let id = run.sync_id?;
+            seen.insert(id).then_some((id, run))
+        })
+        .collect()
+}
+
 /// Longest log tail shown: 2 MiB of the file.
 const MAX_LOG_BYTES: u64 = 2 * 1024 * 1024;
 const TRUNCATED_NOTICE: &str = "… (mostro solo l’ultima parte del registro)\n";
@@ -129,6 +143,27 @@ mod tests {
             partial: None,
             cause: None,
         }
+    }
+
+    #[test]
+    fn the_latest_run_of_each_sync_is_the_first_seen_and_runs_without_a_sync_belong_to_none() {
+        let of = |id: Option<u64>, name: &str| Run {
+            sync_id: id,
+            ..run(name, Outcome::Ok)
+        };
+        let runs = [
+            of(Some(2), "due, nuova"),
+            of(None, "vecchia"),
+            of(Some(1), "uno, nuova"),
+            of(Some(2), "due, vecchia"),
+        ];
+
+        let latest: Vec<_> = latest_per_sync(&runs)
+            .into_iter()
+            .map(|(id, run)| (id, run.sync_name.as_str()))
+            .collect();
+
+        assert_eq!(latest, [(2, "due, nuova"), (1, "uno, nuova")]);
     }
 
     #[test]

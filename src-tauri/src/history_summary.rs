@@ -1,10 +1,9 @@
 //! The numbers beside the Storico: totals over `history.jsonl` and the state of each sync.
 
-use crate::history::{Outcome, Run};
+use crate::history::{self, Outcome, Run};
 use crate::sync_store::SavedSync;
 use chrono::DateTime;
 use serde::Serialize;
-use std::collections::HashMap;
 
 #[derive(Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,8 +38,6 @@ pub fn summarize(runs: &[Run], syncs: &[SavedSync]) -> HistorySummary {
         runs: runs.len(),
         ..HistorySummary::default()
     };
-    let mut statuses: Vec<SyncStatus> = Vec::new();
-    let mut position: HashMap<u64, usize> = HashMap::new();
     for run in runs {
         match run.outcome {
             Outcome::Ok => summary.ok += 1,
@@ -49,31 +46,28 @@ pub fn summarize(runs: &[Run], syncs: &[SavedSync]) -> HistorySummary {
         }
         summary.files_copied += run.partial.unwrap_or(run.new + run.updated);
         summary.files_deleted += run.deleted;
-
-        let Some(id) = run.sync_id else { continue };
-        // The first run seen of a sync is its latest.
-        let at = *position.entry(id).or_insert_with(|| {
-            statuses.push(SyncStatus {
-                id,
-                name: syncs
-                    .iter()
-                    .find(|s| s.id == id)
-                    .map_or(&run.sync_name, |s| &s.name)
-                    .clone(),
-                last_success: None,
-                warning: (run.outcome == Outcome::Error).then(|| {
-                    format!(
-                        "L’ultima copia è finita con un errore il {}.",
-                        when(&run.started_at)
-                    )
-                }),
-            });
-            statuses.len() - 1
-        });
-        if run.outcome == Outcome::Ok && statuses[at].last_success.is_none() {
-            statuses[at].last_success = Some(run.started_at.clone());
-        }
     }
+    let mut statuses: Vec<SyncStatus> = history::latest_per_sync(runs)
+        .into_iter()
+        .map(|(id, latest)| SyncStatus {
+            id,
+            name: syncs
+                .iter()
+                .find(|s| s.id == id)
+                .map_or(&latest.sync_name, |s| &s.name)
+                .clone(),
+            last_success: runs
+                .iter()
+                .find(|r| r.sync_id == Some(id) && r.outcome == Outcome::Ok)
+                .map(|r| r.started_at.clone()),
+            warning: (latest.outcome == Outcome::Error).then(|| {
+                format!(
+                    "L’ultima copia è finita con un errore il {}.",
+                    when(&latest.started_at)
+                )
+            }),
+        })
+        .collect();
     statuses.sort_by_cached_key(|s| (s.warning.is_none(), s.name.to_lowercase()));
     summary.syncs = statuses;
     summary

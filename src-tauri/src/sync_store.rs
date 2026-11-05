@@ -121,17 +121,18 @@ pub struct ListedSyncs {
 /// Every saved sync with the outcome of its latest Run in the history (an unreadable history
 /// just means no last run).
 pub fn list(storage: &Storage) -> io::Result<ListedSyncs> {
-    let mut last_runs: HashMap<u64, LastRun> = HashMap::new();
-    // Newest first: the first run seen for a sync is its latest.
-    for run in history::read(&storage.history_file()).unwrap_or_default() {
-        if let Some(id) = run.sync_id {
-            last_runs.entry(id).or_insert_with(|| LastRun {
-                note: error_messages::card_note(&run),
-                started_at: run.started_at,
+    let runs = history::read(&storage.history_file()).unwrap_or_default();
+    let last_runs: HashMap<u64, LastRun> = history::latest_per_sync(&runs)
+        .into_iter()
+        .map(|(id, run)| {
+            let last_run = LastRun {
+                note: error_messages::card_note(run),
+                started_at: run.started_at.clone(),
                 outcome: run.outcome,
-            });
-        }
-    }
+            };
+            (id, last_run)
+        })
+        .collect();
     let (saved, set_aside) = {
         let _one_writer = WRITE_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
         load_or_set_aside(&storage.syncs_file())?

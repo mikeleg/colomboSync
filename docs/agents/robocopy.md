@@ -25,3 +25,6 @@ Source: spike of 2026-11-03 (see `docs/backlog/colombo-sync/scope.md`, Decisions
 - Count progress without reading labels: a **file line is the only line that starts with a tab**. `ERROR` lines start with a date.
 - `Child::kill()` is `TerminateProcess(…, 1)`: the exit code of a stopped run is **1**, which reads as success. The Run is `Cancelled` because the app asked for the stop, never because of the exit code.
 - A partial count (Error/Cancelled) counts the file lines of the run's own `/UNILOG` under A.  The last file line is the file in flight (maybe cut short), so it is not counted. Never classify them like a preview: after a copy every file exists in B.
+
+## Error lines in the log (Registro)
+- The log window marks a line as an error when it holds `<n> (0x<hex>)` (any `n`, any label before it) and is not a file line (file lines start with a tab). The sentence Windows writes on the next line is not marked.

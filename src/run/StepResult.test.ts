@@ -169,7 +169,7 @@ test("Riprova, Torna all’elenco and Vai allo storico call back", async () => {
 });
 
 test("Apri il registro opens the log viewer of the run, which Chiudi closes", async () => {
-  invokeMock.mockResolvedValue("ERROR 53 …");
+  invokeMock.mockResolvedValue({ text: "ERROR 53 …", errorLines: [0] });
   render(StepResult, {
     run: run({ outcome: "Error", logPath: String.raw`C:\L\logs\x.log` }),
     failure: "",

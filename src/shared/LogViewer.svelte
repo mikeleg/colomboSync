@@ -1,12 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { readRunLog } from "./api";
-  import { formatWhen } from "./format";
-  import type { Run } from "./types";
+  import { formatWhen, modeChip, outcomeChip } from "./format";
+  import RunStats from "./RunStats.svelte";
+  import type { RunLog, RunReport } from "./types";
 
-  let { run, onclose }: { run: Run; onclose: () => void } = $props();
+  let { run, onclose }: { run: RunReport; onclose: () => void } = $props();
 
-  let text = $state("");
+  let log = $state<RunLog>({ text: "", errorLines: [] });
   let unavailable = $state(false);
   let closeButton: HTMLButtonElement;
   let dialog: HTMLElement;
@@ -15,11 +16,28 @@
     const opener = document.activeElement as HTMLElement | null;
     closeButton.focus();
     readRunLog(run.logPath).then(
-      (log) => (text = log),
+      (read) => (log = read),
       () => (unavailable = true),
     );
     return () => opener?.focus();
   });
+
+  /** The log as runs of plain lines, with each error line on its own (Rust says which lines are errors). */
+  const segments = $derived.by(() => {
+    const errors = new Set(log.errorLines);
+    const lines = log.text.split("\n");
+    const segments: { text: string; error: boolean }[] = [];
+    lines.forEach((line, number) => {
+      const text = number < lines.length - 1 ? `${line}\n` : line;
+      const error = errors.has(number);
+      const last = segments.at(-1);
+      if (last && !error && !last.error) last.text += text;
+      else segments.push({ text, error });
+    });
+    return segments;
+  });
+
+  const goToFirstError = () => dialog.querySelector<HTMLElement>(".error-line")?.focus();
 
   function onkeydown(e: KeyboardEvent) {
     if (e.key === "Escape") return onclose();
@@ -27,7 +45,8 @@
     // Keep Tab inside the dialog: wrap from the last control to the first and back.
     const stops = [...dialog.querySelectorAll<HTMLElement>("button, [tabindex='0']")];
     const edge = e.shiftKey ? stops[0] : stops[stops.length - 1];
-    if (document.activeElement === edge || !dialog.contains(document.activeElement)) {
+    // A line inside the log counts as the log: Tab from it leaves the log, not the dialog.
+    if (edge.contains(document.activeElement) || !dialog.contains(document.activeElement)) {
       e.preventDefault();
       (e.shiftKey ? stops[stops.length - 1] : stops[0]).focus();
     }
@@ -42,11 +61,29 @@
       <h2 id="log-title">Registro – {run.syncName} ({formatWhen(run.startedAt)})</h2>
       <button type="button" class="btn" bind:this={closeButton} onclick={onclose}>Chiudi</button>
     </header>
+    <section class="summary" aria-label="Riepilogo">
+      <div class="chips">
+        <span class="chip {modeChip[run.mode].cls}">{modeChip[run.mode].label}</span>
+        <span class="chip {outcomeChip[run.outcome].cls}">{outcomeChip[run.outcome].label}</span>
+      </div>
+      <RunStats {run} />
+      {#if run.explanation}
+        <p class="why">
+          <strong>{run.explanation.title}</strong>
+          {#if run.explanation.advice}<span>{run.explanation.advice}</span>{/if}
+        </p>
+      {/if}
+    </section>
     {#if unavailable}
       <p class="gone">Il registro di questa copia non è più disponibile.</p>
     {:else}
+      {#if log.errorLines.length > 0}
+        <button type="button" class="link jump" onclick={goToFirstError}>Vai al primo errore</button>
+      {/if}
       <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-      <pre tabindex="0">{text}</pre>
+      <pre tabindex="0">{#each segments as { text, error }, i (i)}{#if error}<span class="error-line" tabindex="-1"
+              >{text}</span
+            >{:else}{text}{/if}{/each}</pre>
     {/if}
   </div>
 </div>
@@ -83,6 +120,30 @@
     min-width: 0;
     overflow-wrap: anywhere;
     font-size: 20px;
+  }
+  .summary {
+    display: grid;
+    gap: 10px;
+    padding: 0 26px 18px;
+  }
+  .chips {
+    display: flex;
+    gap: 8px;
+  }
+  .why {
+    margin: 0;
+  }
+  .why strong {
+    display: block;
+  }
+  .jump {
+    align-self: flex-start;
+    margin: 0 20px 8px;
+  }
+  .error-line {
+    color: var(--on-danger-soft);
+    background: var(--danger-soft);
+    font-weight: 700;
   }
   pre {
     margin: 0 20px 20px;

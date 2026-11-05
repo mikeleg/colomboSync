@@ -37,7 +37,7 @@ const doneRun: Run = {
 
 /** What `list_runs` answers: the runs plus a summary (all zeros unless a test gives one). */
 const runList = (runs: Run[], summary: Partial<HistorySummary> = {}): RunList => ({
-  runs,
+  runs: runs.map((run) => ({ explanation: null, ...run })),
   summary: { runs: 0, ok: 0, failed: 0, cancelled: 0, filesCopied: 0, filesDeleted: 0, syncs: [], ...summary },
 });
 

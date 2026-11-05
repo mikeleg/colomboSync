@@ -1,6 +1,6 @@
 // Shapes returned by `list_runs` (src-tauri/src/history/commands.rs, history/summary.rs).
 
-import type { Run } from "../shared/types";
+import type { RunReport } from "../shared/types";
 
 /** One sync found in the history (src-tauri/src/history/summary.rs). */
 export interface SyncStatus {
@@ -27,6 +27,6 @@ export interface HistorySummary {
 /** What `list_runs` returns for the Storico screen. */
 export interface RunList {
   /** Newest first. */
-  runs: Run[];
+  runs: RunReport[];
   summary: HistorySummary;
 }

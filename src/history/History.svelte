@@ -1,12 +1,13 @@
 <script lang="ts">
-  import { formatDuration, formatNumber, formatWhen, modeChip, outcomeChip, partialText } from "../shared/format";
+  import { formatWhen, modeChip, outcomeChip } from "../shared/format";
   import LogViewer from "../shared/LogViewer.svelte";
-  import type { Run } from "../shared/types";
+  import RunStats from "../shared/RunStats.svelte";
+  import type { RunReport } from "../shared/types";
 
   /** Newest first, as returned by `list_runs`. */
-  let { runs, status }: { runs: Run[]; status: "loading" | "ready" | "error" } = $props();
+  let { runs, status }: { runs: RunReport[]; status: "loading" | "ready" | "error" } = $props();
 
-  let viewing = $state<Run | null>(null);
+  let viewing = $state<RunReport | null>(null);
 
   // "" = no filter. Kept here, so they survive the Registro modal; not stored anywhere.
   let syncFilter = $state("");
@@ -20,7 +21,7 @@
   );
 
   /** A run belongs to its saved sync by id; old lines without one, by the id of a run with the same name, else by name. */
-  const syncKey = (run: Run) => {
+  const syncKey = (run: RunReport) => {
     const id = run.syncId ?? idByName.get(run.syncName);
     return id != null ? `id:${id}` : `name:${run.syncName}`;
   };
@@ -118,29 +119,11 @@
           <span class="chip {outcomeChip[run.outcome].cls}">{outcomeChip[run.outcome].label}</span>
         </span>
       </div>
-      <dl class="stats">
-        {#if run.partial != null}
-          <div><dd>{partialText(run.partial)}</dd></div>
-        {:else}
-          <div>
-            <dt>Nuovi</dt>
-            <dd>{formatNumber(run.new)}</dd>
-          </div>
-          <div>
-            <dt>Aggiornati</dt>
-            <dd>{formatNumber(run.updated)}</dd>
-          </div>
-        {/if}
-        <div class:d={run.deleted > 0}>
-          <dt>Cancellati</dt>
-          <dd>{formatNumber(run.deleted)}</dd>
-        </div>
-        <div>
-          <dt>Durata</dt>
-          <dd>{formatDuration(run.durationMs)}</dd>
-        </div>
-        <div class="lg"><button type="button" class="link" onclick={() => (viewing = run)}>Registro</button></div>
-      </dl>
+      <RunStats {run}>
+        {#snippet extra()}
+          <div class="lg"><button type="button" class="link" onclick={() => (viewing = run)}>Registro</button></div>
+        {/snippet}
+      </RunStats>
     </li>
   {/each}
 </ul>
@@ -218,33 +201,8 @@
     gap: 8px;
     margin-left: auto;
   }
-  .stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 22px;
-    margin: 0;
-    align-items: center;
-  }
-  .stats div {
-    min-width: 0;
-  }
-  dt {
-    display: inline;
-    color: var(--fg-2);
-    font-size: 15px;
-  }
-  dt::after {
-    content: " ";
-  }
-  dd {
-    display: inline;
-    margin: 0;
-    font-weight: 700;
-  }
-  .d dd {
-    color: var(--danger);
-  }
   .lg {
+    min-width: 0;
     margin-left: auto;
   }
 </style>

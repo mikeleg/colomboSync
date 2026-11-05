@@ -53,3 +53,6 @@ Source: spike of 2026-11-04 on the GitHub runners (`macos-latest` = macOS 26.6, 
 - Data folder: macOS `~/Library/Application Support/ColomboSync`, Linux `$XDG_DATA_HOME/ColomboSync` (absolute only) or `~/.local/share/ColomboSync`.
 - Case: Linux paths are case-sensitive; macOS volumes usually are not, so the A/B path rules compare lower-cased there. Links are resolved first (deepest existing folder made canonical, the rest appended), so `/Volumes/Macintosh HD` (a link to `/`) cannot hide that B is inside A. The folder picker does not list links that resolve to `/`. Relative paths are refused ("Scrivi il percorso completo, che inizia con /.").
 - MirrorGuard ignores `.DS_Store`, `.Spotlight-V100`, `.fseventsd`, `.Trashes`, `.TemporaryItems`, `lost+found` and `.Trash-*` when it asks whether A is empty (any case except on Linux).
+
+## Error lines in the log (Registro)
+- `engine::error_lines` marks, for the log window, the lines rsync wrote under its own program name (not translated): GNU `rsync: …`, `rsync error: …`, `rsync warning: …`; openrsync `rsync(<pid>): error: …` / `rsync(<pid>): warning: …` (from `log.c` of both projects, not from a capture). Itemize lines never match (they start with their code). The text after the prefix is never read. `rsync_integration.rs` checks that a real failing run has at least one such line.

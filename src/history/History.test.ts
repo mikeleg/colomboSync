@@ -2,12 +2,12 @@ import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, expect, test, vi } from "vitest";
 import History from "./History.svelte";
-import type { Run } from "../shared/types";
+import type { RunReport } from "../shared/types";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 const invokeMock = vi.mocked(invoke);
 
-const run = (over: Partial<Run> = {}): Run => ({
+const run = (over: Partial<RunReport> = {}): RunReport => ({
   syncName: "Copia di Foto",
   source: String.raw`D:\Foto`,
   destination: String.raw`E:\Backup`,
@@ -19,6 +19,7 @@ const run = (over: Partial<Run> = {}): Run => ({
   outcome: "Ok",
   startedAt: "2026-11-02T21:30:00+01:00",
   logPath: String.raw`C:\L\logs\a.log`,
+  explanation: null,
   ...over,
 });
 
@@ -87,7 +88,7 @@ test("when the history cannot be read, a short message says so", () => {
 });
 
 test("Registro opens the log modal of that run; Chiudi closes it", async () => {
-  invokeMock.mockResolvedValueOnce("riga di log");
+  invokeMock.mockResolvedValueOnce({ text: "riga di log", errorLines: [] });
   render(History, {
     runs: [run({ syncName: "Altra", logPath: String.raw`C:\L\logs\b.log` })],
     status: "ready",
@@ -105,7 +106,7 @@ test("Registro opens the log modal of that run; Chiudi closes it", async () => {
 });
 
 test("Esc closes the log modal", async () => {
-  invokeMock.mockResolvedValueOnce("x");
+  invokeMock.mockResolvedValueOnce({ text: "x", errorLines: [] });
   render(History, { runs: [run()], status: "ready" });
   await fireEvent.click(screen.getByRole("button", { name: "Registro" }));
 
@@ -115,7 +116,7 @@ test("Esc closes the log modal", async () => {
 });
 
 test("closing the log modal gives the focus back to the Registro button", async () => {
-  invokeMock.mockResolvedValueOnce("x");
+  invokeMock.mockResolvedValueOnce({ text: "x", errorLines: [] });
   render(History, { runs: [run()], status: "ready" });
   const opener = screen.getByRole("button", { name: "Registro" });
   opener.focus();
@@ -128,7 +129,7 @@ test("closing the log modal gives the focus back to the Registro button", async 
 });
 
 test("Tab stays inside the log modal", async () => {
-  invokeMock.mockResolvedValueOnce("x");
+  invokeMock.mockResolvedValueOnce({ text: "x", errorLines: [] });
   render(History, { runs: [run()], status: "ready" });
   await fireEvent.click(screen.getByRole("button", { name: "Registro" }));
   const close = screen.getByRole("button", { name: "Chiudi" });
@@ -299,7 +300,7 @@ test("when nothing matches, a message replaces the list and the filters can be r
 });
 
 test("the filters stay on while the Registro modal opens and closes", async () => {
-  invokeMock.mockResolvedValueOnce("x");
+  invokeMock.mockResolvedValueOnce({ text: "x", errorLines: [] });
   render(History, { runs: mixed(), status: "ready" });
   await pick("Esito", "Error");
 

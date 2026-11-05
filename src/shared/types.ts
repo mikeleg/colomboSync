@@ -45,3 +45,9 @@ export interface Sync {
   destination: string;
   mode: SyncMode;
 }
+
+/** What `read_run_log` returns (src-tauri/src/history/mod.rs, RunLog): the text, and which of its lines (from 0) are engine errors. */
+export interface RunLog {
+  text: string;
+  errorLines: number[];
+}

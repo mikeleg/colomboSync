@@ -9,7 +9,7 @@
   import { emptySchema, type SchemaModel } from "./schema/schema";
   import SchemaView from "./schema/SchemaView.svelte";
   import ThemeSwitch from "./shared/ThemeSwitch.svelte";
-  import type { Run, Sync } from "./shared/types";
+  import type { RunReport, Sync } from "./shared/types";
   import type { HistorySummary } from "./history/types";
   import Wizard from "./wizard/Wizard.svelte";
 
@@ -32,7 +32,7 @@
     view = "wizard";
   }
 
-  let runs = $state<Run[]>([]);
+  let runs = $state<RunReport[]>([]);
   let summary = $state<HistorySummary | null>(null);
   let historyStatus = $state<"loading" | "ready" | "error">("ready");
   let historyLoads = 0;

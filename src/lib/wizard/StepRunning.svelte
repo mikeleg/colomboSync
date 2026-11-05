@@ -185,6 +185,10 @@
     font-weight: 700;
     margin-bottom: 14px;
   }
+  .btn :global(svg) {
+    width: 18px;
+    height: 18px;
+  }
   .btn.danger {
     background: var(--danger);
     color: var(--on-danger);

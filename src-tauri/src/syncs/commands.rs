@@ -1,9 +1,9 @@
 //! Thin `#[tauri::command]` wrappers for the saved syncs.
 
-use super::sync_store::{self, ListedSyncs};
 use crate::shared::blocking::blocking;
 use crate::shared::domain::{SavedSync, SyncMode};
 use crate::shared::storage::Storage;
+use crate::shared::sync_store::{self, ListedSyncs};
 
 #[tauri::command]
 pub async fn list_syncs() -> Result<ListedSyncs, String> {

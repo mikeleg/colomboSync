@@ -4,7 +4,7 @@ use super::summary::{self, HistorySummary};
 use super::{Run, read, read_log};
 use crate::shared::blocking::blocking;
 use crate::shared::storage::Storage;
-use crate::syncs::sync_store;
+use crate::shared::sync_store;
 use serde::Serialize;
 use std::path::Path;
 

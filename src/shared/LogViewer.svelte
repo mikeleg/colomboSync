@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { readRunLog } from "./api";
-  import { formatWhen, modeChip, outcomeChip } from "./format";
+  import { formatWhen } from "./format";
+  import RunChips from "./RunChips.svelte";
   import RunStats from "./RunStats.svelte";
   import type { RunLog, RunReport } from "./types";
 
@@ -63,8 +64,7 @@
     </header>
     <section class="summary" aria-label="Riepilogo">
       <div class="chips">
-        <span class="chip {modeChip[run.mode].cls}">{modeChip[run.mode].label}</span>
-        <span class="chip {outcomeChip[run.outcome].cls}">{outcomeChip[run.outcome].label}</span>
+        <RunChips {run} />
       </div>
       <RunStats {run} />
       {#if run.explanation}

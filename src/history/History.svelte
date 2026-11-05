@@ -1,6 +1,7 @@
 <script lang="ts">
   import { formatWhen, modeChip, outcomeChip } from "../shared/format";
   import LogViewer from "../shared/LogViewer.svelte";
+  import RunChips from "../shared/RunChips.svelte";
   import RunStats from "../shared/RunStats.svelte";
   import type { RunReport } from "../shared/types";
 
@@ -115,8 +116,7 @@
         <strong>{run.syncName}</strong>
         <span class="when">{formatWhen(run.startedAt)}</span>
         <span class="chips">
-          <span class="chip {modeChip[run.mode].cls}">{modeChip[run.mode].label}</span>
-          <span class="chip {outcomeChip[run.outcome].cls}">{outcomeChip[run.outcome].label}</span>
+          <RunChips {run} />
         </span>
       </div>
       <RunStats {run}>

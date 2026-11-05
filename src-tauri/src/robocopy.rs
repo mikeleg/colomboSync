@@ -7,14 +7,7 @@ use crate::preview_parser::{self, Preview};
 
 /// Arguments of the `/L` dry run. `log` receives the UTF-16LE `/UNILOG`.
 pub fn preview_args(mode: SyncMode, source: &str, destination: &str, log: &str) -> Vec<String> {
-    let mut args = base_args(mode, source, destination);
-    if mode == SyncMode::Copy {
-        // Keep extras in B out of the output: Copy never touches them.
-        args.push("/XX".into());
-    }
-    args.push("/L".into());
-    args.extend(output_args(log));
-    args
+    args(mode, source, destination, log, "/L")
 }
 
 /// Arguments of the real run. `log` is the per-run log kept in `logs\`.
@@ -24,35 +17,32 @@ pub fn preview_args(mode: SyncMode, source: &str, destination: &str, log: &str) 
 /// in B are not listed:
 /// every file line on stdout is then a file of A.
 pub fn run_args(mode: SyncMode, source: &str, destination: &str, log: &str) -> Vec<String> {
-    let mut args = base_args(mode, source, destination);
-    if mode == SyncMode::Copy {
-        args.push("/XX".into());
-    }
-    args.push("/TEE".into());
-    args.extend(output_args(log));
-    args
+    args(mode, source, destination, log, "/TEE")
 }
 
-fn base_args(mode: SyncMode, source: &str, destination: &str) -> Vec<String> {
+/// `dry_run_or_tee` is the one flag that tells a preview (`/L`) from a run (`/TEE`).
+fn args(
+    mode: SyncMode,
+    source: &str,
+    destination: &str,
+    log: &str,
+    dry_run_or_tee: &str,
+) -> Vec<String> {
     let mode_flag = match mode {
         SyncMode::Copy => "/E",
         SyncMode::Mirror => "/MIR",
     };
-    vec![
-        source.into(),
-        destination.into(),
-        mode_flag.into(),
-        "/R:1".into(),
-        "/W:1".into(),
-    ]
-}
-
-fn output_args(log: &str) -> Vec<String> {
-    ["/NJH", "/NJS", "/NDL", "/NC", "/BYTES", "/FP", "/NP"]
-        .iter()
-        .map(|a| a.to_string())
-        .chain([format!("/UNILOG:{log}")])
-        .collect()
+    let mut args: Vec<String> = [source, destination, mode_flag, "/R:1", "/W:1"]
+        .map(String::from)
+        .into();
+    if mode == SyncMode::Copy {
+        // Keep extras in B out of the output: Copy never touches them.
+        args.push("/XX".into());
+    }
+    args.push(dry_run_or_tee.into());
+    args.extend(["/NJH", "/NJS", "/NDL", "/NC", "/BYTES", "/FP", "/NP"].map(String::from));
+    args.push(format!("/UNILOG:{log}"));
+    args
 }
 
 /// Exit codes are a bitmask: 0-7 mean the job worked, 8 and above mean failure.
@@ -82,8 +72,8 @@ pub fn find_cause(_exit_code: i32, log: &str, source: &str, destination: &str) -
     error_messages::find_cause(log, source, destination)
 }
 
-/// `/UNILOG` is UTF-16LE with BOM: never read it as UTF-8.
-pub fn decode_unilog(bytes: &[u8]) -> String {
+/// A run's log as text: the `/UNILOG` of a robocopy run, UTF-16LE with BOM (never UTF-8).
+pub fn decode_log(bytes: &[u8]) -> String {
     let bytes = bytes.strip_prefix(&[0xFF, 0xFE]).unwrap_or(bytes);
     let units: Vec<u16> = bytes
         .as_chunks::<2>()
@@ -92,11 +82,6 @@ pub fn decode_unilog(bytes: &[u8]) -> String {
         .map(|pair| u16::from_le_bytes(*pair))
         .collect();
     String::from_utf16_lossy(&units)
-}
-
-/// A run's log as text: the `/UNILOG` of a robocopy run.
-pub fn decode_log(bytes: &[u8]) -> String {
-    decode_unilog(bytes)
 }
 
 #[cfg(windows)]
@@ -141,7 +126,7 @@ mod process {
         let args = preview_args(mode, source, destination, &log.to_string_lossy());
         let status = command(&args).stdout(Stdio::null()).status()?;
         let text = fs::read(&log)
-            .map(|bytes| decode_unilog(&bytes))
+            .map(|bytes| decode_log(&bytes))
             .unwrap_or_default();
         let _ = fs::remove_file(&log);
         Ok(Finished {
@@ -248,7 +233,7 @@ mod tests {
         for unit in "è già\r\n".encode_utf16() {
             bytes.extend(unit.to_le_bytes());
         }
-        assert_eq!(decode_unilog(&bytes), "è già\r\n");
+        assert_eq!(decode_log(&bytes), "è già\r\n");
     }
 
     #[test]

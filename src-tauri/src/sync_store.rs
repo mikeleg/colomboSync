@@ -7,7 +7,6 @@ use crate::storage::Storage;
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -125,10 +124,8 @@ pub fn list(storage: &Storage) -> io::Result<ListedSyncs> {
     let mut last_runs: HashMap<u64, LastRun> = HashMap::new();
     // Newest first: the first run seen for a sync is its latest.
     for run in history::read(&storage.history_file()).unwrap_or_default() {
-        if let Some(id) = run.sync_id
-            && let Entry::Vacant(slot) = last_runs.entry(id)
-        {
-            slot.insert(LastRun {
+        if let Some(id) = run.sync_id {
+            last_runs.entry(id).or_insert_with(|| LastRun {
                 note: error_messages::card_note(&run),
                 started_at: run.started_at,
                 outcome: run.outcome,

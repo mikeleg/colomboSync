@@ -30,6 +30,7 @@ gh run list -R mikeleg/colomboSync --branch <branch> --limit 1
 gh run watch <id> -R mikeleg/colomboSync --exit-status
 gh run download <id> -R mikeleg/colomboSync -D <new-empty-dir>
 ```
+Artifacts exist only for `slice/**` pushes, PRs and `workflow_dispatch` runs, not for pushes to main (to get them for main: `gh workflow run ci.yml -R mikeleg/colomboSync --ref main`).
 - `colombo-sync-macos`: `ColomboSync-macos.zip` (the `.app`) and the `.dmg`, ad-hoc signed, **not notarized**: on first launch the user right-clicks → Apri. Data in `~/Library/Application Support/ColomboSync`.
 - `colombo-sync-linux`: the `.AppImage` (`chmod +x` first). Data in `$XDG_DATA_HOME/ColomboSync` or `~/.local/share/ColomboSync`.
 - `colombo-sync-windows`: the same exe `npm run portable` makes.

@@ -15,13 +15,15 @@ git -c credential.helper= -c "credential.helper=!f() { echo username=mikeleg; ec
 `export GH_TOKEN=…` must be in the same Bash call as the `gh`/`git push` that uses it (shell state does not persist). Always pass `-R mikeleg/colomboSync` to `gh`.
 
 ## CI (`.github/workflows/ci.yml`)
-Triggers: push to `main` and `slice/**`, every pull request, manual `workflow_dispatch`. One job `build` over a matrix (check names stay `windows`, `macos`, `linux`, `fail-fast: false`):
+Triggers: push to `main` and `slice/**`, every pull request, manual `workflow_dispatch`. A push to `main` runs the checks only (no package builds, no artifacts); artifacts come from `slice/**` pushes, pull requests and manual runs. One job `build` over a matrix (check names stay `windows`, `macos`, `linux`, `fail-fast: false`):
 
 | Job | Runner | Steps | Artifact |
 |---|---|---|---|
 | windows | windows-latest | `npm run check`, `npm test`, `npm run build`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, `npm run portable` | `colombo-sync-windows`: `colombo-sync.exe` |
 | macos | macos-15 | same checks, then `npx tauri build --bundles app,dmg` (ad-hoc signed, `bundle.macOS.signingIdentity` = `-`, not notarized) | `colombo-sync-macos`: `ColomboSync-macos.zip` (the `.app`) and the `.dmg` |
 | linux | ubuntu-latest | same checks (after installing `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`), then `npx tauri build --bundles appimage` | `colombo-sync-linux`: `*.AppImage` |
+
+On a push to `main` the package steps (`npm run portable`, `npx tauri build`) and the artifact uploads are skipped; the checks still run. Release mode always builds.
 
 `npm run build` runs before cargo because `generate_context!` needs `dist/`.
 

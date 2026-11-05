@@ -1,6 +1,7 @@
 name: CI
 
-# Push / pull request / manual: checks on three OS, then CI artifacts for a quick look.
+# Push to main: checks on three OS only, no packages and no CI artifacts.
+# Push to slice/**, pull request, manual: checks on three OS, then CI artifacts for a quick look.
 # Called by release.yml with `release: true`: the same checks, then the release files
 # (renamed, universal dmg) uploaded as `release-<name>` artifacts instead of the CI ones.
 
@@ -42,6 +43,8 @@ jobs:
         shell: bash
     env:
       VERSION: ${{ inputs.version }}
+      # Packages are built everywhere except on pushes to main (checks only there); release mode always builds.
+      PACKAGE: ${{ inputs.release || !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     steps:
       - uses: actions/checkout@v7
 
@@ -99,7 +102,7 @@ jobs:
 
       # ---- Windows: the portable exe, no installer ----
       - name: Portable exe
-        if: runner.os == 'Windows'
+        if: env.PACKAGE == 'true' && runner.os == 'Windows'
         run: npm run portable
 
       - name: Release file (Windows)
@@ -109,21 +112,21 @@ jobs:
           cp src-tauri/target/release/colombo-sync.exe "release-files/ColomboSync-$VERSION-windows-x64.exe"
 
       - uses: actions/upload-artifact@v7
-        if: runner.os == 'Windows' && !inputs.release
+        if: env.PACKAGE == 'true' && runner.os == 'Windows' && !inputs.release
         with:
           name: colombo-sync-windows
           path: src-tauri/target/release/colombo-sync.exe
 
       # ---- macOS: ad-hoc signed (`bundle.macOS.signingIdentity` is "-"), not notarized ----
       - name: App and dmg
-        if: runner.os == 'macOS' && !inputs.release
+        if: env.PACKAGE == 'true' && runner.os == 'macOS' && !inputs.release
         run: |
           npx tauri build --bundles app,dmg
           cd src-tauri/target/release/bundle/macos
           ditto -c -k --keepParent ColomboSync.app ColomboSync-macos.zip
 
       - uses: actions/upload-artifact@v7
-        if: runner.os == 'macOS' && !inputs.release
+        if: env.PACKAGE == 'true' && runner.os == 'macOS' && !inputs.release
         with:
           name: colombo-sync-macos
           path: |
@@ -175,7 +178,7 @@ jobs:
 
       # ---- Linux: AppImage ----
       - name: AppImage
-        if: runner.os == 'Linux'
+        if: env.PACKAGE == 'true' && runner.os == 'Linux'
         env:
           APPIMAGE_EXTRACT_AND_RUN: 1 # no FUSE on the runner
         run: npx tauri build --bundles appimage
@@ -187,7 +190,7 @@ jobs:
           cp src-tauri/target/release/bundle/appimage/*.AppImage "release-files/ColomboSync-$VERSION-linux-x86_64.AppImage"
 
       - uses: actions/upload-artifact@v7
-        if: runner.os == 'Linux' && !inputs.release
+        if: env.PACKAGE == 'true' && runner.os == 'Linux' && !inputs.release
         with:
           name: colombo-sync-linux
           path: src-tauri/target/release/bundle/appimage/*.AppImage

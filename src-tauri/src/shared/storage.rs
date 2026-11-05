@@ -5,6 +5,8 @@
 use super::path_rules;
 use chrono::NaiveDateTime;
 use std::ffi::OsString;
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -59,6 +61,16 @@ impl Storage {
         let safe = safe.trim_end_matches(['.', ' ']);
         self.logs_dir()
             .join(format!("{}-{}.log", started.format("%Y%m%d-%H%M%S"), safe))
+    }
+}
+
+/// The bytes of `file`, or `None` when it is not there (yet): a file nobody has written is an
+/// empty list, not a failure. Any other read error is reported.
+pub fn read_if_present(file: &Path) -> io::Result<Option<Vec<u8>>> {
+    match fs::read(file) {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e),
     }
 }
 
@@ -179,6 +191,19 @@ mod tests {
             .unwrap();
         let log = storage().log_file(r#"a<>:"/\|?*b ."#, started);
         assert_eq!(log.file_name().unwrap(), "20261102-213005-a_________b.log");
+    }
+
+    #[test]
+    fn a_file_that_is_not_there_is_none_and_any_other_read_error_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("x.json");
+        assert_eq!(read_if_present(&file).unwrap(), None);
+
+        fs::write(&file, "ciao").unwrap();
+        assert_eq!(read_if_present(&file).unwrap(), Some(b"ciao".to_vec()));
+
+        // A folder where the file should be: reading it fails, and it is not "not found".
+        assert!(read_if_present(dir.path()).is_err());
     }
 
     #[test]

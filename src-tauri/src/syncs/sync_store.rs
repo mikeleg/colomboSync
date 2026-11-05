@@ -3,7 +3,7 @@
 use crate::history;
 use crate::shared::domain::{Outcome, SavedSync, SyncMode};
 use crate::shared::error_messages;
-use crate::shared::storage::Storage;
+use crate::shared::storage::{Storage, read_if_present};
 use chrono::Local;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -38,12 +38,10 @@ static WRITE_LOCK: Mutex<()> = Mutex::new(());
 /// may still hold the user's syncs, so nobody may treat it as empty and write over it (see
 /// `load_or_set_aside`).
 pub fn load(file: &Path) -> io::Result<Vec<SavedSync>> {
-    let text = match fs::read_to_string(file) {
-        Ok(text) => text,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(e),
+    let Some(bytes) = read_if_present(file)? else {
+        return Ok(Vec::new());
     };
-    serde_json::from_str(&text).map_err(io::Error::other)
+    serde_json::from_slice(&bytes).map_err(io::Error::other)
 }
 
 /// Writes a temp file next to `file` and renames it over, so a crash never leaves half a file.

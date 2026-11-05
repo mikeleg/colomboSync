@@ -5,6 +5,7 @@ pub mod summary;
 
 use crate::engine;
 use crate::shared::domain::Run;
+use crate::shared::storage::read_if_present;
 use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -26,10 +27,8 @@ pub fn append(file: &Path, run: &Run) -> io::Result<()> {
 /// Runs newest first. Lines that do not parse (also invalid UTF-8) are skipped one by one;
 /// a missing file is an empty history, any other read error is reported.
 pub fn read(file: &Path) -> io::Result<Vec<Run>> {
-    let bytes = match fs::read(file) {
-        Ok(bytes) => bytes,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(e),
+    let Some(bytes) = read_if_present(file)? else {
+        return Ok(Vec::new());
     };
     let mut runs: Vec<Run> = bytes
         .split(|&b| b == b'\n')

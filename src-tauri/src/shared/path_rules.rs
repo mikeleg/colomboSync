@@ -178,6 +178,29 @@ fn is_reserved_name(name: &str) -> bool {
     )
 }
 
+/// One pair of folders per refusal, with its message: for the tests of whatever calls
+/// `check_destination`.
+#[cfg(test)]
+pub(crate) fn refused_pairs() -> [(&'static str, &'static str, &'static str); 3] {
+    if cfg!(windows) {
+        [
+            (r"D:\Foto", r"d:\foto\", SAME_FOLDER),
+            (r"D:\Foto", r"D:\Foto\Backup", INSIDE_SOURCE),
+            (r"D:\Foto\2024", r"D:\Foto", SOURCE_INSIDE_DESTINATION),
+        ]
+    } else {
+        [
+            ("/home/anna/Foto", "/home/anna/Foto/", SAME_FOLDER),
+            ("/home/anna/Foto", "/home/anna/Foto/Backup", INSIDE_SOURCE),
+            (
+                "/home/anna/Foto/2024",
+                "/home/anna/Foto",
+                SOURCE_INSIDE_DESTINATION,
+            ),
+        ]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

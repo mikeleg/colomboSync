@@ -2,8 +2,8 @@
 //! never freezes.
 
 use super::folder_browser::{self, FolderListing};
+use super::preview::{self, PreviewMemo};
 use crate::engine::preview_parser::Preview;
-use crate::run::runner::{self, PreviewMemo};
 use crate::shared::blocking::blocking;
 use crate::shared::domain::SyncMode;
 use crate::shared::error_messages::Explanation;
@@ -25,7 +25,7 @@ pub async fn preview_sync(
 ) -> Result<Preview, Explanation> {
     let preview = blocking({
         let (source, destination) = (source.clone(), destination.clone());
-        move || runner::preview(&source, &destination, mode)
+        move || preview::preview(&source, &destination, mode)
     })
     .await?;
     app.state::<PreviewMemo>()

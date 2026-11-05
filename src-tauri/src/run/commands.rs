@@ -1,11 +1,12 @@
 //! Thin `#[tauri::command]` wrappers for a Run: the engine runs on a blocking thread so the UI
 //! never freezes.
 
-use super::runner::{self, ActiveRun, PreviewMemo};
+use super::runner::{self, ActiveRun};
 use crate::engine::preview_parser::Counts;
 use crate::shared::domain::{Run, SavedSync};
 use crate::shared::error_messages::{self, Explanation};
 use crate::shared::storage::Storage;
+use crate::wizard::preview::PreviewMemo;
 use serde::Serialize;
 use tauri::async_runtime::spawn_blocking;
 use tauri::{AppHandle, Emitter, Manager, State};

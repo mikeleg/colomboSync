@@ -2,11 +2,12 @@
 #![cfg(unix)]
 
 use colombo_sync_lib::engine::preview_parser::Counts;
-use colombo_sync_lib::run::mirror_guard;
 use colombo_sync_lib::run::runner::{self, ActiveRun};
 use colombo_sync_lib::shared::domain::{Cause, Folder, Outcome, Run, SavedSync, SyncMode};
 use colombo_sync_lib::shared::error_messages;
+use colombo_sync_lib::shared::mirror_guard;
 use colombo_sync_lib::shared::storage::Storage;
+use colombo_sync_lib::wizard;
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
@@ -73,7 +74,7 @@ fn copy_keeps_extra_files_in_destination() {
     write(&b.join("sub").join("only-in-b-too.txt"), "extra");
     let storage = Storage::at(temp.path().join("ColomboSync"));
 
-    let preview = runner::preview(path_str(&a), path_str(&b), SyncMode::Copy).unwrap();
+    let preview = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy).unwrap();
 
     assert_eq!(sorted(&preview.new.files), ["new.txt", "sub/deep.txt"]);
     assert_eq!(preview.updated.files, ["updated.txt"]);
@@ -115,7 +116,7 @@ fn copy_keeps_extra_files_in_destination() {
     assert_eq!(serde_json::from_str::<Run>(history.trim()).unwrap(), run);
 
     // Nothing is left to do: the second preview is empty.
-    let again = runner::preview(path_str(&a), path_str(&b), SyncMode::Copy).unwrap();
+    let again = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy).unwrap();
     assert_eq!(again.counts(), Counts::default());
 }
 
@@ -127,7 +128,7 @@ fn a_destination_that_does_not_exist_yet_previews_everything_as_new_and_stays_un
     write(&a.join("sub").join("due.txt"), "due");
 
     for mode in [SyncMode::Copy, SyncMode::Mirror] {
-        let preview = runner::preview(path_str(&a), path_str(&b), mode).unwrap();
+        let preview = wizard::preview::preview(path_str(&a), path_str(&b), mode).unwrap();
         assert_eq!(sorted(&preview.new.files), ["sub/due.txt", "uno.txt"]);
         assert_eq!(preview.updated.count, 0);
         assert!(!b.exists(), "a preview creates nothing");
@@ -135,7 +136,7 @@ fn a_destination_that_does_not_exist_yet_previews_everything_as_new_and_stays_un
 
     // The first run creates B itself: not a failure, not a "folder not found".
     let storage = Storage::at(temp.path().join("ColomboSync"));
-    let counts = runner::preview(path_str(&a), path_str(&b), SyncMode::Copy)
+    let counts = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy)
         .unwrap()
         .counts();
     let run = runner::run(
@@ -161,7 +162,7 @@ fn a_destination_whose_parent_is_missing_is_reported_and_never_created() {
     write(&a.join("uno.txt"), "uno");
     let storage = Storage::at(temp.path().join("ColomboSync"));
 
-    let failure = runner::preview(path_str(&a), path_str(&b), SyncMode::Copy).unwrap_err();
+    let failure = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy).unwrap_err();
     assert_eq!(
         failure.title,
         format!("Non trovo la cartella B ({}).", path_str(&b))
@@ -206,7 +207,7 @@ fn an_rsync_failure_is_recorded_as_error() {
     let storage = Storage::at(temp.path().join("ColomboSync"));
 
     let a = path_str(&missing);
-    let failure = runner::preview(a, path_str(&b), SyncMode::Copy).unwrap_err();
+    let failure = wizard::preview::preview(a, path_str(&b), SyncMode::Copy).unwrap_err();
     assert_eq!(failure.title, format!("Non trovo la cartella A ({a})."));
     assert_eq!(failure.advice, "Il disco è collegato?");
 
@@ -251,7 +252,7 @@ fn run_reports_progress_with_the_current_file() {
     write(&a.join("è già.txt"), "tre");
     write(&b.join("only-in-b.txt"), "extra");
     let storage = Storage::at(temp.path().join("ColomboSync"));
-    let counts = runner::preview(path_str(&a), path_str(&b), SyncMode::Copy)
+    let counts = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy)
         .unwrap()
         .counts();
 
@@ -294,7 +295,7 @@ fn cancel_kills_rsync_and_records_a_cancelled_run() {
         .set_len(3_000_000_000)
         .unwrap();
     let storage = Storage::at(temp.path().join("ColomboSync"));
-    let counts = runner::preview(path_str(&a), path_str(&b), SyncMode::Copy)
+    let counts = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy)
         .unwrap()
         .counts();
     let active = ActiveRun::default();
@@ -371,8 +372,8 @@ fn extra_files_count_as_deleted_only_in_mirror() {
     write(&b.join("only-in-b.txt"), "extra");
     write(&b.join("old-dir").join("inside.txt"), "extra");
 
-    let copy = runner::preview(path_str(&a), path_str(&b), SyncMode::Copy).unwrap();
-    let mirror = runner::preview(path_str(&a), path_str(&b), SyncMode::Mirror).unwrap();
+    let copy = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy).unwrap();
+    let mirror = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Mirror).unwrap();
 
     assert_eq!(copy.deleted.count, 0);
     assert!(copy.blocked.is_none());
@@ -404,7 +405,7 @@ fn mirror_deletes_extra_files_in_destination() {
     write(&b.join("old-dir").join("inside.txt"), "extra");
     let storage = Storage::at(temp.path().join("ColomboSync"));
 
-    let preview = runner::preview(path_str(&a), path_str(&b), SyncMode::Mirror).unwrap();
+    let preview = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Mirror).unwrap();
     assert_eq!(preview.deleted.count, 2);
     assert!(preview.blocked.is_none());
 
@@ -435,12 +436,14 @@ fn mirror_with_a_missing_or_empty_source_is_blocked_and_never_run() {
     let storage = Storage::at(temp.path().join("ColomboSync"));
 
     // A that exists and is empty: the guard blocks the mirror.
-    let preview = runner::preview(path_str(&empty), path_str(&b), SyncMode::Mirror).unwrap();
+    let preview =
+        wizard::preview::preview(path_str(&empty), path_str(&b), SyncMode::Mirror).unwrap();
     assert_eq!(preview.blocked.as_deref(), Some(mirror_guard::SOURCE_EMPTY));
     assert!(run_mirror(&storage, &empty, &b, preview.counts()).is_err());
 
     // A that is not there at all is said as such, in Mirror too (and nothing can be started).
-    let failure = runner::preview(path_str(&missing), path_str(&b), SyncMode::Mirror).unwrap_err();
+    let failure =
+        wizard::preview::preview(path_str(&missing), path_str(&b), SyncMode::Mirror).unwrap_err();
     assert_eq!(
         failure.title,
         format!("Non trovo la cartella A ({}).", path_str(&missing))
@@ -459,7 +462,7 @@ fn mirror_with_more_deleted_than_new_plus_updated_is_blocked() {
     identical_in(&b, &a, "a.txt");
     write(&b.join("extra1.txt"), "x");
 
-    let preview = runner::preview(path_str(&a), path_str(&b), SyncMode::Mirror).unwrap();
+    let preview = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Mirror).unwrap();
 
     assert_eq!(preview.counts().deleted, 1);
     assert_eq!(

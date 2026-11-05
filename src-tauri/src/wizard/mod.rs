@@ -2,3 +2,4 @@
 
 pub mod commands;
 pub mod folder_browser;
+pub mod preview;

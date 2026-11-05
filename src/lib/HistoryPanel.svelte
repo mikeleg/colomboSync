@@ -3,7 +3,7 @@
   import { formatNumber, formatWhen, modeChip, outcomeChip } from "./format";
   import type { HistorySummary } from "./types";
 
-  /** From `history_summary`; null while it loads or when it failed: then only the legend shows. */
+  /** From `list_runs`; null while it loads or when the history could not be read: then only the legend shows. */
   let { summary }: { summary: HistorySummary | null } = $props();
 
   const numbers = $derived(

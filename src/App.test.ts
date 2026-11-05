@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { act, fireEvent, render, screen, within } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App.svelte";
-import type { Preview, Run, RunReport, SyncSummary } from "./lib/types";
+import type { HistorySummary, Preview, Run, RunList, RunReport, SyncSummary } from "./lib/types";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
@@ -32,6 +32,12 @@ const doneRun: Run = {
   logPath: "C:\\L\\logs\\x.log",
 };
 
+/** What `list_runs` answers: the runs plus a summary (all zeros unless a test gives one). */
+const runList = (runs: Run[], summary: Partial<HistorySummary> = {}): RunList => ({
+  runs,
+  summary: { runs: 0, ok: 0, failed: 0, cancelled: 0, filesCopied: 0, filesDeleted: 0, syncs: [], ...summary },
+});
+
 const savedSync: SyncSummary = {
   id: 7,
   name: "Foto di Anna",
@@ -51,7 +57,6 @@ type Handlers = Partial<
     | "default_sync_name"
     | "check_destination"
     | "list_runs"
-    | "history_summary"
     | "read_run_log"
     | "is_elevated",
     (args: Args) => unknown
@@ -63,7 +68,6 @@ function backend(handlers: Handlers = {}) {
   const defaults: Record<string, (args: Args) => unknown> = {
     browse_folders: () => ({ parent: "", folders: [], error: null }),
     list_syncs: () => ({ syncs: [], setAside: false }),
-    history_summary: () => ({ runs: 0, ok: 0, failed: 0, cancelled: 0, filesCopied: 0, filesDeleted: 0, syncs: [] }),
     default_sync_name: () => "Copia di Foto",
     check_destination: () => undefined, // B is fine
     is_elevated: () => false,
@@ -521,26 +525,27 @@ test("home: a saved sync's A and B are in the schema with the caption", async ()
 
 test("Storico lists the runs from Rust and swaps the schema for the summary panel", async () => {
   backend({
-    list_runs: () => [
-      { ...doneRun, syncName: "Seconda", outcome: "Error" },
-      { ...doneRun, syncName: "Prima" },
-    ],
-    history_summary: () => ({
-      runs: 2,
-      ok: 1,
-      failed: 1,
-      cancelled: 0,
-      filesCopied: 3,
-      filesDeleted: 0,
-      syncs: [{ id: 7, name: "Foto di Anna", lastSuccess: "2026-11-03T12:00:00+01:00", warning: null }],
-    }),
+    list_runs: () =>
+      runList(
+        [
+          { ...doneRun, syncName: "Seconda", outcome: "Error" },
+          { ...doneRun, syncName: "Prima" },
+        ],
+        {
+          runs: 2,
+          ok: 1,
+          failed: 1,
+          filesCopied: 3,
+          syncs: [{ id: 7, name: "Foto di Anna", lastSuccess: "2026-11-03T12:00:00+01:00", warning: null }],
+        },
+      ),
   });
   render(App);
 
   await click("Storico");
 
   expect(invokeMock).toHaveBeenCalledWith("list_runs");
-  expect(invokeMock).toHaveBeenCalledWith("history_summary");
+  expect(calls("history_summary")).toHaveLength(0);
   expect(screen.getByRole("heading", { name: "Storico" })).toBeTruthy();
   expect(await screen.findByText("Seconda", { selector: "strong" })).toBeTruthy();
   const aside = screen.getByRole("complementary", { name: "Riepilogo dello storico" });
@@ -548,23 +553,6 @@ test("Storico lists the runs from Rust and swaps the schema for the summary pane
   expect(within(aside).getByText("Copie fatte").previousElementSibling?.textContent).toBe("2");
   expect(within(aside).getByText("Con errore").previousElementSibling?.textContent).toBe("1");
   expect(within(aside).getByText("Foto di Anna")).toBeTruthy();
-});
-
-test("if the summary cannot be read the rows still show and the panel keeps its legend", async () => {
-  backend({
-    list_runs: () => [{ ...doneRun, syncName: "Prima" }],
-    history_summary: () => {
-      throw "boom";
-    },
-  });
-  render(App);
-
-  await click("Storico");
-
-  expect(await screen.findByText("Prima", { selector: "strong" })).toBeTruthy();
-  const aside = screen.getByRole("complementary", { name: "Riepilogo dello storico" });
-  expect(within(aside).queryByText("Copie fatte")).toBeNull();
-  expect(within(aside).getByText("Cosa vogliono dire le etichette")).toBeTruthy();
 });
 
 test("a failed list_runs says so instead of showing an empty history", async () => {
@@ -582,8 +570,8 @@ test("a failed list_runs says so instead of showing an empty history", async () 
 });
 
 test("while the history loads there are no old rows, and a late older answer is ignored", async () => {
-  let answerFirst!: (runs: Run[]) => void;
-  const answers = [new Promise<Run[]>((resolve) => (answerFirst = resolve)), Promise.resolve([{ ...doneRun, syncName: "Aggiornata" }])];
+  let answerFirst!: (list: RunList) => void;
+  const answers = [new Promise<RunList>((resolve) => (answerFirst = resolve)), Promise.resolve(runList([{ ...doneRun, syncName: "Aggiornata" }]))];
   backend({ list_runs: () => answers.shift() });
   render(App);
 
@@ -593,7 +581,7 @@ test("while the history loads there are no old rows, and a late older answer is 
   await click("Storico");
   expect(await screen.findByText("Aggiornata", { selector: "strong" })).toBeTruthy();
 
-  answerFirst([{ ...doneRun, syncName: "Vecchia" }]);
+  answerFirst(runList([{ ...doneRun, syncName: "Vecchia" }]));
   await Promise.resolve();
 
   expect(screen.queryByText("Vecchia", { selector: "strong" })).toBeNull();
@@ -836,7 +824,7 @@ test("Riprova opens a fresh preview of the same saved sync and never runs by its
 });
 
 test("Torna all’elenco and Vai allo storico leave the result", async () => {
-  backend({ preview_sync: () => preview(2, 1), run_sync: () => failedRun, list_runs: () => [failedRun] });
+  backend({ preview_sync: () => preview(2, 1), run_sync: () => failedRun, list_runs: () => runList([failedRun]) });
   render(App);
   await goToPreview();
   await click(await screen.findByRole("button", { name: "Sì, avvia" }));

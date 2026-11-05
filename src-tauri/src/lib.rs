@@ -40,7 +40,6 @@ pub fn run() {
             commands::save_sync,
             commands::default_sync_name,
             commands::list_runs,
-            commands::history_summary,
             commands::read_run_log,
             commands::check_destination,
             commands::is_elevated,

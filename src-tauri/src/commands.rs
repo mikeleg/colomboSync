@@ -48,21 +48,23 @@ async fn blocking<T: Send + 'static, E: From<String> + Send + 'static>(
         .map_err(|e| E::from(e.to_string()))?
 }
 
-#[tauri::command]
-pub async fn list_runs() -> Result<Vec<Run>, String> {
-    let storage = Storage::from_env()?;
-    blocking(move || history::read(&storage.history_file()).map_err(|e| e.to_string())).await
+/// What the Storico screen shows: the runs, newest first, and the totals and per-sync state for its
+/// side panel.
+#[derive(Serialize)]
+pub struct RunList {
+    runs: Vec<Run>,
+    summary: HistorySummary,
 }
 
-/// Totals over the history and the state of each sync, for the Storico side panel. A `syncs.json`
-/// that cannot be read only means the syncs keep the names they had in their runs.
+/// A `syncs.json` that cannot be read only means the syncs keep the names they had in their runs.
 #[tauri::command]
-pub async fn history_summary() -> Result<HistorySummary, String> {
+pub async fn list_runs() -> Result<RunList, String> {
     let storage = Storage::from_env()?;
     blocking(move || {
         let runs = history::read(&storage.history_file()).map_err(|e| e.to_string())?;
         let syncs = sync_store::load(&storage.syncs_file()).unwrap_or_default();
-        Ok(history_summary::summarize(&runs, &syncs))
+        let summary = history_summary::summarize(&runs, &syncs);
+        Ok(RunList { runs, summary })
     })
     .await
 }

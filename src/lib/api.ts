@@ -1,7 +1,7 @@
 // The only place that talks to Rust: Tauri commands.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Counts, Explanation, FolderListing, HistorySummary, ListedSyncs, Preview, Run, RunProgress, RunReport, Sync, SyncMode } from "./types";
+import type { Counts, Explanation, FolderListing, ListedSyncs, Preview, RunList, RunProgress, RunReport, Sync, SyncMode } from "./types";
 
 /** Anything that is not an `Explanation` (the call itself failed) becomes a title. */
 const asExplanation = (e: unknown): Explanation =>
@@ -38,11 +38,8 @@ export const createFolder = (parent: string, name: string) =>
 export const checkDestination = (source: string, destination: string) =>
   invoke<void>("check_destination", { source, destination });
 
-/** Past runs, newest first. */
-export const listRuns = () => invoke<Run[]>("list_runs");
-
-/** Totals over the history and the state of each sync, for the Storico side panel. */
-export const historySummary = () => invoke<HistorySummary>("history_summary");
+/** Past runs, newest first, with the totals and per-sync state for the Storico side panel. */
+export const listRuns = () => invoke<RunList>("list_runs");
 
 /** Text of a run's robocopy log; rejects when the file is gone. */
 export const readRunLog = (path: string) => invoke<string>("read_run_log", { path });

@@ -53,7 +53,7 @@ export interface SyncStatus {
   warning: string | null;
 }
 
-/** What `history_summary` returns: totals over the whole history and the state of each sync. */
+/** Totals over the whole history and the state of each sync. */
 export interface HistorySummary {
   runs: number;
   ok: number;
@@ -63,6 +63,13 @@ export interface HistorySummary {
   filesCopied: number;
   filesDeleted: number;
   syncs: SyncStatus[];
+}
+
+/** What `list_runs` returns for the Storico screen. */
+export interface RunList {
+  /** Newest first. */
+  runs: Run[];
+  summary: HistorySummary;
 }
 
 /** Why something failed, as Rust words it: what happened, and what to do about it. */

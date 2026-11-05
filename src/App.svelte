@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { historySummary, isElevated, listRuns } from "./lib/api";
+  import { isElevated, listRuns } from "./lib/api";
   import History from "./lib/History.svelte";
   import HistoryPanel from "./lib/HistoryPanel.svelte";
   import Home from "./lib/Home.svelte";
@@ -42,11 +42,10 @@
     summary = null;
     historyStatus = "loading";
     try {
-      // Without its summary the panel still has the legend, so only the list is essential.
-      const [result, totals] = await Promise.all([listRuns(), historySummary().catch(() => null)]);
+      const result = await listRuns();
       if (load !== historyLoads) return; // a newer request owns the screen
-      runs = result;
-      summary = totals;
+      runs = result.runs;
+      summary = result.summary;
       historyStatus = "ready";
     } catch {
       if (load === historyLoads) historyStatus = "error";

@@ -1,4 +1,4 @@
-// Shapes returned by the home's Rust commands (src-tauri/src/sync_store.rs, history.rs).
+// Shapes returned by the home's Rust commands (src-tauri/src/shared/sync_store.rs, src-tauri/src/history/commands.rs).
 
 import type { Outcome, Sync } from "../shared/types";
 

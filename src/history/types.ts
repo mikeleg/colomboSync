@@ -1,8 +1,8 @@
-// Shapes returned by `list_runs` (src-tauri/src/history.rs, history_summary.rs).
+// Shapes returned by `list_runs` (src-tauri/src/history/commands.rs, history/summary.rs).
 
 import type { Run } from "../shared/types";
 
-/** One sync found in the history (src-tauri/src/history_summary.rs). */
+/** One sync found in the history (src-tauri/src/history/summary.rs). */
 export interface SyncStatus {
   id: number;
   name: string;

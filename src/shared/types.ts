@@ -1,4 +1,4 @@
-// Shapes returned by the Rust commands (src-tauri/src/history.rs, sync_store.rs, run_sync). Used by two or more slices.
+// Shapes returned by the Rust commands (src-tauri/src/history/commands.rs, shared/sync_store.rs, run/commands.rs). Used by two or more slices.
 
 export type SyncMode = "Copy" | "Mirror";
 
@@ -37,7 +37,7 @@ export interface Explanation {
 /** What `run_sync` returns: the stored Run, plus the explanation when it ended in Errore. */
 export type RunReport = Run & { explanation: Explanation | null };
 
-/** A saved A→B pair (src-tauri/src/sync_store.rs). */
+/** A saved A→B pair (src-tauri/src/shared/domain.rs, SavedSync). */
 export interface Sync {
   id: number;
   name: string;

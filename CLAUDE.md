@@ -1,6 +1,6 @@
 # ColomboSync – agent guide
 
-Desktop app (Windows/macOS/Linux): a non-technical user copies folder A → B safely. Wizard, mandatory preview, A→B schema side panel (Storico shows the history legend instead), history. Engine: robocopy (Windows), rsync (macOS openrsync, Linux GNU rsync). UI in Italian.
+Desktop app (Windows/macOS/Linux): a non-technical user copies folder A → B safely. Wizard, mandatory preview, A→B schema side panel (Storico shows a summary panel instead: Riepilogo, Per sincronizzazione, legend), history. Engine: robocopy (Windows), rsync (macOS openrsync, Linux GNU rsync). UI in Italian.
 
 **Stack:** Tauri 2 (Rust, `src-tauri/`) + Svelte 5 + Vite + TS (`src/`). No installer. Deliverables: Windows portable exe, macOS `.app`/`.dmg` (ad-hoc signed, not notarized: first launch right-click → Apri), Linux AppImage.
 
@@ -27,7 +27,7 @@ Skills: `xp-slice` (one slice test-first), `parallel-slices` (worktrees + merge)
 
 ## Architecture
 - **Rust owns all logic, I/O and every user-facing message** (`Explanation {title, advice}`; history stores `Cause`s, not prose): engine args and run, preview parsing, path rules, `syncs.json`, `history.jsonl`, logs in the data dir (`%LOCALAPPDATA%\ColomboSync`, `~/Library/Application Support/ColomboSync`, `$XDG_DATA_HOME` or `~/.local/share/ColomboSync`).
-- `src-tauri/src/`: one dir per vertical slice – `syncs/`, `wizard/`, `run/`, `history/`, `engine/`, `shared/` (used by 2+ slices: `domain` – `SyncMode`, `SavedSync`, `Run`, `Outcome`, `Cause` –, `storage`, `error_messages`, `path_rules`, `mirror_guard`, `elevation`, `blocking`). Depend downward only on `engine/` and `shared/` (exceptions: `run` reads `PreviewMemo` from `wizard/preview.rs`; `syncs` reads `history`). Each slice's `#[tauri::command]`s live in its `commands.rs`, registered in `lib.rs` (`shared/elevation.rs` is the `is_elevated` command).
+- `src-tauri/src/`: one dir per vertical slice – `syncs/`, `wizard/`, `run/`, `history/`, `engine/`, `shared/` (used by 2+ slices: `domain` – `SyncMode`, `SavedSync`, `Run`, `Outcome`, `Cause` –, `storage`, `sync_store` (`syncs.json`), `error_messages`, `path_rules`, `mirror_guard`, `elevation`, `blocking`). Depend downward only on `engine/` and `shared/` (exceptions: `run` reads `PreviewMemo` from `wizard/preview.rs`; `syncs` reads `history`). Each slice's `#[tauri::command]`s live in its `commands.rs`, registered in `lib.rs` (`shared/elevation.rs` is the `is_elevated` command).
 - **Engine boundary = `engine/mod.rs`**: `cfg(windows)` → `robocopy.rs`, `cfg(unix)` → `rsync.rs`. Nothing else knows which engine runs; other platform code is `cfg`-gated too.
 - **Svelte owns presentation**: `src/` mirrors the slices (`syncs/`, `wizard/` one component per step, `run/`, `history/`, `schema/` = `SchemaView.svelte`, `shared/`). Each slice owns components, tests, `api.ts` (`invoke`/event wrappers), `types.ts`. Talks to Rust only via `invoke` and events.
 - Domain logic free of Tauri types where possible (plain `cargo test`).

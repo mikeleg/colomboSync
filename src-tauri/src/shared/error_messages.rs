@@ -270,17 +270,16 @@ pub fn has_error_code(line: &str) -> bool {
 }
 
 /// The `n` of every `<n> (0x<hex>)` in a log line.
-fn error_codes(line: &str) -> impl Iterator<Item = u32> {
-    let tokens: Vec<&str> = line.split_whitespace().collect();
+fn error_codes(line: &str) -> impl Iterator<Item = u32> + '_ {
+    let tokens = line.split_whitespace();
     tokens
-        .windows(2)
-        .filter_map(|pair| {
-            let hex = pair[1].strip_prefix("(0x")?.strip_suffix(')')?;
+        .clone()
+        .zip(tokens.skip(1))
+        .filter_map(|(number, hex)| {
+            let hex = hex.strip_prefix("(0x")?.strip_suffix(')')?;
             let is_hex = !hex.is_empty() && hex.chars().all(|c| c.is_ascii_hexdigit());
-            is_hex.then(|| pair[0].parse().ok()).flatten()
+            is_hex.then(|| number.parse().ok()).flatten()
         })
-        .collect::<Vec<_>>()
-        .into_iter()
 }
 
 /// The folder an error line talks about: the one whose path the line holds. A line that

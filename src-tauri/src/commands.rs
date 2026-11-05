@@ -28,22 +28,23 @@ pub async fn preview_sync(
     destination: String,
     mode: SyncMode,
 ) -> Result<Preview, Explanation> {
-    let preview = spawn_blocking({
+    let preview = blocking({
         let (source, destination) = (source.clone(), destination.clone());
         move || runner::preview(&source, &destination, mode)
     })
-    .await
-    .map_err(|e| Explanation::from(e.to_string()))??;
+    .await?;
     app.state::<PreviewMemo>()
         .remember(&source, &destination, mode, preview.counts());
     Ok(preview)
 }
 
 /// Runs `work` on a blocking thread, so a slow disk never freezes the UI.
-async fn blocking<T: Send + 'static>(
-    work: impl FnOnce() -> Result<T, String> + Send + 'static,
-) -> Result<T, String> {
-    spawn_blocking(work).await.map_err(|e| e.to_string())?
+async fn blocking<T: Send + 'static, E: From<String> + Send + 'static>(
+    work: impl FnOnce() -> Result<T, E> + Send + 'static,
+) -> Result<T, E> {
+    spawn_blocking(work)
+        .await
+        .map_err(|e| E::from(e.to_string()))?
 }
 
 #[tauri::command]

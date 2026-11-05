@@ -7,7 +7,7 @@ use crate::preview_parser::{self, Preview};
 
 /// Arguments of the `/L` dry run. `log` receives the UTF-16LE `/UNILOG`.
 pub fn preview_args(mode: SyncMode, source: &str, destination: &str, log: &str) -> Vec<String> {
-    args(mode, source, destination, log, "/L")
+    args(mode, source, destination, log, true)
 }
 
 /// Arguments of the real run. `log` is the per-run log kept in `logs\`.
@@ -17,17 +17,10 @@ pub fn preview_args(mode: SyncMode, source: &str, destination: &str, log: &str) 
 /// in B are not listed:
 /// every file line on stdout is then a file of A.
 pub fn run_args(mode: SyncMode, source: &str, destination: &str, log: &str) -> Vec<String> {
-    args(mode, source, destination, log, "/TEE")
+    args(mode, source, destination, log, false)
 }
 
-/// `dry_run_or_tee` is the one flag that tells a preview (`/L`) from a run (`/TEE`).
-fn args(
-    mode: SyncMode,
-    source: &str,
-    destination: &str,
-    log: &str,
-    dry_run_or_tee: &str,
-) -> Vec<String> {
+fn args(mode: SyncMode, source: &str, destination: &str, log: &str, dry_run: bool) -> Vec<String> {
     let mode_flag = match mode {
         SyncMode::Copy => "/E",
         SyncMode::Mirror => "/MIR",
@@ -39,7 +32,7 @@ fn args(
         // Keep extras in B out of the output: Copy never touches them.
         args.push("/XX".into());
     }
-    args.push(dry_run_or_tee.into());
+    args.push(if dry_run { "/L" } else { "/TEE" }.into());
     args.extend(["/NJH", "/NJS", "/NDL", "/NC", "/BYTES", "/FP", "/NP"].map(String::from));
     args.push(format!("/UNILOG:{log}"));
     args

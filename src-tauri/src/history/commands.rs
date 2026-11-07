@@ -1,7 +1,7 @@
 //! Thin `#[tauri::command]` wrappers for the Storico screen.
 
 use super::summary::{self, HistorySummary};
-use super::{Run, RunLog, read, read_log};
+use super::{LogError, Run, RunLog, read, read_log};
 use crate::shared::blocking::blocking;
 use crate::shared::domain::{RunReport, SavedSync};
 use crate::shared::error_messages::{self, Explanation};
@@ -44,8 +44,10 @@ pub async fn list_runs() -> Result<RunList, Explanation> {
 pub async fn read_run_log(path: String) -> Result<RunLog, Explanation> {
     let storage = Storage::from_env()?;
     blocking(move || {
-        read_log(&storage.logs_dir(), Path::new(&path))
-            .map_err(|e| error_messages::explain_log_error(&e))
+        read_log(&storage.logs_dir(), Path::new(&path)).map_err(|e| match e {
+            LogError::OutsideLogsFolder => error_messages::not_a_log(),
+            LogError::Io(e) => error_messages::explain_log_error(&e),
+        })
     })
     .await
 }

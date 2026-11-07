@@ -175,15 +175,24 @@ pub fn cannot_read_syncs() -> Explanation {
     "Non riesco a leggere le sincronizzazioni salvate.".into()
 }
 
-pub fn cannot_save_sync(error: &io::Error) -> Explanation {
-    format!("Non riesco a salvare la sincronizzazione: {error}").into()
+/// Fixed words: what the OS said is for the developer, not for the user.
+pub fn cannot_save_sync() -> Explanation {
+    explanation(
+        "Non riesco a salvare la sincronizzazione.",
+        "Controlla lo spazio sul disco e i permessi, poi riprova.",
+    )
 }
 
 pub fn cannot_read_history() -> Explanation {
     "Non riesco a leggere lo storico.".into()
 }
 
-/// A run's log could not be shown: the file is gone, or it cannot be read.
+/// The path asked for is not inside the folder of the logs: nothing the user can fix.
+pub fn not_a_log() -> Explanation {
+    "Questo file non è un registro di ColomboSync.".into()
+}
+
+/// A run's log could not be shown: the file is gone, or the OS could not read it.
 pub fn explain_log_error(error: &io::Error) -> Explanation {
     if error.kind() == io::ErrorKind::NotFound {
         return "Il registro di questa copia non è più disponibile.".into();
@@ -442,8 +451,8 @@ mod tests {
             "Non riesco a leggere le sincronizzazioni salvate."
         );
         assert_eq!(
-            cannot_save_sync(&io::Error::other("disco pieno")).title,
-            "Non riesco a salvare la sincronizzazione: disco pieno"
+            cannot_save_sync().title,
+            "Non riesco a salvare la sincronizzazione."
         );
         assert_eq!(
             cannot_read_history().title,
@@ -468,15 +477,29 @@ mod tests {
         );
         assert_eq!(gone.advice, "");
 
-        let outside = io::Error::new(io::ErrorKind::PermissionDenied, "outside the logs");
-        for error in [outside, io::Error::from(io::ErrorKind::TimedOut)] {
+        let denied = io::Error::new(io::ErrorKind::PermissionDenied, "os says no");
+        for error in [denied, io::Error::from(io::ErrorKind::TimedOut)] {
             let unreadable = explain_log_error(&error);
             assert_eq!(
                 unreadable.title,
                 "Non riesco ad aprire il registro di questa copia."
             );
-            assert!(!unreadable.advice.contains("outside"));
+            assert!(!unreadable.advice.contains("os says no"));
         }
+    }
+
+    #[test]
+    fn a_path_outside_the_logs_folder_has_its_own_words_and_no_advice_to_follow() {
+        let outside = not_a_log();
+        assert_eq!(
+            outside.title,
+            "Questo file non è un registro di ColomboSync."
+        );
+        assert_eq!(outside.advice, "");
+        assert_ne!(
+            outside,
+            explain_log_error(&io::Error::from(io::ErrorKind::PermissionDenied))
+        );
     }
 
     #[test]

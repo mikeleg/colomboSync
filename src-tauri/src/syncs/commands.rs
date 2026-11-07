@@ -23,7 +23,7 @@ pub async fn save_sync(
     let storage = Storage::from_env()?;
     blocking(move || {
         sync_store::add(&storage.syncs_file(), &name, &source, &destination, mode)
-            .map_err(|e| error_messages::cannot_save_sync(&e))
+            .map_err(|_| error_messages::cannot_save_sync())
     })
     .await
 }

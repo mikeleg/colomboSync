@@ -4,5 +4,3 @@ src-tauri
 package-lock.json
 docs/backlog/colombo-sync/prototype.html
 *.md
-demo.html
-src/demo.ts

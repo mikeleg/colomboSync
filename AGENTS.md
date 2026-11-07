@@ -50,4 +50,5 @@ The dev machine is Windows: Unix-only code can't compile here. Push a `slice/**`
 - Svelte 5 best practices: `$derived` (not `$effect`) for computed state; `$effect` never forwards data to a parent or writes derivable state; every `{#each}` keyed; `svelte-ignore` only with a comment saying why.
 - Shell heredocs, `sed` and Python halve backslashes here: write files with your file-editing tool. TS tests: `String.raw` for Windows paths.
 - Minimum code for the criteria; no traits/abstractions with a single implementation.
-- Untracked local files `demo.html`, `src/demo.ts` (browser demo with Tauri mocks) and `HANDOFF.md` are never committed.
+- Browser demo (`demo.html` + `src/demo.ts`, backend mocked with `mockIPC`) for screenshots and visual checks: `npx vite --port 5199 --strictPort`, then http://localhost:5199/demo.html. When a command's API changes, update its mock in `src/demo.ts` (`npm run check` type-checks it).
+- `HANDOFF.md` is a local session note, never committed.

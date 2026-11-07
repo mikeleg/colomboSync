@@ -43,7 +43,7 @@ The dev machine is Windows: Unix-only code can't compile here. Push a `slice/**`
 ## Conventions
 - Test first; commit at every green (`feat(sN): …`); full suite green before handing back.
 - `main` changes only through a pull request, owner included (GitHub ruleset, no bypass): work on a branch, never push `main`.
-- Before every push or PR run locally every check CI runs: `npm run format:check`, `npm test`, `npm run check`, `cargo fmt --check`, clippy, `cargo test`. Line endings are LF everywhere (`.gitattributes`), so the local Prettier check matches the Windows runner.
+- Before every push or PR run locally every check CI runs: `npm run format:check`, `npm test`, `npm run check`, `cargo fmt --check`, clippy, `cargo test`. Line endings are LF everywhere (`.gitattributes`), so the local Prettier check matches the Windows runner. `format:check` rewrites what it can: commit what it changed (`git status` clean) before pushing, or CI's check-only run fails.
 - Every slice branch gets a code review for correctness bugs before merge – it found real data-loss bugs every time (path rules incl. A inside B, links/aliases, normalization, MirrorGuard trusting the UI, overwriting unreadable files, non-atomic writes). Treat folder-safety code as hostile-input code.
 - fmt + clippy + Prettier clean (Prettier formats `src/` and the HTML/TS/JSON files; `*.md` is ignored). English identifiers, Italian UI strings from the prototype; new copy not in the prototype goes in the slice report and scope.md "Decisions during implementation".
 - Look: colors only as tokens from `src/theme.css`, no inline colors. Mirror/deletion stays red and loud; Specchio (the mode) is violet (`--mirror`).

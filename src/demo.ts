@@ -421,12 +421,18 @@ async function runSync(sync: Sync, previewToken: string | null, consent: boolean
     await wait(RUN_MS / RUN_STEPS);
     const done = Math.round((total * tick) / RUN_STEPS);
     const elapsedMs = Date.now() - started;
+    // The words and rules of `eta_text` in Rust (shared/copy_text.rs).
     const left = Math.ceil((total - done) / (done / (elapsedMs / 1000)));
     const progress: RunProgress = {
       syncName: sync.name,
       done,
       currentFile: names[tick % names.length],
-      eta: left <= 1 ? "Quasi finito." : `Mancano circa ${num(left)} secondi.`,
+      eta:
+        elapsedMs < 1000 || done === 0
+          ? "Calcolo il tempo che manca…"
+          : left <= 1
+            ? "Quasi finito."
+            : `Mancano circa ${num(left)} secondi.`,
     };
     await emit("run-progress", progress);
   }

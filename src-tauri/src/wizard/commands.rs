@@ -33,14 +33,16 @@ pub async fn preview_sync(
     destination: String,
     mode: SyncMode,
 ) -> Result<PreviewReport, Explanation> {
+    // From here no earlier token can start a run, even if this preview fails or ends after a newer one.
+    let started = app.state::<PreviewMemo>().begin();
     let preview = blocking({
         let (source, destination) = (source.clone(), destination.clone());
         move || preview::preview(&source, &destination, mode)
     })
     .await?;
-    let preview_token = app
-        .state::<PreviewMemo>()
-        .remember(&source, &destination, mode, &preview);
+    let preview_token =
+        app.state::<PreviewMemo>()
+            .remember(started, &source, &destination, mode, &preview);
     Ok(PreviewReport {
         preview,
         preview_token,

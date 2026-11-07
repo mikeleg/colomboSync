@@ -67,42 +67,59 @@ struct Remembered {
 
 #[derive(Default)]
 struct Memo {
-    /// Previews made so far: tokens differ even within the same process.
-    issued: u64,
+    /// Previews started so far, in the order they were asked: the number of the newest one. Tokens
+    /// differ even within the same process.
+    started: u64,
     last: Option<Remembered>,
 }
 
-/// The last preview shown to the user, with the token the UI gets for it. A run takes its counts
-/// from here, never from what the UI sends back, and is refused unless it brings the token of that
+/// The last preview asked for, with the token the UI gets for it. A run takes its counts from
+/// here, never from what the UI sends back, and is refused unless it brings the token of that
 /// preview, for the same A, B and mode (and, when it would delete from B, the user's consent).
+///
+/// "Last" is the order the previews were asked in, not the order they finish in: a slow preview
+/// of a share that ends after a newer one must not take its place.
 #[derive(Default)]
 pub struct PreviewMemo(Mutex<Memo>);
 
 impl PreviewMemo {
-    /// Keeps `preview` as the only one a run can confirm (any earlier one goes stale) and returns
-    /// its token. A blocked preview confirms nothing: it replaces the last one and has no token.
+    /// A preview is about to start: it is now the only one that can confirm a run, so any earlier
+    /// token goes stale at once, whether this preview ends well, blocked or in an error. Returns
+    /// its number, for `remember`.
+    pub fn begin(&self) -> u64 {
+        let mut memo = self.memo();
+        memo.started += 1;
+        memo.last = None;
+        memo.started
+    }
+
+    /// Keeps the finished `preview` (number `started`, from `begin`) as the one a run can confirm
+    /// and returns its token. `None`: a blocked preview confirms nothing, and one that a newer
+    /// preview has overtaken is ignored (it changes nothing).
     pub fn remember(
         &self,
+        started: u64,
         source: &str,
         destination: &str,
         mode: SyncMode,
         preview: &Preview,
     ) -> Option<String> {
         let mut memo = self.memo();
-        memo.issued += 1;
+        if started != memo.started || preview.blocked.is_some() {
+            return None;
+        }
         let token = format!(
-            "{:x}-{:016x}",
-            memo.issued,
+            "{started:x}-{:016x}",
             RandomState::new().build_hasher().finish()
         );
-        memo.last = preview.blocked.is_none().then(|| Remembered {
+        memo.last = Some(Remembered {
             token: token.clone(),
             source: source.into(),
             destination: destination.into(),
             mode,
             counts: preview.counts(),
         });
-        memo.last.is_some().then_some(token)
+        Some(token)
     }
 
     /// Counts of the preview this run confirms; each preview confirms one run, also when the run
@@ -177,7 +194,8 @@ mod tests {
     /// A memo holding a preview of A to B in `mode`, and the token of that preview.
     fn memo_with(mode: SyncMode, preview: &Preview) -> (PreviewMemo, String) {
         let memo = PreviewMemo::default();
-        let token = memo.remember(A, B, mode, preview).unwrap();
+        let started = memo.begin();
+        let token = memo.remember(started, A, B, mode, preview).unwrap();
         (memo, token)
     }
 
@@ -240,8 +258,14 @@ mod tests {
     fn the_token_of_a_replaced_preview_is_stale_even_for_the_same_folders() {
         for mode in [SyncMode::Copy, SyncMode::Mirror] {
             let memo = PreviewMemo::default();
-            let old = memo.remember(A, B, mode, &preview_of(9, 9, 0)).unwrap();
-            let new = memo.remember(A, B, mode, &preview_of(1, 0, 0)).unwrap();
+            let first = memo.begin();
+            let old = memo
+                .remember(first, A, B, mode, &preview_of(9, 9, 0))
+                .unwrap();
+            let second = memo.begin();
+            let new = memo
+                .remember(second, A, B, mode, &preview_of(1, 0, 0))
+                .unwrap();
             assert_ne!(old, new);
 
             assert_eq!(
@@ -258,19 +282,80 @@ mod tests {
 
     #[test]
     fn a_blocked_preview_has_no_token_and_makes_the_earlier_one_stale() {
-        let memo = PreviewMemo::default();
-        let token = memo
-            .remember(A, B, SyncMode::Mirror, &preview_of(1, 0, 0))
-            .unwrap();
+        let (memo, token) = memo_with(SyncMode::Mirror, &preview_of(1, 0, 0));
+        let started = memo.begin();
         let blocked = Preview {
             blocked: Some("no".into()),
             ..preview_of(1, 0, 5)
         };
 
-        assert_eq!(memo.remember(A, B, SyncMode::Mirror, &blocked), None);
+        assert_eq!(
+            memo.remember(started, A, B, SyncMode::Mirror, &blocked),
+            None
+        );
         assert_eq!(
             memo.confirm(Some(&token), &sync(A, B, SyncMode::Mirror), true),
             Err(error_messages::run_with_stale_preview())
+        );
+    }
+
+    #[test]
+    fn a_preview_that_fails_makes_the_earlier_token_stale() {
+        let (memo, token) = memo_with(SyncMode::Mirror, &preview_of(1, 0, 0));
+
+        // The next preview starts and then fails: `remember` is never called for it.
+        memo.begin();
+
+        assert_eq!(
+            memo.confirm(Some(&token), &sync(A, B, SyncMode::Mirror), true),
+            Err(error_messages::run_with_stale_preview())
+        );
+    }
+
+    #[test]
+    fn a_slow_preview_that_ends_after_a_newer_one_changes_nothing() {
+        for mode in [SyncMode::Copy, SyncMode::Mirror] {
+            let memo = PreviewMemo::default();
+            let slow = memo.begin();
+            let newer = memo.begin();
+            let token = memo
+                .remember(newer, A, B, mode, &preview_of(1, 0, 0))
+                .unwrap();
+
+            let late = memo.remember(slow, A, B, mode, &preview_of(9, 9, 0));
+            let late_blocked = memo.remember(
+                slow,
+                A,
+                B,
+                mode,
+                &Preview {
+                    blocked: Some("no".into()),
+                    ..preview_of(0, 0, 0)
+                },
+            );
+
+            assert_eq!((late, late_blocked), (None, None));
+            assert_eq!(
+                memo.confirm(Some(&token), &sync(A, B, mode), true),
+                Ok(counts(1, 0, 0)),
+                "the newer preview keeps its token"
+            );
+        }
+    }
+
+    #[test]
+    fn a_slow_preview_that_ends_before_the_newer_one_does_is_ignored_too() {
+        let memo = PreviewMemo::default();
+        let slow = memo.begin();
+        let newer = memo.begin();
+
+        assert_eq!(
+            memo.remember(slow, A, B, SyncMode::Copy, &preview_of(9, 9, 0)),
+            None
+        );
+        assert!(
+            memo.remember(newer, A, B, SyncMode::Copy, &preview_of(1, 0, 0))
+                .is_some()
         );
     }
 

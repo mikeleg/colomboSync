@@ -76,6 +76,8 @@ jobs:
 
       - run: npm ci
       - run: npm run check
+      # Check only: npm run format:check also rewrites files, which would hide unformatted pushes.
+      - run: npx prettier --check .
       - run: npm test
       - run: npm run build # generate_context! needs dist/ before any cargo step
 

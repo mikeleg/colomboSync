@@ -3,7 +3,10 @@ import { listen } from "@tauri-apps/api/event";
 import { act, fireEvent, render, screen, within } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App.svelte";
-import type { Preview, Run, RunReport, SyncSummary } from "./lib/types";
+import type { Run, RunReport } from "./shared/types";
+import type { HistorySummary, RunList } from "./history/types";
+import type { Preview } from "./wizard/types";
+import type { SyncSummary } from "./syncs/types";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
@@ -31,6 +34,12 @@ const doneRun: Run = {
   startedAt: "2026-11-03T12:00:00+01:00",
   logPath: "C:\\L\\logs\\x.log",
 };
+
+/** What `list_runs` answers: the runs plus a summary (all zeros unless a test gives one). */
+const runList = (runs: Run[], summary: Partial<HistorySummary> = {}): RunList => ({
+  runs: runs.map((run) => ({ explanation: null, ...run })),
+  summary: { runs: 0, ok: 0, failed: 0, cancelled: 0, filesCopied: 0, filesDeleted: 0, syncs: [], ...summary },
+});
 
 const savedSync: SyncSummary = {
   id: 7,
@@ -77,9 +86,10 @@ function backend(handlers: Handlers = {}) {
 const calls = (cmd: string) => invokeMock.mock.calls.filter(([c]) => c === cmd);
 
 const click = (target: string | RegExp | HTMLElement) =>
-  fireEvent.click(typeof target === "object" && "tagName" in target ? target : screen.getByRole("button", { name: target }));
-const typeInto = (label: RegExp, value: string) =>
-  fireEvent.input(screen.getByLabelText(label), { target: { value } });
+  fireEvent.click(
+    typeof target === "object" && "tagName" in target ? target : screen.getByRole("button", { name: target }),
+  );
+const typeInto = (label: RegExp, value: string) => fireEvent.input(screen.getByLabelText(label), { target: { value } });
 
 async function goToPreview() {
   await click("Nuova sincronizzazione");
@@ -130,6 +140,25 @@ test("A and B through Opzioni: the preview and the schema show the same counts",
   expect(screen.getByText("148", { selector: "aside b" })).toBeTruthy();
   expect(screen.getByText("3", { selector: "aside b" })).toBeTruthy();
   expect(screen.getByText("Nessun file viene cancellato in B")).toBeTruthy();
+});
+
+test("only the preview step fills the window: the other steps scroll with the page", async () => {
+  backend({ preview_sync: () => preview(2, 1) });
+  render(App);
+
+  await click("Nuova sincronizzazione");
+  expect(document.querySelector(".fill")).toBeNull(); // Da dove copio?
+  await typeInto(/Percorso/, "D:\\Foto");
+  await click("Avanti");
+  await typeInto(/Percorso/, "E:\\Backup");
+  await click("Avanti");
+  await screen.findByDisplayValue("Copia di Foto");
+  await click("Avanti"); // Come la chiamo? -> Opzioni
+  expect(document.querySelector(".fill")).toBeNull();
+
+  await click("Avanti"); // Anteprima
+  await screen.findByText("Da copiare (nuovi)");
+  expect(document.querySelector(".content.fill")).not.toBeNull();
 });
 
 test("Sì, avvia runs with the previewed counts and says Fatto", async () => {
@@ -334,7 +363,11 @@ test("a sync that cannot be saved says so and does not leave the preview", async
 });
 
 test("Controlla e avvia on a saved sync goes straight to a fresh preview, never running by itself", async () => {
-  backend({ list_syncs: () => ({ syncs: [savedSync], setAside: false }), preview_sync: () => preview(3, 0), run_sync: () => doneRun });
+  backend({
+    list_syncs: () => ({ syncs: [savedSync], setAside: false }),
+    preview_sync: () => preview(3, 0),
+    run_sync: () => doneRun,
+  });
   render(App);
 
   await click(await screen.findByRole("button", { name: "Controlla e avvia Foto di Anna" }));
@@ -351,7 +384,11 @@ test("Controlla e avvia on a saved sync goes straight to a fresh preview, never 
 });
 
 test("running a saved sync again does not save it twice and runs that sync by its id", async () => {
-  backend({ list_syncs: () => ({ syncs: [savedSync], setAside: false }), preview_sync: () => preview(3, 0), run_sync: () => doneRun });
+  backend({
+    list_syncs: () => ({ syncs: [savedSync], setAside: false }),
+    preview_sync: () => preview(3, 0),
+    run_sync: () => doneRun,
+  });
   render(App);
   await click(await screen.findByRole("button", { name: "Controlla e avvia Foto di Anna" }));
 
@@ -517,24 +554,36 @@ test("home: a saved sync's A and B are in the schema with the caption", async ()
   expect(schema.textContent).toContain('Premi "Controlla e avvia": prima ti mostro cosa cambierà, poi decidi tu.');
 });
 
-test("Storico lists the runs from Rust and swaps the schema for the legend", async () => {
+test("Storico lists the runs from Rust and swaps the schema for the summary panel", async () => {
   backend({
-    list_runs: () => [
-      { ...doneRun, syncName: "Seconda", outcome: "Error" },
-      { ...doneRun, syncName: "Prima" },
-    ],
+    list_runs: () =>
+      runList(
+        [
+          { ...doneRun, syncName: "Seconda", outcome: "Error" },
+          { ...doneRun, syncName: "Prima" },
+        ],
+        {
+          runs: 2,
+          ok: 1,
+          failed: 1,
+          filesCopied: 3,
+          syncs: [{ id: 7, name: "Foto di Anna", lastSuccess: "2026-11-03T12:00:00+01:00", warning: null }],
+        },
+      ),
   });
   render(App);
 
   await click("Storico");
 
   expect(invokeMock).toHaveBeenCalledWith("list_runs");
+  expect(calls("history_summary")).toHaveLength(0);
   expect(screen.getByRole("heading", { name: "Storico" })).toBeTruthy();
-  expect(await screen.findByText("Seconda")).toBeTruthy();
-  const aside = screen.getByRole("complementary", { name: "Come leggere lo storico" });
+  expect(await screen.findByText("Seconda", { selector: "strong" })).toBeTruthy();
+  const aside = screen.getByRole("complementary", { name: "Riepilogo dello storico" });
   expect(aside.textContent).not.toContain("Cosa succede");
   expect(within(aside).getByText("Copie fatte").previousElementSibling?.textContent).toBe("2");
-  expect(within(aside).getByText("Riuscite").previousElementSibling?.textContent).toBe("1");
+  expect(within(aside).getByText("Con errore").previousElementSibling?.textContent).toBe("1");
+  expect(within(aside).getByText("Foto di Anna")).toBeTruthy();
 });
 
 test("a failed list_runs says so instead of showing an empty history", async () => {
@@ -552,8 +601,11 @@ test("a failed list_runs says so instead of showing an empty history", async () 
 });
 
 test("while the history loads there are no old rows, and a late older answer is ignored", async () => {
-  let answerFirst!: (runs: Run[]) => void;
-  const answers = [new Promise<Run[]>((resolve) => (answerFirst = resolve)), Promise.resolve([{ ...doneRun, syncName: "Aggiornata" }])];
+  let answerFirst!: (list: RunList) => void;
+  const answers = [
+    new Promise<RunList>((resolve) => (answerFirst = resolve)),
+    Promise.resolve(runList([{ ...doneRun, syncName: "Aggiornata" }])),
+  ];
   backend({ list_runs: () => answers.shift() });
   render(App);
 
@@ -561,13 +613,13 @@ test("while the history loads there are no old rows, and a late older answer is 
   expect(screen.getByText("Sto leggendo lo storico…")).toBeTruthy();
   await click("Sincronizzazioni");
   await click("Storico");
-  expect(await screen.findByText("Aggiornata")).toBeTruthy();
+  expect(await screen.findByText("Aggiornata", { selector: "strong" })).toBeTruthy();
 
-  answerFirst([{ ...doneRun, syncName: "Vecchia" }]);
+  answerFirst(runList([{ ...doneRun, syncName: "Vecchia" }]));
   await Promise.resolve();
 
-  expect(screen.queryByText("Vecchia")).toBeNull();
-  expect(screen.getByText("Aggiornata")).toBeTruthy();
+  expect(screen.queryByText("Vecchia", { selector: "strong" })).toBeNull();
+  expect(screen.getByText("Aggiornata", { selector: "strong" })).toBeTruthy();
 });
 
 test("closing the window during a run asks to stop the copy", async () => {
@@ -614,7 +666,9 @@ test("turning on the mirror switch shows the red warning at once and the schema 
   await fireEvent.click(mirrorSwitch());
 
   expect(screen.getByRole("alert").textContent).toContain("Attenzione: questa opzione cancella dei file");
-  expect(screen.getByRole("alert").textContent).toContain("Prima di partire vedrai l’elenco dei file che verranno cancellati.");
+  expect(screen.getByRole("alert").textContent).toContain(
+    "Prima di partire vedrai l’elenco dei file che verranno cancellati.",
+  );
   const schema = screen.getByRole("complementary");
   expect(schema.textContent).toContain("Specchio");
   expect(schema.textContent).toContain("Eliminati da B");
@@ -806,7 +860,7 @@ test("Riprova opens a fresh preview of the same saved sync and never runs by its
 });
 
 test("Torna all’elenco and Vai allo storico leave the result", async () => {
-  backend({ preview_sync: () => preview(2, 1), run_sync: () => failedRun, list_runs: () => [failedRun] });
+  backend({ preview_sync: () => preview(2, 1), run_sync: () => failedRun, list_runs: () => runList([failedRun]) });
   render(App);
   await goToPreview();
   await click(await screen.findByRole("button", { name: "Sì, avvia" }));
@@ -836,7 +890,9 @@ test("running as administrator shows the banner about network drives", async () 
   render(App);
 
   expect(
-    await screen.findByText("Le unità di rete potrebbero non essere visibili: apri ColomboSync senza 'Esegui come amministratore'."),
+    await screen.findByText(
+      "Le unità di rete potrebbero non essere visibili: apri ColomboSync senza 'Esegui come amministratore'.",
+    ),
   ).toBeTruthy();
 });
 

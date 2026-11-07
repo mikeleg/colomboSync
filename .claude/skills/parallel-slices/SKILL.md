@@ -10,7 +10,7 @@ The orchestrator (main thread) plans, delegates and verifies. Subagents write co
 ## 1. Pick the wave
 From the dependency graph at the top of `docs/backlog/colombo-sync/backlog.md`: every slice whose "Blocked by" is merged on `main`. Slices that touch the same files (see hot spots) are **not** parallel – sequence them.
 
-Conflict hot spots: `src/App.svelte`, `src/lib/wizard/Wizard.svelte`, `StepPreview.svelte`, `src-tauri/src/lib.rs` (handler list and managed state), `commands.rs`, `runner.rs`, `engine.rs`.
+Conflict hot spots: `src/App.svelte`, `src/wizard/Wizard.svelte`, `StepPreview.svelte`, `src-tauri/src/lib.rs` (handler list and managed state), the slices' `commands.rs`, `run/runner.rs`, `engine/mod.rs`.
 
 ## 2. One worktree per slice (never Claude's `isolation: "worktree"`)
 ```
@@ -31,12 +31,13 @@ Use the `Agent` tool, all in one message. Model: `sonnet` for M slices, `haiku` 
 For each finished branch, in its worktree: `cargo test`, `npm test`, `npm run check`; CI green on all three OS (`gh run watch <id> -R mikeleg/colomboSync --exit-status`, with `export GH_TOKEN=$(gh auth token -u mikeleg)`); read the diff (`git diff main...slice/sx`); run **`/code-review` on every branch before merge**. It has found real data-loss bugs in every slice so far (path rules, links/aliases, normalization, MirrorGuard trusting the UI, overwriting unreadable files, non-atomic writes). Send findings back to the subagent (or fix them) with a test each; re-review until clean.
 
 ## 5. Merge one at a time
-Merge first the branch others depend on. After **each** merge re-run the full suite before the next one:
+`main` accepts changes only through a pull request (GitHub ruleset, no bypass, owner included): never `git push origin main`. Merge first the branch others depend on, one PR at a time:
 ```
-git checkout main && git merge --no-ff slice/s8
-cd src-tauri && cargo test && cd .. && npm test && npm run check
+gh pr create -R mikeleg/colomboSync --base main --head slice/s8 --fill
+gh pr merge <n> -R mikeleg/colomboSync --merge --delete-branch     # only with CI green on the PR
+git checkout main && git pull && cd src-tauri && cargo test && cd .. && npm test && npm run check
 ```
-Rebase or merge `main` into the next slice branch, push it again and wait for CI before merging it. Resolve hot-spot conflicts by keeping both sides (both commands registered, both states managed, both steps/tabs present). Suite red after a merge → fix on `main` before the next merge. Push `main` only with everything green; check CI on `main` afterwards.
+Merge `main` into the next slice branch, push it again and wait for CI before merging its PR. Resolve hot-spot conflicts by keeping both sides (both commands registered, both states managed, both steps/tabs present). Suite red after a merge → fix it with a new branch and PR before the next merge. Check CI on `main` after each merge.
 
 ## 6. Clean up and record
 ```

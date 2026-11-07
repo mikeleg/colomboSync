@@ -7,7 +7,7 @@ Use these names in Rust and TypeScript. UI shows the Italian column.
 | `Sync` / `SavedSync` | sincronizzazione | Saved A→B pair: `name`, `source` (A), `destination` (B), `mode`. `SyncStore` is `syncs.json`. |
 | `source` / A | Da dove / A | Folder copied from. Local path, mapped drive or UNC on Windows; `/`-rooted path on macOS/Linux. |
 | `destination` / B | Dove / B | Folder copied to. Never inside or equal to A, and A is never inside B. |
-| `Engine` | – | The program that copies: **robocopy** on Windows, **rsync** on macOS (openrsync) and Linux (GNU rsync). Picked by `cfg` in `engine.rs`; nothing outside `engine.rs`, `robocopy.rs`, `rsync.rs` knows which one runs. |
+| `Engine` | – | The program that copies: **robocopy** on Windows, **rsync** on macOS (openrsync) and Linux (GNU rsync). Picked by `cfg` in `engine/mod.rs`; nothing outside `engine/` (`mod.rs`, `robocopy.rs`, `rsync.rs`) knows which one runs. |
 | `SyncMode::Copy` | Copia | Default. Never deletes in B (robocopy `/E`, rsync `-rt` without `--delete`). |
 | `SyncMode::Mirror` | Specchio | Makes B identical to A – deletes extras in B (robocopy `/MIR`, rsync `--delete`). Needs explicit consent per run. |
 | `Preview` | Anteprima | Dry run (robocopy `/L`, rsync `--dry-run`): lists/counts of `new`, `updated`, `deleted`. Mandatory before every `Run`. |

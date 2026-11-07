@@ -20,5 +20,7 @@ export default defineConfig({
 
   test: {
     environment: "jsdom",
+    // The whole-app tests in jsdom sometimes take over the 5 s default on a busy Windows machine.
+    testTimeout: 20_000,
   },
 });

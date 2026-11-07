@@ -1,15 +1,17 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { isElevated, listRuns } from "./lib/api";
-  import History from "./lib/History.svelte";
-  import HistoryLegend from "./lib/HistoryLegend.svelte";
-  import Home from "./lib/Home.svelte";
-  import Icon from "./lib/Icon.svelte";
-  import { emptySchema, type SchemaModel } from "./lib/schema";
-  import SchemaView from "./lib/SchemaView.svelte";
-  import ThemeSwitch from "./lib/ThemeSwitch.svelte";
-  import type { Run, Sync } from "./lib/types";
-  import Wizard from "./lib/wizard/Wizard.svelte";
+  import { isElevated } from "./shared/api";
+  import { listRuns } from "./history/api";
+  import History from "./history/History.svelte";
+  import HistoryPanel from "./history/HistoryPanel.svelte";
+  import Home from "./syncs/Home.svelte";
+  import Icon from "./shared/Icon.svelte";
+  import { emptySchema, type SchemaModel } from "./schema/schema";
+  import SchemaView from "./schema/SchemaView.svelte";
+  import ThemeSwitch from "./shared/ThemeSwitch.svelte";
+  import type { RunReport, Sync } from "./shared/types";
+  import type { HistorySummary } from "./history/types";
+  import Wizard from "./wizard/Wizard.svelte";
 
   /** Started as administrator: mapped network drives are not visible then. */
   let elevated = $state(false);
@@ -30,7 +32,8 @@
     view = "wizard";
   }
 
-  let runs = $state<Run[]>([]);
+  let runs = $state<RunReport[]>([]);
+  let summary = $state<HistorySummary | null>(null);
   let historyStatus = $state<"loading" | "ready" | "error">("ready");
   let historyLoads = 0;
 
@@ -38,11 +41,13 @@
     const load = ++historyLoads;
     view = "history";
     runs = [];
+    summary = null;
     historyStatus = "loading";
     try {
       const result = await listRuns();
       if (load !== historyLoads) return; // a newer request owns the screen
-      runs = result;
+      runs = result.runs;
+      summary = result.summary;
       historyStatus = "ready";
     } catch {
       if (load === historyLoads) historyStatus = "error";
@@ -89,7 +94,8 @@
   </header>
   {#if elevated}
     <p class="elevated" role="alert">
-      <Icon name="warn" />Le unità di rete potrebbero non essere visibili: apri ColomboSync senza 'Esegui come amministratore'.
+      <Icon name="warn" />Le unità di rete potrebbero non essere visibili: apri ColomboSync senza 'Esegui come
+      amministratore'.
     </p>
   {/if}
   <div class="layout">
@@ -110,9 +116,9 @@
         />
       {/if}
     </main>
-    <aside class="schema" aria-label={view === "history" ? "Come leggere lo storico" : "Schema di cosa succede"}>
+    <aside class="schema" aria-label={view === "history" ? "Riepilogo dello storico" : "Schema di cosa succede"}>
       {#if view === "history"}
-        <HistoryLegend {runs} />
+        <HistoryPanel {summary} />
       {:else}
         <SchemaView model={schema} />
       {/if}
@@ -123,9 +129,7 @@
 <style>
   .app {
     min-height: 100vh;
-    background:
-      radial-gradient(70% 55% at 85% 0%, var(--glow) 0%, transparent 70%),
-      var(--surface);
+    background: radial-gradient(70% 55% at 85% 0%, var(--glow) 0%, transparent 70%), var(--surface);
   }
   /* Mirror is the one risky mode: the whole page takes a red glow instead of the teal one. */
   .app.mirror {
@@ -200,6 +204,33 @@
   }
   .screen {
     min-width: 0;
+  }
+  /* Only the preview step renders `.content.fill` (see Wizard.svelte): the other steps keep the page scrolling. */
+  .screen:has(:global(.content.fill)) {
+    display: flex;
+    flex-direction: column;
+  }
+  /* Wide and tall window: the wizard fills the window, so only its groups scroll and the start box stays at the bottom.
+     Narrow or short window (below 760px high, where the header takes most of the height): the page scrolls and the
+     start box sticks instead. */
+  @media (min-width: 901px) and (min-height: 760px) {
+    .app:has(:global(.content.fill)) :global(.groups) {
+      min-height: 240px;
+    }
+    .app:has(:global(.content.fill)) {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .app:has(:global(.content.fill)) .layout {
+      flex: 1;
+      min-height: 0;
+      grid-template-rows: minmax(0, 1fr);
+      align-items: stretch;
+    }
+    .app:has(:global(.content.fill)) .screen {
+      min-height: 0;
+    }
   }
   .schema {
     background: var(--panel);

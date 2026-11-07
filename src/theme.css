@@ -24,6 +24,8 @@
   --on-ok: #ffffff;
   --ok-soft: rgb(31 122 58 / 0.12);
   --on-ok-soft: #14552a;
+  --mirror: #6b3fd0;
+  --on-mirror: #ffffff;
   --danger: #c42b1c;
   --on-danger: #ffffff;
   --danger-soft: rgb(196 43 28 / 0.1);
@@ -39,7 +41,9 @@
   --shadow-win: 0 0 0 1px rgb(0 0 0 / 0.06), 0 24px 60px -28px rgb(0 0 0 / 0.45);
   --r: 28px;
   --r-s: 16px;
-  --font: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font:
+    "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue",
+    Arial, sans-serif;
   --mono: Consolas, "Cascadia Mono", "SF Mono", Menlo, monospace;
   color-scheme: light;
 }
@@ -67,6 +71,8 @@
     --on-ok: #002a0c;
     --ok-soft: rgb(48 209 88 / 0.16);
     --on-ok-soft: #8ff0a8;
+    --mirror: #a78bfa;
+    --on-mirror: #1a0b3d;
     --danger: #ff453a;
     --on-danger: #ffffff;
     --danger-soft: rgb(255 69 58 / 0.14);
@@ -105,6 +111,8 @@
   --on-ok: #002a0c;
   --ok-soft: rgb(48 209 88 / 0.16);
   --on-ok-soft: #8ff0a8;
+  --mirror: #a78bfa;
+  --on-mirror: #1a0b3d;
   --danger: #ff453a;
   --on-danger: #ffffff;
   --danger-soft: rgb(255 69 58 / 0.14);
@@ -249,10 +257,13 @@ h3 {
   background: var(--ok);
   color: var(--on-ok);
 }
-.chip.err,
-.chip.mirror {
+.chip.err {
   background: var(--danger);
   color: var(--on-danger);
+}
+.chip.mirror {
+  background: var(--mirror);
+  color: var(--on-mirror);
 }
 .chip.copy {
   background: color-mix(in srgb, var(--fg) 10%, transparent);

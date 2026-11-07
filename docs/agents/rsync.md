@@ -1,6 +1,6 @@
 # rsync – facts the engine relies on (macOS and Linux)
 
-Source: spike of 2026-11-04 on the GitHub runners (`macos-latest` = macOS 26.6, `ubuntu-latest` = Ubuntu with rsync 3.4.1). CI tests on `macos-15` (macOS 15.8, openrsync) and `ubuntu-latest`; the "Which rsync" CI step prints `which rsync` / `rsync --version` in every run. Code: `src-tauri/src/rsync.rs`; fixtures in `src-tauri/tests/fixtures/rsync_preview_*.txt` are real captures. Don't contradict without a test proving otherwise.
+Source: spike of 2026-11-04 on the GitHub runners (`macos-latest` = macOS 26.6, `ubuntu-latest` = Ubuntu with rsync 3.4.1). CI tests on `macos-15` (macOS 15.8, openrsync) and `ubuntu-latest`; the "Which rsync" CI step prints `which rsync` / `rsync --version` in every run. Code: `src-tauri/src/engine/rsync.rs`; fixtures in `src-tauri/tests/fixtures/rsync_preview_*.txt` are real captures. Don't contradict without a test proving otherwise.
 
 ## Which rsync
 - Binary: `rsync` found on `PATH` (`/usr/bin/rsync` on both).
@@ -53,3 +53,7 @@ Source: spike of 2026-11-04 on the GitHub runners (`macos-latest` = macOS 26.6, 
 - Data folder: macOS `~/Library/Application Support/ColomboSync`, Linux `$XDG_DATA_HOME/ColomboSync` (absolute only) or `~/.local/share/ColomboSync`.
 - Case: Linux paths are case-sensitive; macOS volumes usually are not, so the A/B path rules compare lower-cased there. Links are resolved first (deepest existing folder made canonical, the rest appended), so `/Volumes/Macintosh HD` (a link to `/`) cannot hide that B is inside A. The folder picker does not list links that resolve to `/`. Relative paths are refused ("Scrivi il percorso completo, che inizia con /.").
 - MirrorGuard ignores `.DS_Store`, `.Spotlight-V100`, `.fseventsd`, `.Trashes`, `.TemporaryItems`, `lost+found` and `.Trash-*` when it asks whether A is empty (any case except on Linux).
+
+## Error lines in the log (Registro)
+- `engine::error_lines` marks, for the log window, the lines rsync wrote under its own program name (not translated): GNU `rsync: …`, `rsync error: …`, `rsync warning: …`; openrsync `rsync(<pid>): error: …` / `rsync(<pid>): warning: …` (from `log.c` of both projects, not from a capture). Itemize lines never match (they start with their code). The text after the prefix is never read. `rsync_integration.rs` checks that a real failing run has at least one such line.
+- Known and accepted: rsync lines that carry no program-name prefix (GNU's `file has vanished: "…"`, for example) are not highlighted, because telling them apart would mean reading rsync's translated text; the `rsync warning`/`rsync error` summary lines that follow them are. Lines of an error that are mixed up by the pty, or that hold a newline in a file name, are not handled either.

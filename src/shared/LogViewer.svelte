@@ -80,7 +80,9 @@
       {#if log.errorLines.length > 0}
         <button type="button" class="link jump" onclick={goToFirstError}>Vai al primo errore</button>
       {/if}
-      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex
+        The <pre> is focusable so keyboard users can scroll the log; the error spans get tabindex="-1"
+        only to receive focus from "Vai al primo errore". -->
       <pre tabindex="0">{#each segments as { text, error }, i (i)}{#if error}<span class="error-line" tabindex="-1"
               >{text}</span
             >{:else}{text}{/if}{/each}</pre>

@@ -56,15 +56,11 @@ test("a stopped or failed run shows the files copied so far instead of the new a
 });
 
 test("an Errore run shows the explanation Rust gave; an OK run shows none", () => {
-  const { unmount } = show(
-    run({
-      outcome: "Error",
-      explanation: { title: "Non completato: non trovo la cartella B (E:\\Backup).", advice: "Il disco è collegato?" },
-    }),
-  );
+  const title = String.raw`Non completato: non trovo la cartella B (E:\Backup).`;
+  const { unmount } = show(run({ outcome: "Error", explanation: { title, advice: "Il disco è collegato?" } }));
 
   expect(summary().getByText("Errore")).toBeTruthy();
-  expect(summary().getByText("Non completato: non trovo la cartella B (E:\\Backup).")).toBeTruthy();
+  expect(summary().getByText(title)).toBeTruthy();
   expect(summary().getByText("Il disco è collegato?")).toBeTruthy();
 
   unmount();

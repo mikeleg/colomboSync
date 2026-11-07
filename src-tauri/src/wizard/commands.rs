@@ -18,15 +18,14 @@ pub fn describe_place(path: String) -> Place {
     copy_text::place(&path)
 }
 
-/// The steps of the wizard, in the words of the UI (`STEPS` in Wizard.svelte).
+/// The steps of the wizard that can refuse Avanti, in the words of the UI (`STEPS` in Wizard.svelte).
+/// Opzioni never refuses and Anteprima has no Avanti.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Step {
     Source,
     Destination,
     Name,
-    Options,
-    Preview,
 }
 
 /// Avanti: whether the step has what it needs, as the error to show when it has not. `source`,
@@ -48,7 +47,6 @@ pub fn check_step(
             .err()
             .map(Explanation::from),
         Step::Name => name.trim().is_empty().then(error_messages::name_missing),
-        Step::Options | Step::Preview => None,
     };
     missing.map_or(Ok(()), Err)
 }
@@ -225,8 +223,6 @@ mod tests {
         assert_eq!(check(Step::Source, r"D:\A", "", ""), Ok(()));
         assert_eq!(check(Step::Destination, "/A", "/B", ""), Ok(()));
         assert_eq!(check(Step::Name, "", "", "Foto"), Ok(()));
-        assert_eq!(check(Step::Options, "", "", ""), Ok(()));
-        assert_eq!(check(Step::Preview, "", "", ""), Ok(()));
     }
 
     #[test]
@@ -252,8 +248,6 @@ mod tests {
             ("source", Step::Source),
             ("destination", Step::Destination),
             ("name", Step::Name),
-            ("options", Step::Options),
-            ("preview", Step::Preview),
         ] {
             let parsed: Step = serde_json::from_value(id.into()).unwrap();
             assert_eq!(parsed, step);

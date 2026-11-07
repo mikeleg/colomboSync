@@ -1,7 +1,10 @@
 // Shapes returned by the wizard's Rust commands (src-tauri/src/preview_parser.rs, folder browsing).
 
-/** The wizard's steps, as `check_step` names them (`STEPS` in Wizard.svelte). */
+/** The wizard's steps (`STEPS` in Wizard.svelte). */
 export type StepId = "source" | "destination" | "name" | "options" | "preview";
+
+/** The steps Rust checks on Avanti (`check_step`): Opzioni never refuses, Anteprima has no Avanti. */
+export type CheckedStepId = "source" | "destination" | "name";
 
 export interface FileGroup {
   count: number;

@@ -119,18 +119,26 @@
     const here = step;
     const id = stepId;
     if (id === "name" && suggesting) return;
-    let checked: [string, string, string];
-    do {
-      checked = [source.trim(), destination.trim(), name.trim()];
-      try {
-        await checkStep(id, ...checked);
-      } catch (e) {
-        error = toExplanation(e);
-        return;
+    // Opzioni has nothing to ask Rust.
+    if (id === "source" || id === "destination" || id === "name") {
+      for (;;) {
+        const checked: [string, string, string] = [source.trim(), destination.trim(), name.trim()];
+        let refusal: Explanation | null = null;
+        try {
+          await checkStep(id, ...checked);
+        } catch (e) {
+          refusal = toExplanation(e);
+        }
+        if (step !== here) return; // Indietro or a second click got there first: this answer is late
+        // The user may have edited a path or the name while Rust was answering: check what is there now.
+        if (checked[0] !== source.trim() || checked[1] !== destination.trim() || checked[2] !== name.trim()) continue;
+        if (refusal) {
+          error = refusal;
+          return;
+        }
+        break;
       }
-      // The user may have edited a path or the name while Rust was answering: check what is there now.
-    } while (checked[0] !== source.trim() || checked[1] !== destination.trim() || checked[2] !== name.trim());
-    if (step !== here) return; // a second click got there first
+    }
     error = null;
     step++;
     if (STEPS[step].id === "name") suggestName();

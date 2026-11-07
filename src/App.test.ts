@@ -911,6 +911,75 @@ test("Dove: if the paths change while they are being checked, the new ones are c
   expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();
 });
 
+test("Nome: a refusal that arrives after Indietro is dropped, not shown on Dove", async () => {
+  let refuse: (e: unknown) => void = () => {};
+  backend({
+    check_step: (args) => {
+      if ((args as { step: string }).step !== "name") return;
+      return new Promise<void>((_, reject) => (refuse = reject));
+    },
+  });
+  render(App);
+  await click("Nuova sincronizzazione");
+  await typeInto(/Percorso/, String.raw`D:\Foto`);
+  await click("Avanti");
+  await typeInto(/Percorso/, String.raw`E:\Backup`);
+  await click("Avanti");
+  await screen.findByDisplayValue("Copia di Foto");
+  await typeInto(/Nome della sincronizzazione/, "");
+  const pending = click("Avanti");
+  await vi.waitFor(() => expect(calls("check_step").length).toBe(3));
+
+  await click("Indietro");
+  refuse({ title: "Scrivi un nome per riconoscere questa sincronizzazione.", advice: "" });
+  await pending;
+  await act();
+
+  expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("Nome: a refusal for a name that was edited meanwhile is not shown, the new name is checked", async () => {
+  let refuse: (e: unknown) => void = () => {};
+  let nameChecks = 0;
+  backend({
+    check_step: (args) => {
+      if ((args as { step: string }).step !== "name") return;
+      if (++nameChecks === 1) return new Promise<void>((_, reject) => (refuse = reject));
+    },
+  });
+  render(App);
+  await click("Nuova sincronizzazione");
+  await typeInto(/Percorso/, String.raw`D:\Foto`);
+  await click("Avanti");
+  await typeInto(/Percorso/, String.raw`E:\Backup`);
+  await click("Avanti");
+  await screen.findByDisplayValue("Copia di Foto");
+  await typeInto(/Nome della sincronizzazione/, "");
+  const pending = click("Avanti");
+  await vi.waitFor(() => expect(nameChecks).toBe(1));
+
+  await typeInto(/Nome della sincronizzazione/, "Foto");
+  refuse({ title: "Scrivi un nome per riconoscere questa sincronizzazione.", advice: "" });
+  await pending;
+
+  await vi.waitFor(() => expect(screen.getByRole("heading", { name: "Opzioni" })).toBeTruthy());
+  expect(nameChecks).toBe(2);
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("Opzioni: Avanti asks Rust nothing, it goes straight to the preview", async () => {
+  backend({ preview_sync: () => preview(2, 1) });
+  render(App);
+  await goToPreview();
+
+  expect(calls("check_step").map(([, args]) => (args as { step: string }).step)).toEqual([
+    "source",
+    "destination",
+    "name",
+  ]);
+});
+
 // What Rust sends (error_messages): the sentence that says what happened, and what to do.
 const unreachable = {
   title: String.raw`Non completato: la cartella di rete \\NAS non è raggiungibile.`,

@@ -1,9 +1,14 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { expect, test, vi } from "vitest";
-import type { Preview } from "./types";
+import type { Preview, Segment } from "./types";
 import StepPreview from "./StepPreview.svelte";
 
 const group = (count: number, files: string[] = []) => ({ count, files });
+/** Rust's sentence in pieces: the words are plain, the numbers are the bold counts. */
+const summaryOf = (...parts: (string | number)[]): Segment[] =>
+  parts.map((part) => (typeof part === "number" ? { text: String(part), bold: true } : { text: part, bold: false }));
+/** The bold pieces of the summary sentence, as the screen shows them. */
+const boldOf = (paragraph: HTMLElement) => [...paragraph.querySelectorAll("b")].map((b) => b.textContent);
 const preview = (n: number, u: number, files = { n: ["a.jpg", "b.jpg"], u: ["c.pdf"] }): Preview => ({
   new: group(n, files.n.slice(0, n)),
   updated: group(u, files.u.slice(0, u)),
@@ -13,7 +18,7 @@ const preview = (n: number, u: number, files = { n: ["a.jpg", "b.jpg"], u: ["c.p
   previewToken: "token-1",
   // What Rust says for these counts in Copy mode (see wizard/commands.rs).
   caption: "Da fare: copiare 148 file nuovi, aggiornarne 1.",
-  summary: "Ecco cosa verrà fatto: 148 file nuovi, 1 da aggiornare.",
+  summary: summaryOf("Ecco cosa verrà fatto: ", 148, " file nuovi, ", 1, " da aggiornare."),
 });
 
 const props = {
@@ -199,19 +204,33 @@ test("mirror with no extra files: says so, no consent checkbox, Sì, avvia is en
   expect((screen.getByRole("button", { name: "Sì, avvia" }) as HTMLButtonElement).disabled).toBe(false);
 });
 
-test("the summary is Rust's sentence, followed by the total weight", () => {
+test("the summary is Rust's sentence, followed by the total weight, with the counts in bold", () => {
   render(StepPreview, { ...props, preview: preview(148, 1) });
 
-  expect(screen.getByText(/Ecco cosa verrà fatto/).textContent).toBe(
+  const paragraph = screen.getByText(/Ecco cosa verrà fatto/);
+  expect(paragraph.textContent).toBe(
     "Ecco cosa verrà fatto: 148 file nuovi, 1 da aggiornare. Peso totale da copiare: 5 MB.",
   );
+  expect(boldOf(paragraph)).toEqual(["148", "1", "5 MB"]);
 });
 
-test("mirror: the summary also counts what will be deleted", () => {
-  const summary = "Ecco cosa succederà in B: 3 file nuovi, 1 da aggiornare, 2 da cancellare.";
+test("mirror: the summary also counts what will be deleted, each count in bold", () => {
+  const summary = summaryOf(
+    "Ecco cosa succederà in B: ",
+    3,
+    " file nuovi, ",
+    1,
+    " da aggiornare, ",
+    2,
+    " da cancellare.",
+  );
   render(StepPreview, { ...mirrorProps, preview: mirrorPreview(2, { summary }) });
 
-  expect(screen.getByText(/Ecco cosa succederà in B/).textContent).toBe(`${summary} Peso totale da copiare: 5 MB.`);
+  const paragraph = screen.getByText(/Ecco cosa succederà in B/);
+  expect(paragraph.textContent).toBe(
+    "Ecco cosa succederà in B: 3 file nuovi, 1 da aggiornare, 2 da cancellare. Peso totale da copiare: 5 MB.",
+  );
+  expect(boldOf(paragraph)).toEqual(["3", "1", "2", "5 MB"]);
 });
 
 test("MirrorGuard: when blocked it shows the warning and offers no Sì, avvia and no consent", async () => {

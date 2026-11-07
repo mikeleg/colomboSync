@@ -12,6 +12,12 @@ export interface FileGroup {
   files: string[];
 }
 
+/** A piece of a sentence Rust made; the counts are `bold`. */
+export interface Segment {
+  text: string;
+  bold: boolean;
+}
+
 export interface Preview {
   new: FileGroup;
   updated: FileGroup;
@@ -23,8 +29,8 @@ export interface Preview {
   previewToken: string | null;
   /** The schema panel's caption: the `blocked` reason, or what there is to do ("B è già aggiornato."). */
   caption: string;
-  /** "Ecco cosa verrà fatto: 148 file nuovi, 1 da aggiornare." */
-  summary: string;
+  /** "Ecco cosa verrà fatto: 148 file nuovi, 1 da aggiornare.", in pieces: the counts are bold. */
+  summary: Segment[];
 }
 
 interface Folder {

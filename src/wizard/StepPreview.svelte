@@ -3,7 +3,7 @@
   import Warnbox from "../shared/Warnbox.svelte";
   import { formatNumber, formatSize } from "../shared/format";
   import type { Explanation } from "../shared/types";
-  import type { FileGroup, Preview } from "./types";
+  import type { FileGroup, Preview, Segment } from "./types";
 
   let {
     scanning,
@@ -51,6 +51,9 @@
   {/if}
 {/snippet}
 
+{#snippet sentence(parts: Segment[])}{#each parts as part, i (i)}{#if part.bold}<b>{part.text}</b
+      >{:else}{part.text}{/if}{/each}{/snippet}
+
 {#if scanning}
   <div class="scan" role="status">
     <span class="spin"></span>
@@ -87,7 +90,7 @@
         </Warnbox>
       </div>
     {:else}
-      <p class="sum">{preview.summary} Peso totale da copiare: <b>{formatSize(preview.bytes)}</b>.</p>
+      <p class="sum">{@render sentence(preview.summary)} Peso totale da copiare: <b>{formatSize(preview.bytes)}</b>.</p>
     {/if}
     <div class="groups">
       {@render group("Da copiare (nuovi)", "File che ci sono in A e non ci sono ancora in B.", preview.new)}

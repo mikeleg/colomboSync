@@ -5,7 +5,7 @@ use super::folder_browser::{self, FolderListing};
 use super::preview::{self, PreviewMemo};
 use crate::engine::preview_parser::Preview;
 use crate::shared::blocking::blocking;
-use crate::shared::copy_text::{self, Place};
+use crate::shared::copy_text::{self, Place, Segment};
 use crate::shared::domain::SyncMode;
 use crate::shared::error_messages::{self, Explanation};
 use crate::shared::path_rules;
@@ -53,7 +53,7 @@ pub fn check_step(
 
 /// A preview and the token that lets `run_sync` confirm it; no token when the preview is blocked.
 /// With the sentences the screen shows for it: the schema caption (what MirrorGuard says when
-/// blocked) and the summary of what would be done.
+/// blocked) and the summary of what would be done, in segments (the counts are bold).
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewReport {
@@ -61,7 +61,7 @@ pub struct PreviewReport {
     preview: Preview,
     preview_token: Option<String>,
     caption: String,
-    summary: String,
+    summary: Vec<Segment>,
 }
 
 impl PreviewReport {
@@ -163,7 +163,14 @@ mod tests {
         );
         assert_eq!(
             json["summary"],
-            "Ecco cosa verrà fatto: 148 file nuovi, 1 da aggiornare."
+            serde_json::json!([
+                { "text": "Ecco cosa verrà fatto: ", "bold": false },
+                { "text": "148", "bold": true },
+                { "text": " file nuovi, ", "bold": false },
+                { "text": "1", "bold": true },
+                { "text": " da aggiornare", "bold": false },
+                { "text": ".", "bold": false },
+            ])
         );
 
         let json = report(counted(3, 1, 2), None, SyncMode::Mirror);
@@ -172,7 +179,12 @@ mod tests {
             "Da fare: copiare 3 file nuovi, aggiornarne 1, cancellarne 2 da B."
         );
         assert_eq!(
-            json["summary"],
+            json["summary"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|s| s["text"].as_str().unwrap())
+                .collect::<String>(),
             "Ecco cosa succederà in B: 3 file nuovi, 1 da aggiornare, 2 da cancellare."
         );
 

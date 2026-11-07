@@ -22,7 +22,13 @@ const preview = (n: number, u: number): Preview => ({
   previewToken: "token-1",
   // The sentences Rust makes for these counts in Copy mode (see shared/copy_text.rs).
   caption: n + u === 0 ? "B è già aggiornato." : `Da fare: copiare ${n} file nuovi, aggiornarne ${u}.`,
-  summary: `Ecco cosa verrà fatto: ${n} file nuovi, ${u} da aggiornare.`,
+  summary: [
+    { text: "Ecco cosa verrà fatto: ", bold: false },
+    { text: String(n), bold: true },
+    { text: " file nuovi, ", bold: false },
+    { text: String(u), bold: true },
+    { text: " da aggiornare.", bold: false },
+  ],
 });
 
 // A run as Rust sends it, texts included: the screens show them as they are.

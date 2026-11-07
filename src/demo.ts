@@ -357,7 +357,7 @@ async function previewSync(source: string, destination: string, mode: SyncMode):
       blocked: SOURCE_EMPTY,
       previewToken: null, // a blocked preview confirms nothing
       caption: SOURCE_EMPTY,
-      summary: "",
+      summary: [],
     };
   }
   const previewToken = `demo-${++previews}`;
@@ -369,7 +369,24 @@ async function previewSync(source: string, destination: string, mode: SyncMode):
     blocked: null,
     previewToken,
     caption: `Da fare: copiare ${num(120)} file nuovi, aggiornarne ${num(40)}${mode === "Mirror" ? `, cancellarne ${num(25)} da B` : ""}.`,
-    summary: `${mode === "Mirror" ? "Ecco cosa succederà in B" : "Ecco cosa verrà fatto"}: ${num(120)} file nuovi, ${num(40)} da aggiornare${mode === "Mirror" ? `, ${num(25)} da cancellare` : ""}.`,
+    summary:
+      mode === "Mirror"
+        ? [
+            { text: "Ecco cosa succederà in B: ", bold: false },
+            { text: num(120), bold: true },
+            { text: " file nuovi, ", bold: false },
+            { text: num(40), bold: true },
+            { text: " da aggiornare, ", bold: false },
+            { text: num(25), bold: true },
+            { text: " da cancellare.", bold: false },
+          ]
+        : [
+            { text: "Ecco cosa verrà fatto: ", bold: false },
+            { text: num(120), bold: true },
+            { text: " file nuovi, ", bold: false },
+            { text: num(40), bold: true },
+            { text: " da aggiornare.", bold: false },
+          ],
   };
   lastPreview = {
     token: previewToken,

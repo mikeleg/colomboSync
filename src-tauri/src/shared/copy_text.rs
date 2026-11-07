@@ -136,21 +136,46 @@ pub fn preview_caption(counts: Counts, mode: SyncMode) -> String {
     )
 }
 
-/// The first sentence of a preview that is not blocked.
-pub fn preview_summary(counts: Counts, mode: SyncMode) -> String {
-    let (lead, deleted) = if mode == SyncMode::Mirror {
-        (
-            "Ecco cosa succederà in B",
-            format!(", {} da cancellare", format_number(counts.deleted)),
-        )
+/// A piece of a sentence Rust makes: the screen shows `bold` pieces (the counts) in bold.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Segment {
+    pub text: String,
+    pub bold: bool,
+}
+
+fn words(text: &str) -> Segment {
+    Segment {
+        text: text.to_string(),
+        bold: false,
+    }
+}
+
+fn count(n: usize) -> Segment {
+    Segment {
+        text: format_number(n),
+        bold: true,
+    }
+}
+
+/// The first sentence of a preview that is not blocked, in pieces: each count is bold.
+pub fn preview_summary(counts: Counts, mode: SyncMode) -> Vec<Segment> {
+    let mut sentence = if mode == SyncMode::Mirror {
+        vec![words("Ecco cosa succederà in B: ")]
     } else {
-        ("Ecco cosa verrà fatto", String::new())
+        vec![words("Ecco cosa verrà fatto: ")]
     };
-    format!(
-        "{lead}: {} file nuovi, {} da aggiornare{deleted}.",
-        format_number(counts.new),
-        format_number(counts.updated)
-    )
+    sentence.extend([
+        count(counts.new),
+        words(" file nuovi, "),
+        count(counts.updated),
+        words(" da aggiornare"),
+    ]);
+    if mode == SyncMode::Mirror {
+        sentence.extend([words(", "), count(counts.deleted), words(" da cancellare")]);
+    }
+    sentence.push(words("."));
+    sentence
 }
 
 /// What kind of place a path is, for the schema panel and the home cards.
@@ -390,16 +415,44 @@ mod tests {
         );
     }
 
+    /// The sentence as one string, and the pieces that are bold.
+    fn sentence(segments: &[Segment]) -> (String, Vec<&str>) {
+        let text = segments.iter().map(|s| s.text.as_str()).collect();
+        let bold = segments
+            .iter()
+            .filter(|s| s.bold)
+            .map(|s| s.text.as_str())
+            .collect();
+        (text, bold)
+    }
+
     #[test]
     fn the_preview_summary_also_counts_what_will_be_deleted_in_a_mirror() {
         assert_eq!(
-            preview_summary(counts(148, 1, 0), SyncMode::Copy),
-            "Ecco cosa verrà fatto: 148 file nuovi, 1 da aggiornare."
+            sentence(&preview_summary(counts(148, 1, 0), SyncMode::Copy)),
+            (
+                "Ecco cosa verrà fatto: 148 file nuovi, 1 da aggiornare.".to_string(),
+                vec!["148", "1"]
+            )
         );
         assert_eq!(
-            preview_summary(counts(3, 1, 2), SyncMode::Mirror),
-            "Ecco cosa succederà in B: 3 file nuovi, 1 da aggiornare, 2 da cancellare."
+            sentence(&preview_summary(counts(3, 1, 2), SyncMode::Mirror)),
+            (
+                "Ecco cosa succederà in B: 3 file nuovi, 1 da aggiornare, 2 da cancellare."
+                    .to_string(),
+                vec!["3", "1", "2"]
+            )
         );
+    }
+
+    #[test]
+    fn the_preview_summary_bolds_the_counts_and_only_them() {
+        let segments = preview_summary(counts(12_345, 0, 0), SyncMode::Copy);
+        assert_eq!(
+            segments.iter().map(|s| s.bold).collect::<Vec<_>>(),
+            [false, true, false, true, false, false]
+        );
+        assert_eq!(segments[1].text, "12.345");
     }
 
     #[test]

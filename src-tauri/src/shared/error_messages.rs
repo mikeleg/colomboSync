@@ -162,6 +162,38 @@ pub fn mirror_without_consent() -> Explanation {
     )
 }
 
+/// A background task died instead of answering: nothing the user did.
+pub fn unexpected_failure() -> Explanation {
+    explanation(
+        "Qualcosa è andato storto dentro l’app.",
+        "Riprova. Se succede ancora, chiudi e riapri ColomboSync.",
+    )
+}
+
+/// `syncs.json` can be read neither nor set aside.
+pub fn cannot_read_syncs() -> Explanation {
+    "Non riesco a leggere le sincronizzazioni salvate.".into()
+}
+
+pub fn cannot_save_sync(error: &io::Error) -> Explanation {
+    format!("Non riesco a salvare la sincronizzazione: {error}").into()
+}
+
+pub fn cannot_read_history() -> Explanation {
+    "Non riesco a leggere lo storico.".into()
+}
+
+/// A run's log could not be shown: the file is gone, or it cannot be read.
+pub fn explain_log_error(error: &io::Error) -> Explanation {
+    if error.kind() == io::ErrorKind::NotFound {
+        return "Il registro di questa copia non è più disponibile.".into();
+    }
+    explanation(
+        "Non riesco ad aprire il registro di questa copia.",
+        "Controlla che il file ci sia ancora e di avere il permesso di leggerlo.",
+    )
+}
+
 pub fn run_already_in_progress() -> Explanation {
     "C’è già una copia in corso.".into()
 }
@@ -402,6 +434,50 @@ mod tests {
 
     const A: &str = r"D:\Foto";
     const NAS_B: &str = r"\\NAS\Backup";
+
+    #[test]
+    fn the_commands_words_keep_what_the_ui_used_to_say() {
+        assert_eq!(
+            cannot_read_syncs().title,
+            "Non riesco a leggere le sincronizzazioni salvate."
+        );
+        assert_eq!(
+            cannot_save_sync(&io::Error::other("disco pieno")).title,
+            "Non riesco a salvare la sincronizzazione: disco pieno"
+        );
+        assert_eq!(
+            cannot_read_history().title,
+            "Non riesco a leggere lo storico."
+        );
+        assert_eq!(
+            run_already_in_progress().title,
+            "C’è già una copia in corso."
+        );
+        assert_eq!(
+            run_without_preview().advice,
+            "Prima controlla le due cartelle con l’anteprima, poi avvia."
+        );
+    }
+
+    #[test]
+    fn a_log_that_cannot_be_shown_says_if_it_is_gone_or_unreadable_and_never_the_os_text() {
+        let gone = explain_log_error(&io::Error::from(io::ErrorKind::NotFound));
+        assert_eq!(
+            gone.title,
+            "Il registro di questa copia non è più disponibile."
+        );
+        assert_eq!(gone.advice, "");
+
+        let outside = io::Error::new(io::ErrorKind::PermissionDenied, "outside the logs");
+        for error in [outside, io::Error::from(io::ErrorKind::TimedOut)] {
+            let unreadable = explain_log_error(&error);
+            assert_eq!(
+                unreadable.title,
+                "Non riesco ad aprire il registro di questa copia."
+            );
+            assert!(!unreadable.advice.contains("outside"));
+        }
+    }
 
     #[test]
     fn the_os_error_decides_the_message_of_a_failed_folder_creation() {

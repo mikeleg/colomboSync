@@ -13,8 +13,8 @@ use tauri::{AppHandle, Manager};
 
 /// Rejects a destination that is A itself or inside A, with the message to show on step "Dove".
 #[tauri::command]
-pub fn check_destination(source: String, destination: String) -> Result<(), String> {
-    path_rules::check_destination(&source, &destination).map_err(str::to_string)
+pub fn check_destination(source: String, destination: String) -> Result<(), Explanation> {
+    Ok(path_rules::check_destination(&source, &destination)?)
 }
 
 /// A preview and the token that lets `run_sync` confirm it; no token when the preview is blocked.
@@ -50,7 +50,7 @@ pub async fn preview_sync(
 /// Drives (empty `path`) or the subfolders of `path`. On a blocking thread: a disconnected
 /// mapped drive can take seconds to answer and must not freeze the UI.
 #[tauri::command]
-pub async fn browse_folders(path: String) -> Result<FolderListing, String> {
+pub async fn browse_folders(path: String) -> Result<FolderListing, Explanation> {
     blocking(move || Ok(folder_browser::browse(&path))).await
 }
 

@@ -103,6 +103,13 @@ test("a folder that cannot be opened says so, instead of looking empty and chose
   expect(screen.getByRole("button", { name: /Livello superiore/ })).toBeTruthy();
 });
 
+test("when listing the folders is refused, it shows Rust's explanation as it is", async () => {
+  invokeMock.mockRejectedValue({ title: CANNOT_OPEN, advice: "" });
+  render(FolderPicker, { ...props, value: NAS });
+
+  expect((await screen.findByRole("alert")).textContent).toBe(CANNOT_OPEN);
+});
+
 test("typing a path by hand is tucked away; Enter there behaves as Avanti", async () => {
   const onenter = vi.fn();
   render(FolderPicker, { ...props, onenter });

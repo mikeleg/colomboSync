@@ -346,6 +346,8 @@ async function previewSync(source: string, destination: string, mode: SyncMode):
       bytes: 0,
       blocked: SOURCE_EMPTY,
       previewToken: null, // a blocked preview confirms nothing
+      caption: SOURCE_EMPTY,
+      summary: "",
     };
   }
   const previewToken = `demo-${++previews}`;
@@ -356,6 +358,8 @@ async function previewSync(source: string, destination: string, mode: SyncMode):
     bytes: Math.round(1.8 * 1024 ** 3),
     blocked: null,
     previewToken,
+    caption: `Da fare: copiare ${num(120)} file nuovi, aggiornarne ${num(40)}${mode === "Mirror" ? `, cancellarne ${num(25)} da B` : ""}.`,
+    summary: `${mode === "Mirror" ? "Ecco cosa succederà in B" : "Ecco cosa verrà fatto"}: ${num(120)} file nuovi, ${num(40)} da aggiornare${mode === "Mirror" ? `, ${num(25)} da cancellare` : ""}.`,
   };
   lastPreview = {
     token: previewToken,
@@ -526,6 +530,17 @@ mockIPC(
         return lastSegment(text("source"));
       case "check_destination":
         return undefined;
+      case "check_step": {
+        const missing: Record<string, [string, string]> = {
+          source: [text("source"), "Scegli prima la cartella da copiare."],
+          destination: [text("destination"), "Scegli prima dove mettere la copia."],
+          name: [text("name"), "Scrivi un nome per riconoscere questa sincronizzazione."],
+        };
+        const [value, title] = missing[text("step")] ?? ["x", ""];
+        if (value.trim()) return undefined;
+        const refused: Explanation = { title, advice: "" };
+        throw refused;
+      }
       case "save_sync": {
         const sync: Sync = {
           id: nextId++,

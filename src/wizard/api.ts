@@ -1,7 +1,7 @@
 // The only place the wizard talks to Rust: Tauri commands. Each one rejects with an `Explanation`.
 import { invoke } from "@tauri-apps/api/core";
 import type { SyncMode } from "../shared/types";
-import type { FolderListing, Preview } from "./types";
+import type { FolderListing, Preview, StepId } from "./types";
 
 /** The preview, with the token that lets `runSync` confirm it. */
 export const previewSync = (source: string, destination: string, mode: SyncMode) =>
@@ -16,6 +16,10 @@ export const browseFolders = (path: string) => invoke<FolderListing>("browse_fol
  */
 export const createFolder = (source: string, parent: string, name: string) =>
   invoke<string>("create_folder", { source, parent, name });
+
+/** Avanti: rejects with what is missing on `step` (a folder to copy, a place for the copy, a name). */
+export const checkStep = (step: StepId, source: string, destination: string, name: string) =>
+  invoke<void>("check_step", { step, source, destination, name });
 
 /** Rejects for a B that is A itself or inside A. */
 export const checkDestination = (source: string, destination: string) =>

@@ -20,6 +20,9 @@ const preview = (n: number, u: number): Preview => ({
   bytes: 3_000_000,
   blocked: null,
   previewToken: "token-1",
+  // The sentences Rust makes for these counts in Copy mode (see shared/copy_text.rs).
+  caption: n + u === 0 ? "B è già aggiornato." : `Da fare: copiare ${n} file nuovi, aggiornarne ${u}.`,
+  summary: `Ecco cosa verrà fatto: ${n} file nuovi, ${u} da aggiornare.`,
 });
 
 // A run as Rust sends it, texts included: the screens show them as they are.
@@ -82,6 +85,17 @@ function backend(handlers: Handlers = {}) {
     list_syncs: () => ({ syncs: [], setAside: false }),
     default_sync_name: () => "Copia di Foto",
     check_destination: () => undefined, // B is fine
+    // The words and rules of `check_step` in Rust (wizard/commands.rs).
+    check_step: (args) => {
+      const { step, source, destination, name } = args as Record<string, string>;
+      const missing: Record<string, [string, string]> = {
+        source: [source, "Scegli prima la cartella da copiare."],
+        destination: [destination, "Scegli prima dove mettere la copia."],
+        name: [name, "Scrivi un nome per riconoscere questa sincronizzazione."],
+      };
+      const [value, title] = missing[step] ?? ["x", ""];
+      if (!value.trim()) throw { title, advice: "" };
+    },
     is_elevated: () => false,
     save_sync: (args) => ({ id: 7, ...args }),
   };
@@ -149,6 +163,19 @@ test("A and B through Opzioni: the preview and the schema show the same counts",
   expect(screen.getByText("148", { selector: "aside b" })).toBeTruthy();
   expect(screen.getByText("3", { selector: "aside b" })).toBeTruthy();
   expect(screen.getByText("Nessun file viene cancellato in B")).toBeTruthy();
+});
+
+test("the schema caption on the preview is the one Rust sent, as it is", async () => {
+  backend({
+    preview_sync: () => ({ ...preview(3, 1), caption: "Da fare: copiare 3 file nuovi, aggiornarne 1." }),
+  });
+  render(App);
+
+  await goToPreview();
+
+  expect(
+    await screen.findByText("Da fare: copiare 3 file nuovi, aggiornarne 1.", { selector: "aside p" }),
+  ).toBeTruthy();
 });
 
 test("only the preview step fills the window: the other steps scroll with the page", async () => {
@@ -295,7 +322,9 @@ test("Indietro, cambio qualcosa goes back to Opzioni keeping what was typed; No,
   expect((screen.getByLabelText(/Percorso/) as HTMLInputElement).value).toBe("E:\\Backup");
 
   await click("Avanti");
+  await screen.findByRole("heading", { name: "Come la chiamo?" });
   await click("Avanti");
+  await screen.findByRole("heading", { name: "Opzioni" });
   await click("Avanti");
   await click(await screen.findByRole("button", { name: "No, salva e basta" }));
 
@@ -549,6 +578,7 @@ test("while the suggested name is on its way Avanti waits, and no empty-name err
   await click("Avanti");
   await typeInto(/Percorso/, "E:\\Backup");
   await click("Avanti");
+  await screen.findByRole("heading", { name: "Come la chiamo?" });
 
   expect((screen.getByRole("button", { name: "Avanti" }) as HTMLButtonElement).disabled).toBe(true);
   await act(() => asked[0].answer("Copia di Foto"));
@@ -567,11 +597,14 @@ test("an older suggested name arriving late does not replace the newer one", asy
   await click("Avanti");
   await typeInto(/Percorso/, "E:\\Backup");
   await click("Avanti"); // asks for D:\Foto
+  await screen.findByRole("heading", { name: "Come la chiamo?" });
   await click("Indietro");
   await click("Indietro");
   await typeInto(/Percorso/, "D:\\Altro");
   await click("Avanti");
+  await screen.findByRole("heading", { name: "Dove copio?" });
   await click("Avanti"); // asks for D:\Altro
+  await screen.findByRole("heading", { name: "Come la chiamo?" });
 
   await act(() => asked[1].answer("Copia di Altro"));
   await act(() => asked[0].answer("Copia di Foto"));
@@ -774,7 +807,7 @@ test("consent is per run: going back and opening the preview again unchecks it",
 
 test("MirrorGuard: a blocked mirror preview shows Rust's reason, in the schema too, and offers no Sì, avvia", async () => {
   const reason = "Motivo deciso da Rust: non si parte.";
-  backend({ preview_sync: () => ({ ...preview(0, 0), blocked: reason }) });
+  backend({ preview_sync: () => ({ ...preview(0, 0), blocked: reason, caption: reason }) });
   render(App);
   await toOpzioni();
   await fireEvent.click(mirrorSwitch());
@@ -788,7 +821,7 @@ test("MirrorGuard: a blocked mirror preview shows Rust's reason, in the schema t
 
 test("a blocked preview that still counts files does not say 'Da fare' in the schema", async () => {
   const reason = "Motivo deciso da Rust: non si parte.";
-  backend({ preview_sync: () => ({ ...preview(2, 1), blocked: reason }) });
+  backend({ preview_sync: () => ({ ...preview(2, 1), blocked: reason, caption: reason }) });
   render(App);
   await toOpzioni();
   await fireEvent.click(mirrorSwitch());

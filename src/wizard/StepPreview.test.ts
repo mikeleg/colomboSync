@@ -11,6 +11,9 @@ const preview = (n: number, u: number, files = { n: ["a.jpg", "b.jpg"], u: ["c.p
   bytes: 5_000_000,
   blocked: null,
   previewToken: "token-1",
+  // What Rust says for these counts in Copy mode (see wizard/commands.rs).
+  caption: "Da fare: copiare 148 file nuovi, aggiornarne 1.",
+  summary: "Ecco cosa verrà fatto: 148 file nuovi, 1 da aggiornare.",
 });
 
 const props = {
@@ -196,10 +199,19 @@ test("mirror with no extra files: says so, no consent checkbox, Sì, avvia is en
   expect((screen.getByRole("button", { name: "Sì, avvia" }) as HTMLButtonElement).disabled).toBe(false);
 });
 
-test("mirror: the summary also counts what will be deleted", () => {
-  render(StepPreview, { ...mirrorProps, preview: mirrorPreview(2) });
+test("the summary is Rust's sentence, followed by the total weight", () => {
+  render(StepPreview, { ...props, preview: preview(148, 1) });
 
-  expect(screen.getByText(/Ecco cosa succederà in B/).textContent).toContain("2 da cancellare");
+  expect(screen.getByText(/Ecco cosa verrà fatto/).textContent).toBe(
+    "Ecco cosa verrà fatto: 148 file nuovi, 1 da aggiornare. Peso totale da copiare: 5 MB.",
+  );
+});
+
+test("mirror: the summary also counts what will be deleted", () => {
+  const summary = "Ecco cosa succederà in B: 3 file nuovi, 1 da aggiornare, 2 da cancellare.";
+  render(StepPreview, { ...mirrorProps, preview: mirrorPreview(2, { summary }) });
+
+  expect(screen.getByText(/Ecco cosa succederà in B/).textContent).toBe(`${summary} Peso totale da copiare: 5 MB.`);
 });
 
 test("MirrorGuard: when blocked it shows the warning and offers no Sì, avvia and no consent", async () => {

@@ -49,12 +49,8 @@
     let result: FolderListing;
     try {
       result = await browseFolders(path);
-    } catch {
-      result = {
-        parent: "",
-        folders: [],
-        error: "Non riesco ad aprire questa cartella. Il disco o la rete sono collegati?",
-      };
+    } catch (e) {
+      result = { parent: "", folders: [], error: toExplanation(e).title };
     }
     if (seq === lastLoad) listing = result;
   }

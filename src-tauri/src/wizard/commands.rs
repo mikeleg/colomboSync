@@ -5,10 +5,11 @@ use super::folder_browser::{self, FolderListing};
 use super::preview::{self, PreviewMemo};
 use crate::engine::preview_parser::Preview;
 use crate::shared::blocking::blocking;
+use crate::shared::copy_text;
 use crate::shared::domain::SyncMode;
-use crate::shared::error_messages::Explanation;
+use crate::shared::error_messages::{self, Explanation};
 use crate::shared::path_rules;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
 /// Rejects a destination that is A itself or inside A, with the message to show on step "Dove".
@@ -17,13 +18,64 @@ pub fn check_destination(source: String, destination: String) -> Result<(), Expl
     Ok(path_rules::check_destination(&source, &destination)?)
 }
 
+/// The steps of the wizard, in the words of the UI (`STEPS` in Wizard.svelte).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Step {
+    Source,
+    Destination,
+    Name,
+    Options,
+    Preview,
+}
+
+/// Avanti: whether the step has what it needs, as the error to show when it has not. `source`,
+/// `destination` and `name` are what the user has written so far.
+#[tauri::command]
+pub fn check_step(
+    step: Step,
+    source: String,
+    destination: String,
+    name: String,
+) -> Result<(), Explanation> {
+    let missing = match step {
+        Step::Source => source.trim().is_empty().then(error_messages::choose_source),
+        Step::Destination => destination
+            .trim()
+            .is_empty()
+            .then(error_messages::choose_destination),
+        Step::Name => name.trim().is_empty().then(error_messages::name_missing),
+        Step::Options | Step::Preview => None,
+    };
+    missing.map_or(Ok(()), Err)
+}
+
 /// A preview and the token that lets `run_sync` confirm it; no token when the preview is blocked.
+/// With the sentences the screen shows for it: the schema caption (what MirrorGuard says when
+/// blocked) and the summary of what would be done.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewReport {
     #[serde(flatten)]
     preview: Preview,
     preview_token: Option<String>,
+    caption: String,
+    summary: String,
+}
+
+impl PreviewReport {
+    fn new(preview: Preview, preview_token: Option<String>, mode: SyncMode) -> Self {
+        let counts = preview.counts();
+        PreviewReport {
+            caption: preview
+                .blocked
+                .clone()
+                .unwrap_or_else(|| copy_text::preview_caption(counts, mode)),
+            summary: copy_text::preview_summary(counts, mode),
+            preview,
+            preview_token,
+        }
+    }
 }
 
 #[tauri::command]
@@ -43,17 +95,16 @@ pub async fn preview_sync(
     let preview_token =
         app.state::<PreviewMemo>()
             .remember(started, &source, &destination, mode, &preview);
-    Ok(PreviewReport {
-        preview,
-        preview_token,
-    })
+    Ok(PreviewReport::new(preview, preview_token, mode))
 }
 
 /// Drives (empty `path`) or the subfolders of `path`. On a blocking thread: a disconnected
 /// mapped drive can take seconds to answer and must not freeze the UI.
 #[tauri::command]
 pub async fn browse_folders(path: String) -> Result<FolderListing, Explanation> {
-    blocking(move || Ok(folder_browser::browse(&path))).await
+    blocking(move || Ok(folder_browser::browse(&path)))
+        .await
+        .map_err(|_| error_messages::cannot_open_folder())
 }
 
 /// A new folder `name` inside `parent` to be used as B for the folder A `source`, whose path is
@@ -71,19 +122,114 @@ pub async fn create_folder(
 mod tests {
     use super::*;
 
+    use crate::engine::preview_parser::FileGroup;
+
+    fn report(preview: Preview, preview_token: Option<&str>, mode: SyncMode) -> serde_json::Value {
+        let preview_token = preview_token.map(str::to_string);
+        serde_json::to_value(PreviewReport::new(preview, preview_token, mode)).unwrap()
+    }
+
+    fn counted(new: usize, updated: usize, deleted: usize) -> Preview {
+        let group = |count| FileGroup {
+            count,
+            files: Vec::new(),
+        };
+        Preview {
+            new: group(new),
+            updated: group(updated),
+            deleted: group(deleted),
+            ..Preview::default()
+        }
+    }
+
     #[test]
     fn the_preview_goes_to_the_ui_with_its_token_next_to_the_counted_groups() {
-        let report = |preview_token: Option<&str>| PreviewReport {
-            preview: Preview::default(),
-            preview_token: preview_token.map(str::to_string),
-        };
-
-        let json = serde_json::to_value(report(Some("1-abc"))).unwrap();
+        let json = report(Preview::default(), Some("1-abc"), SyncMode::Copy);
         assert_eq!(json["previewToken"], "1-abc");
         assert_eq!(json["new"]["count"], 0);
         assert!(json["blocked"].is_null());
 
-        let json = serde_json::to_value(report(None)).unwrap();
+        let json = report(Preview::default(), None, SyncMode::Copy);
         assert!(json["previewToken"].is_null());
+    }
+
+    #[test]
+    fn the_preview_goes_to_the_ui_with_its_caption_and_summary() {
+        let json = report(counted(148, 1, 0), None, SyncMode::Copy);
+        assert_eq!(
+            json["caption"],
+            "Da fare: copiare 148 file nuovi, aggiornarne 1."
+        );
+        assert_eq!(
+            json["summary"],
+            "Ecco cosa verrà fatto: 148 file nuovi, 1 da aggiornare."
+        );
+
+        let json = report(counted(3, 1, 2), None, SyncMode::Mirror);
+        assert_eq!(
+            json["caption"],
+            "Da fare: copiare 3 file nuovi, aggiornarne 1, cancellarne 2 da B."
+        );
+        assert_eq!(
+            json["summary"],
+            "Ecco cosa succederà in B: 3 file nuovi, 1 da aggiornare, 2 da cancellare."
+        );
+
+        let json = report(counted(0, 0, 0), None, SyncMode::Copy);
+        assert_eq!(json["caption"], "B è già aggiornato.");
+    }
+
+    #[test]
+    fn a_blocked_preview_has_the_reason_for_caption() {
+        let blocked = Preview {
+            blocked: Some("Motivo deciso da Rust: non si parte.".into()),
+            ..counted(0, 0, 9)
+        };
+        let json = report(blocked, None, SyncMode::Mirror);
+        assert_eq!(json["caption"], "Motivo deciso da Rust: non si parte.");
+        assert_eq!(json["blocked"], "Motivo deciso da Rust: non si parte.");
+    }
+
+    fn check(step: Step, source: &str, destination: &str, name: &str) -> Result<(), Explanation> {
+        check_step(step, source.into(), destination.into(), name.into())
+    }
+
+    #[test]
+    fn avanti_wants_what_the_step_asks_for() {
+        assert_eq!(
+            check(Step::Source, "  ", r"E:\B", "n"),
+            Err("Scegli prima la cartella da copiare.".into())
+        );
+        assert_eq!(
+            check(Step::Destination, r"D:\A", "", "n"),
+            Err("Scegli prima dove mettere la copia.".into())
+        );
+        assert_eq!(
+            check(Step::Name, r"D:\A", r"E:\B", " \t"),
+            Err("Scrivi un nome per riconoscere questa sincronizzazione.".into())
+        );
+    }
+
+    #[test]
+    fn avanti_asks_only_about_its_own_step() {
+        assert_eq!(check(Step::Source, r"D:\A", "", ""), Ok(()));
+        assert_eq!(check(Step::Destination, "", r"E:\B", ""), Ok(()));
+        assert_eq!(check(Step::Name, "", "", "Foto"), Ok(()));
+        assert_eq!(check(Step::Options, "", "", ""), Ok(()));
+        assert_eq!(check(Step::Preview, "", "", ""), Ok(()));
+    }
+
+    #[test]
+    fn the_steps_are_named_as_the_ui_names_them() {
+        for (id, step) in [
+            ("source", Step::Source),
+            ("destination", Step::Destination),
+            ("name", Step::Name),
+            ("options", Step::Options),
+            ("preview", Step::Preview),
+        ] {
+            let parsed: Step = serde_json::from_value(id.into()).unwrap();
+            assert_eq!(parsed, step);
+        }
     }
 }

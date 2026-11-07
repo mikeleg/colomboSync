@@ -58,6 +58,10 @@ const TRUNCATED_NOTICE: &str = "… (mostro solo l’ultima parte del registro)\
 /// Heads the error lines found in the cut part, above `TRUNCATED_NOTICE`.
 const EARLY_ERRORS_TITLE: &str = "Errori nella parte non mostrata del registro:\n";
 const MAX_EARLY_ERRORS: usize = 200;
+/// How far before the shown tail the errors are searched: 64 MiB. Older bytes are not read.
+const MAX_SCAN_BYTES: u64 = 64 * 1024 * 1024;
+/// Longest line kept while scanning: a longer one is cut to its first 64 KiB.
+const MAX_LINE_BYTES: usize = 64 * 1024;
 /// How much of the cut part is read at a time (even: UTF-16 units stay whole).
 const SCAN_CHUNK_BYTES: usize = 256 * 1024;
 
@@ -77,14 +81,30 @@ pub fn read_log(logs_dir: &Path, file: &Path) -> io::Result<RunLog> {
 }
 
 fn read_log_capped(logs_dir: &Path, file: &Path, max_bytes: u64) -> io::Result<RunLog> {
-    let text = read_text_capped(logs_dir, file, max_bytes)?;
+    read_log_with_limits(logs_dir, file, max_bytes, MAX_SCAN_BYTES)
+}
+
+/// `read_log` with its limits as parameters: the tail shown is `max_bytes` long, and the errors
+/// are searched in at most `max_scan_bytes` before it.
+fn read_log_with_limits(
+    logs_dir: &Path,
+    file: &Path,
+    max_bytes: u64,
+    max_scan_bytes: u64,
+) -> io::Result<RunLog> {
+    let text = read_text_capped(logs_dir, file, max_bytes, max_scan_bytes)?;
     Ok(RunLog {
         error_lines: engine::error_lines(&text),
         text,
     })
 }
 
-fn read_text_capped(logs_dir: &Path, file: &Path, max_bytes: u64) -> io::Result<String> {
+fn read_text_capped(
+    logs_dir: &Path,
+    file: &Path,
+    max_bytes: u64,
+    max_scan_bytes: u64,
+) -> io::Result<String> {
     let lower = |p: &Path| PathBuf::from(p.to_string_lossy().to_lowercase());
     let file = file.canonicalize()?;
     if !lower(&file).starts_with(lower(&logs_dir.canonicalize()?)) {
@@ -102,16 +122,19 @@ fn read_text_capped(logs_dir: &Path, file: &Path, max_bytes: u64) -> io::Result<
     }
     // Start on a UTF-16 unit boundary, then drop the cut line.
     let start = (len - max_bytes) & !1;
-    let (mut early_errors, unfinished_line) = errors_before(&mut input, start)?;
+    let scan = errors_before(&mut input, start, max_scan_bytes)?;
+    let mut early_errors = scan.errors;
     input.seek(SeekFrom::Start(start))?;
-    let mut tail = Vec::new();
+    // A character the scan left half read is completed by the first bytes of the tail.
+    let mut tail = scan.unfinished_char;
     input.read_to_end(&mut tail)?;
     let text = engine::decode_log(&tail);
     let from_next_line = match text.split_once('\n') {
         Some((rest_of_cut_line, rest)) => {
             // The dropped line began in the part before `start`: it is judged whole.
-            let cut_line = format!("{unfinished_line}{rest_of_cut_line}");
-            let cut_line = cut_line.trim_end_matches('\r');
+            let mut cut_line = scan.unfinished_line;
+            push_capped(&mut cut_line, rest_of_cut_line);
+            let cut_line = cut_line.strip_suffix('\r').unwrap_or(&cut_line);
             if early_errors.len() < MAX_EARLY_ERRORS && engine::is_error_line(cut_line) {
                 early_errors.push(cut_line.to_string());
             }
@@ -127,34 +150,75 @@ fn read_text_capped(logs_dir: &Path, file: &Path, max_bytes: u64) -> io::Result<
     Ok(format!("{title}{TRUNCATED_NOTICE}{from_next_line}"))
 }
 
-/// The error lines (at most `MAX_EARLY_ERRORS`, without line end) in the first `end` bytes of a
-/// log, read in chunks so a huge log is never held whole; and the unfinished line the part ends
-/// with. `end` is on a UTF-16 unit boundary. A multi-byte character split between two chunks
-/// reads as a replacement character, which cannot change whether the line is an error.
-fn errors_before(input: &mut File, end: u64) -> io::Result<(Vec<String>, String)> {
-    input.seek(SeekFrom::Start(0))?;
-    let mut errors = Vec::new();
-    let mut unfinished = String::new();
+/// What the scan of the part before the shown tail leaves for the tail to complete.
+struct EarlyScan {
+    /// Error lines, at most `MAX_EARLY_ERRORS`, without line end.
+    errors: Vec<String>,
+    /// The line the scanned part ends in, as far as it was kept (`MAX_LINE_BYTES`).
+    unfinished_line: String,
+    /// Bytes at the end of the part that begin a character continued in the tail.
+    unfinished_char: Vec<u8>,
+}
+
+/// Appends `text` to `line` without making it longer than `MAX_LINE_BYTES`, nor splitting a char.
+fn push_capped(line: &mut String, text: &str) {
+    let mut end = text.len().min(MAX_LINE_BYTES.saturating_sub(line.len()));
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    line.push_str(&text[..end]);
+}
+
+/// Scans for errors in the `max_scan_bytes` bytes before `end`, in chunks so a huge log is never held
+/// whole. `end` is on a UTF-16 unit boundary. A window that begins inside the log begins inside a
+/// line: that line is not judged.
+fn errors_before(input: &mut File, end: u64, max_scan_bytes: u64) -> io::Result<EarlyScan> {
+    let from = end.saturating_sub(max_scan_bytes) & !1;
+    input.seek(SeekFrom::Start(from))?;
+    let mut scan = EarlyScan {
+        errors: Vec::new(),
+        unfinished_line: String::new(),
+        unfinished_char: Vec::new(),
+    };
+    let mut skipping_first_line = from > 0;
     let mut chunk = vec![0; SCAN_CHUNK_BYTES];
-    let mut left = end;
-    while left > 0 && errors.len() < MAX_EARLY_ERRORS {
+    let mut left = end - from;
+    while left > 0 && scan.errors.len() < MAX_EARLY_ERRORS {
         let n = left.min(SCAN_CHUNK_BYTES as u64) as usize;
         input.read_exact(&mut chunk[..n])?;
         left -= n as u64;
-        let text = format!("{unfinished}{}", engine::decode_log(&chunk[..n]));
-        let Some((complete, rest)) = text.rsplit_once('\n') else {
-            unfinished = text;
-            continue;
-        };
-        for line in complete.split('\n') {
-            let line = line.trim_end_matches('\r');
-            if errors.len() < MAX_EARLY_ERRORS && engine::is_error_line(line) {
-                errors.push(line.to_string());
-            }
+        // Decode whole characters only: what a chunk ends in the middle of waits for the next.
+        let mut bytes = std::mem::take(&mut scan.unfinished_char);
+        bytes.extend_from_slice(&chunk[..n]);
+        scan.unfinished_char = bytes.split_off(engine::whole_chars_len(&bytes));
+        let decoded = engine::decode_log(&bytes);
+        let mut text = decoded.as_str();
+        if skipping_first_line {
+            let Some((_, rest)) = text.split_once('\n') else {
+                continue;
+            };
+            text = rest;
+            skipping_first_line = false;
         }
-        unfinished = rest.to_string();
+        // Lines as `str::lines` splits them, so they match the line numbers the UI gets.
+        let mut pieces = text.split('\n');
+        let unfinished_piece = pieces.next_back().unwrap_or_default();
+        for piece in pieces {
+            push_capped(&mut scan.unfinished_line, piece);
+            let line = scan.unfinished_line.strip_suffix('\r');
+            let line = line.unwrap_or(&scan.unfinished_line);
+            if scan.errors.len() < MAX_EARLY_ERRORS && engine::is_error_line(line) {
+                scan.errors.push(line.to_string());
+            }
+            scan.unfinished_line.clear();
+        }
+        push_capped(&mut scan.unfinished_line, unfinished_piece);
     }
-    Ok((errors, unfinished))
+    if left > 0 {
+        // Stopped before `end` (enough errors): nothing of the tail is half read.
+        scan.unfinished_char.clear();
+    }
+    Ok(scan)
 }
 
 #[cfg(test)]
@@ -435,6 +499,75 @@ mod tests {
         assert!(log.text.starts_with(EARLY_ERRORS_TITLE));
         assert_eq!(log.text.matches(error).count(), 4);
         assert_eq!(log.error_lines, [1, 2, 3, 4]);
+    }
+
+    /// A character of more than one unit in this platform's log encoding: é in UTF-8, a surrogate
+    /// pair in UTF-16.
+    const WIDE_CHAR: &str = if cfg!(windows) { "📁" } else { "é" };
+
+    #[test]
+    fn an_error_line_with_a_wide_character_split_by_a_chunk_end_is_listed_whole() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("long.log");
+        let (error, fine) = error_and_file_lines();
+        // The first chunk ends inside WIDE_CHAR: one unit (byte, or UTF-16 code unit) of it is in
+        // the first chunk, the rest in the second.
+        let unit = if cfg!(windows) { 2 } else { 1 };
+        let bom = if cfg!(windows) { 2 } else { 0 };
+        let chars_before = (SCAN_CHUNK_BYTES - unit - bom) / unit;
+        let error_line = format!("{error} {WIDE_CHAR}");
+        let padding = "x".repeat(chars_before - error.len() - 1 - 2);
+        let files: String = (1..=100).map(|n| format!("{fine} {n}\r\n")).collect();
+        fs::write(
+            &file,
+            unilog(&format!("{padding}\r\n{error_line}\r\n{files}")),
+        )
+        .unwrap();
+        let cap = if cfg!(windows) { 400 } else { 200 };
+
+        let log = read_log_capped(dir.path(), &file, cap).unwrap();
+
+        let top = format!("{EARLY_ERRORS_TITLE}{error_line}\n{TRUNCATED_NOTICE}");
+        assert!(log.text.starts_with(&top), "{:?}", log.text.lines().nth(1));
+    }
+
+    #[test]
+    fn a_line_longer_than_the_limit_is_listed_cut_to_it_however_many_chunks_it_spans() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("long.log");
+        let (error, fine) = error_and_file_lines();
+        let junk = "y".repeat(3 * SCAN_CHUNK_BYTES);
+        let files: String = (1..=100).map(|n| format!("{fine} {n}\r\n")).collect();
+        fs::write(&file, unilog(&format!("{error}{junk}\r\n{files}"))).unwrap();
+        let cap = if cfg!(windows) { 400 } else { 200 };
+
+        let log = read_log_capped(dir.path(), &file, cap).unwrap();
+
+        let listed = log.text.lines().nth(1).unwrap();
+        assert!(listed.starts_with(error));
+        assert_eq!(listed.len(), MAX_LINE_BYTES);
+    }
+
+    #[test]
+    fn only_the_scan_window_before_the_shown_end_is_searched_for_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("long.log");
+        let (error, fine) = error_and_file_lines();
+        let pad =
+            |count: usize| -> String { (0..count).map(|n| format!("{fine} {n}\r\n")).collect() };
+        // An old error, a lot of file lines, a recent error, 100 file lines of which the last
+        // ~10 are shown.
+        let text = format!("{error} old\r\n{}{error} recent\r\n{}", pad(200), pad(100));
+        fs::write(&file, unilog(&text)).unwrap();
+        let (cap, unit) = if cfg!(windows) { (400, 2) } else { (200, 1) };
+
+        let everything = read_log_with_limits(dir.path(), &file, cap, u64::MAX).unwrap();
+        let window = read_log_with_limits(dir.path(), &file, cap, unit * 3000).unwrap();
+
+        assert_eq!(everything.error_lines, [1, 2]);
+        assert!(window.text.contains(&format!("{error} recent\n")));
+        assert!(!window.text.contains(&format!("{error} old")));
+        assert_eq!(window.error_lines, [1]);
     }
 
     #[test]

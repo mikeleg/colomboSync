@@ -88,6 +88,20 @@ pub fn decode_log(bytes: &[u8]) -> String {
     String::from_utf16_lossy(&units)
 }
 
+/// How many of the first bytes of `bytes` decode to whole characters: the rest is an odd byte or a
+/// high surrogate whose low half is in the next bytes of the log.
+pub fn whole_chars_len(bytes: &[u8]) -> usize {
+    let even = bytes.len() & !1;
+    match even.checked_sub(2) {
+        Some(last)
+            if (0xD800..0xDC00).contains(&u16::from_le_bytes([bytes[last], bytes[last + 1]])) =>
+        {
+            last
+        }
+        _ => even,
+    }
+}
+
 #[cfg(windows)]
 pub use process::{dry_run, exit_code, file_name, is_file_line, spawn};
 
@@ -404,6 +418,21 @@ mod tests {
             bytes.extend(unit.to_le_bytes());
         }
         assert_eq!(decode_log(&bytes), "è già\r\n");
+    }
+
+    #[test]
+    fn a_log_chunk_ends_whole_before_an_odd_byte_or_a_high_surrogate() {
+        let units =
+            |text: &str| -> Vec<u8> { text.encode_utf16().flat_map(u16::to_le_bytes).collect() };
+        let folder = units("a📁"); // a, high surrogate, low surrogate: 6 bytes
+
+        assert_eq!(whole_chars_len(&folder), 6);
+        assert_eq!(whole_chars_len(&folder[..5]), 2);
+        assert_eq!(whole_chars_len(&folder[..4]), 2);
+        assert_eq!(whole_chars_len(&folder[..3]), 2);
+        assert_eq!(whole_chars_len(&folder[..2]), 2);
+        assert_eq!(whole_chars_len(&folder[..1]), 0);
+        assert_eq!(whole_chars_len(&[]), 0);
     }
 
     #[test]

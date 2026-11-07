@@ -33,14 +33,14 @@ use robocopy::partial_count;
 #[cfg(windows)]
 pub use robocopy::{
     decode_log, dry_run, exit_code, file_name, find_cause, is_error_line, is_file_line, is_success,
-    parse_preview, spawn,
+    parse_preview, spawn, whole_chars_len,
 };
 #[cfg(unix)]
 use rsync::partial_count;
 #[cfg(unix)]
 pub use rsync::{
     decode_log, dry_run, exit_code, file_name, find_cause, is_error_line, is_file_line, is_success,
-    parse_preview, spawn,
+    parse_preview, spawn, whole_chars_len,
 };
 
 /// How a Run ended.

@@ -189,6 +189,16 @@ pub fn decode_log(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
+/// How many of the first bytes of `bytes` decode to whole characters: the rest is the start of a
+/// UTF-8 sequence that ends in the next bytes of the log. Bytes that are plain invalid count as
+/// whole (they decode to a replacement character whatever follows).
+pub fn whole_chars_len(bytes: &[u8]) -> usize {
+    match std::str::from_utf8(bytes) {
+        Err(error) if error.error_len().is_none() => error.valid_up_to(),
+        _ => bytes.len(),
+    }
+}
+
 /// Is this stdout line of a running copy a file the run has just started on (or deleted)? A file
 /// line starts with its itemize code (`>f…`, `*deleting`); labels are never read.
 pub fn is_file_line(line: &[u8]) -> bool {
@@ -448,6 +458,20 @@ mod process {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    #[test]
+    fn a_log_chunk_ends_whole_before_the_start_of_a_utf8_sequence() {
+        let bytes = "aé€".as_bytes(); // 1 + 2 + 3 bytes
+
+        assert_eq!(whole_chars_len(bytes), 6);
+        assert_eq!(whole_chars_len(&bytes[..5]), 3);
+        assert_eq!(whole_chars_len(&bytes[..4]), 3);
+        assert_eq!(whole_chars_len(&bytes[..2]), 1);
+        assert_eq!(whole_chars_len(&bytes[..1]), 1);
+        assert_eq!(whole_chars_len(b""), 0);
+        // Invalid bytes are not waiting for more: they are whole.
+        assert_eq!(whole_chars_len(b"a\xFFb"), 3);
+    }
 
     // Real `rsync -rt -8 --itemize-changes --delete --dry-run A/ B/` stdout, captured on the CI
     // runners of 2026-11-04: macOS 26 (openrsync, protocol 29) and Ubuntu (rsync 3.4.1).

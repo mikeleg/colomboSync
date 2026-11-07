@@ -160,6 +160,7 @@ fn errors_before(input: &mut File, end: u64) -> io::Result<(Vec<String>, String)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::error_and_file_lines;
     use crate::shared::domain::{Outcome, sample_run};
 
     fn run(name: &str, outcome: Outcome) -> Run {
@@ -290,21 +291,6 @@ mod tests {
         assert_eq!(read_log(dir.path(), &file).unwrap().text, "è già\r\n");
         fs::remove_file(&file).unwrap();
         assert!(read_log(dir.path(), &file).is_err());
-    }
-
-    /// An error line and a file line, as the engine of this platform writes them.
-    fn error_and_file_lines() -> (&'static str, &'static str) {
-        if cfg!(windows) {
-            (
-                "2026/11/04 11:58:26 ERROR 5 (0x00000005) Copying File E:\\a.jpg",
-                "\t\t 5\tD:\\Foto\\a.jpg",
-            )
-        } else {
-            (
-                "rsync: [sender] send_files failed to open \"/A/a.jpg\": Permission denied (13)",
-                ">f+++++++++ a.jpg",
-            )
-        }
     }
 
     #[test]

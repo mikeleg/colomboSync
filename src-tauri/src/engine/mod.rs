@@ -110,6 +110,22 @@ pub fn read_log(file: &Path) -> String {
         .unwrap_or_default()
 }
 
+/// An error line and a file line, as the engine of this platform writes them, for the tests.
+#[cfg(test)]
+pub(crate) fn error_and_file_lines() -> (&'static str, &'static str) {
+    if cfg!(windows) {
+        (
+            "2026/11/04 11:58:26 ERROR 5 (0x00000005) Copying File E:\\a.jpg",
+            "\t\t 5\tD:\\Foto\\a.jpg",
+        )
+    } else {
+        (
+            "rsync: [sender] send_files failed to open \"/A/a.jpg\": Permission denied (13)",
+            ">f+++++++++ a.jpg",
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,17 +134,7 @@ mod tests {
 
     #[test]
     fn the_error_lines_of_a_log_are_numbered_from_zero() {
-        let (error, file) = if cfg!(windows) {
-            (
-                "2026/11/04 11:58:26 ERROR 5 (0x00000005) Copying File E:\\a.jpg",
-                "\t\t 5\tD:\\Foto\\a.jpg",
-            )
-        } else {
-            (
-                "rsync: [sender] send_files failed to open \"/A/a.jpg\": Permission denied (13)",
-                ">f+++++++++ a.jpg",
-            )
-        };
+        let (error, file) = error_and_file_lines();
         let log = format!("{file}\r\n{error}\r\n{file}\r\n\r\n{error}");
 
         assert_eq!(error_lines(&log), [1, 4]);

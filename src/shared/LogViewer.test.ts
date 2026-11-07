@@ -69,7 +69,7 @@ test("an Errore run shows the explanation Rust gave; an OK run shows none", () =
 });
 
 test("when the log is gone the summary stays and the log says so", async () => {
-  invokeMock.mockRejectedValueOnce("non trovato");
+  invokeMock.mockRejectedValueOnce({ title: "Il registro di questa copia non è più disponibile.", advice: "" });
   render(LogViewer, { run: run(), onclose: () => {} });
 
   expect(await screen.findByText("Il registro di questa copia non è più disponibile.")).toBeTruthy();

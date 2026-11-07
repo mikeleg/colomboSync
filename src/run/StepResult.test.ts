@@ -33,14 +33,14 @@ const generic = {
 };
 
 test("success: Fatto with copied and updated counts and the duration", () => {
-  render(StepResult, { run: run(), failure: "", ...handlers });
+  render(StepResult, { run: run(), failure: null, ...handlers });
 
   expect(screen.getByRole("heading").textContent).toBe("Fatto: 12 file copiati, 3 aggiornati in < 1 min");
   expect(screen.getByRole("button", { name: "Torna all’elenco" })).toBeTruthy();
 });
 
 test("success uses the singular", () => {
-  render(StepResult, { run: run({ new: 1, updated: 1 }), failure: "", ...handlers });
+  render(StepResult, { run: run({ new: 1, updated: 1 }), failure: null, ...handlers });
 
   expect(screen.getByRole("heading").textContent).toBe("Fatto: 1 file copiato, 1 aggiornato in < 1 min");
 });
@@ -48,7 +48,7 @@ test("success uses the singular", () => {
 test("error outcome without a known cause: the generic title and where to look", () => {
   render(StepResult, {
     run: run({ outcome: "Error", explanation: generic }),
-    failure: "",
+    failure: null,
     ...handlers,
   });
 
@@ -57,15 +57,19 @@ test("error outcome without a known cause: the generic title and where to look",
   expect(screen.queryByText(/^Fatto/)).toBeNull();
 });
 
-test("a command failure before any Run exists is shown as not completed", () => {
-  render(StepResult, { run: null, failure: "spawn failed", ...handlers });
+test("a command failure before any Run exists shows Rust's title and advice", () => {
+  const failure = {
+    title: "Non ho avviato la copia: manca l’anteprima.",
+    advice: "Prima controlla le due cartelle con l’anteprima, poi avvia.",
+  };
+  render(StepResult, { run: null, failure, ...handlers });
 
-  expect(screen.getByRole("heading").textContent).toBe("Non completato");
-  expect(screen.getByText("spawn failed")).toBeTruthy();
+  expect(screen.getByRole("heading").textContent).toBe(failure.title);
+  expect(screen.getByText(failure.advice)).toBeTruthy();
 });
 
 test("a mirror run also says how many files were deleted from B", () => {
-  render(StepResult, { run: run({ mode: "Mirror", deleted: 12 }), failure: "", ...handlers });
+  render(StepResult, { run: run({ mode: "Mirror", deleted: 12 }), failure: null, ...handlers });
 
   expect(screen.getByRole("heading").textContent).toBe(
     "Fatto: 12 file copiati, 3 aggiornati, 12 cancellati da B in < 1 min",
@@ -73,18 +77,18 @@ test("a mirror run also says how many files were deleted from B", () => {
 });
 
 test("a mirror run that deleted nothing, or one file, reads naturally", () => {
-  const { unmount } = render(StepResult, { run: run({ mode: "Mirror", deleted: 0 }), failure: "", ...handlers });
+  const { unmount } = render(StepResult, { run: run({ mode: "Mirror", deleted: 0 }), failure: null, ...handlers });
   expect(screen.getByRole("heading").textContent).toBe("Fatto: 12 file copiati, 3 aggiornati in < 1 min");
   unmount();
 
-  render(StepResult, { run: run({ mode: "Mirror", deleted: 1 }), failure: "", ...handlers });
+  render(StepResult, { run: run({ mode: "Mirror", deleted: 1 }), failure: null, ...handlers });
   expect(screen.getByRole("heading").textContent).toContain(", 1 cancellato da B in ");
 });
 
 test("cancelled: Annullato with what stays in B, and the partial count", () => {
   render(StepResult, {
     run: run({ outcome: "Cancelled", new: 0, updated: 0, partial: 40 }),
-    failure: "",
+    failure: null,
     ...handlers,
   });
 
@@ -94,14 +98,14 @@ test("cancelled: Annullato with what stays in B, and the partial count", () => {
 });
 
 test("cancelled before any file was copied", () => {
-  render(StepResult, { run: run({ outcome: "Cancelled", partial: 0 }), failure: "", ...handlers });
+  render(StepResult, { run: run({ outcome: "Cancelled", partial: 0 }), failure: null, ...handlers });
 
   expect(screen.getByText("Nessun file è stato copiato.")).toBeTruthy();
   expect(screen.queryByText(/restano in B/)).toBeNull();
 });
 
 test("error before any file was copied", () => {
-  render(StepResult, { run: run({ outcome: "Error", explanation: generic, partial: 0 }), failure: "", ...handlers });
+  render(StepResult, { run: run({ outcome: "Error", explanation: generic, partial: 0 }), failure: null, ...handlers });
 
   expect(screen.getByText("Nessun file è stato copiato.")).toBeTruthy();
 });
@@ -109,7 +113,7 @@ test("error before any file was copied", () => {
 test("error after copying 40 files says 40 file copiati (parziale) next to the message", () => {
   render(StepResult, {
     run: run({ outcome: "Error", explanation: generic, partial: 40 }),
-    failure: "",
+    failure: null,
     ...handlers,
   });
 
@@ -118,7 +122,7 @@ test("error after copying 40 files says 40 file copiati (parziale) next to the m
 });
 
 test("a success has no partial line", () => {
-  render(StepResult, { run: run(), failure: "", ...handlers });
+  render(StepResult, { run: run(), failure: null, ...handlers });
 
   expect(screen.queryByText(/parziale/)).toBeNull();
 });
@@ -126,17 +130,17 @@ test("a success has no partial line", () => {
 const buttons = () => screen.getAllByRole("button").map((b) => b.textContent?.trim());
 
 test("OK: Torna all’elenco is the only button, with the log and history links", () => {
-  render(StepResult, { run: run(), failure: "", ...handlers });
+  render(StepResult, { run: run(), failure: null, ...handlers });
 
   expect(buttons()).toEqual(["Torna all’elenco", "Apri il registro", "Vai allo storico"]);
 });
 
 test("Errore and Annullato offer Riprova first, then Torna all’elenco", () => {
-  const { unmount } = render(StepResult, { run: run({ outcome: "Error" }), failure: "", ...handlers });
+  const { unmount } = render(StepResult, { run: run({ outcome: "Error" }), failure: null, ...handlers });
   expect(buttons()).toEqual(["Riprova", "Torna all’elenco", "Apri il registro", "Vai allo storico"]);
   unmount();
 
-  render(StepResult, { run: run({ outcome: "Cancelled", partial: 3 }), failure: "", ...handlers });
+  render(StepResult, { run: run({ outcome: "Cancelled", partial: 3 }), failure: null, ...handlers });
   expect(buttons()).toEqual(["Riprova", "Torna all’elenco", "Apri il registro", "Vai allo storico"]);
 });
 
@@ -145,7 +149,7 @@ test("an unreachable share: the reason in the title, what to do under it", () =>
     title: String.raw`Non completato: la cartella di rete \\NAS non è raggiungibile.`,
     advice: "Controlla la connessione e riprova.",
   };
-  render(StepResult, { run: run({ outcome: "Error", explanation }), failure: "", ...handlers });
+  render(StepResult, { run: run({ outcome: "Error", explanation }), failure: null, ...handlers });
 
   expect(screen.getByRole("heading").textContent).toBe(explanation.title);
   expect(screen.getByText(explanation.advice)).toBeTruthy();
@@ -155,7 +159,7 @@ test("Riprova, Torna all’elenco and Vai allo storico call back", async () => {
   const calls: string[] = [];
   render(StepResult, {
     run: run({ outcome: "Error" }),
-    failure: "",
+    failure: null,
     onhome: () => calls.push("home"),
     onretry: () => calls.push("retry"),
     onhistory: () => calls.push("history"),
@@ -172,7 +176,7 @@ test("Apri il registro opens the log viewer of the run, which Chiudi closes", as
   invokeMock.mockResolvedValue({ text: "ERROR 53 …", errorLines: [0] });
   render(StepResult, {
     run: run({ outcome: "Error", logPath: String.raw`C:\L\logs\x.log` }),
-    failure: "",
+    failure: null,
     ...handlers,
   });
 
@@ -185,13 +189,13 @@ test("Apri il registro opens the log viewer of the run, which Chiudi closes", as
 });
 
 test("when no Run exists there is no log to open, but Riprova is still there", () => {
-  render(StepResult, { run: null, failure: "spawn failed", ...handlers });
+  render(StepResult, { run: null, failure: { title: "spawn failed", advice: "" }, ...handlers });
 
   expect(buttons()).toEqual(["Riprova", "Torna all’elenco", "Vai allo storico"]);
 });
 
 test("a failed run without an explanation (an older one) still says Non completato", () => {
-  render(StepResult, { run: run({ outcome: "Error" }), failure: "", ...handlers });
+  render(StepResult, { run: run({ outcome: "Error" }), failure: null, ...handlers });
 
   expect(screen.getByRole("heading").textContent).toBe("Non completato");
 });

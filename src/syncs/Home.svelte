@@ -4,7 +4,7 @@
   import { listSyncs } from "./api";
   import { formatWhen, isNetworkPath, modeChip, outcomeChip } from "../shared/format";
   import { emptySchema, type SchemaModel } from "../schema/schema";
-  import type { Sync } from "../shared/types";
+  import type { Explanation, Sync } from "../shared/types";
   import type { SyncSummary } from "./types";
 
   let {
@@ -19,7 +19,7 @@
   let selectedId = $state<number | null>(null);
 
   /** Set when syncs.json cannot be read nor set aside: no list, and no new sync that would have to be saved over it. */
-  let loadError = $state("");
+  let loadError = $state<Explanation | null>(null);
   /** A damaged syncs.json was renamed aside: the list is empty and the user is told. */
   let setAside = $state(false);
 
@@ -29,7 +29,7 @@
       syncs = listed.syncs;
       setAside = listed.setAside;
     } catch (e) {
-      loadError = String(e);
+      loadError = e as Explanation;
     }
   });
 
@@ -107,7 +107,7 @@
 {#if setAside}<p class="note aside">
     Le sincronizzazioni salvate non erano leggibili: ne ho messo da parte una copia.
   </p>{/if}
-{#if loadError}<div class="err-msg" role="alert">{loadError}</div>{/if}
+{#if loadError}<div class="err-msg" role="alert">{loadError.title} {loadError.advice}</div>{/if}
 <button type="button" class="newcard" disabled={!!loadError} onclick={onnew}
   ><Icon name="plus" />Nuova sincronizzazione</button
 >

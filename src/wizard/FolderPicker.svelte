@@ -19,7 +19,7 @@
     label: string;
     placeholder: string;
     value: string;
-    error: string;
+    error: Explanation | null;
     onenter: () => void;
     /** Offers "Nuova cartella" inside the folder being browsed. */
     canCreate?: boolean;
@@ -81,7 +81,7 @@
     try {
       pick(await createFolder(source, chosen, newName));
     } catch (e) {
-      const { title, advice } = e as Explanation; // createFolder rejects with an Explanation
+      const { title, advice } = e as Explanation;
       createError = `${title} ${advice}`.trim();
     } finally {
       createBusy = false;
@@ -163,7 +163,7 @@
     {/each}
   </div>
 </div>
-{#if error}<div class="err-msg" role="alert">{error}</div>{/if}
+{#if error}<div class="err-msg" role="alert">{error.title} {error.advice}</div>{/if}
 <details class="manual" bind:open={manualOpen}>
   <summary>Preferisci scrivere il percorso a mano?</summary>
   <div class="manualbody">

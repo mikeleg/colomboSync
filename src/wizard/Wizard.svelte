@@ -48,12 +48,12 @@
   let mirror = $state(rerun?.mode === "Mirror");
   let name = $state(rerun?.name ?? "");
   let nameTouched = $state(!!rerun);
-  let error = $state("");
+  let error = $state<Explanation | null>(null);
   let preview = $state<Preview | null>(null);
   let scanning = $state(!!rerun);
   let previewError = $state<Explanation | null>(null);
   let run = $state<RunReport | null>(null);
-  let failure = $state("");
+  let failure = $state<Explanation | null>(null);
   let scanId = 0;
   let suggestionId = 0;
   let suggesting = $state(false);
@@ -117,16 +117,16 @@
 
   async function next() {
     if (stepId === "source" && !source.trim()) {
-      error = "Scegli prima la cartella da copiare.";
+      error = { title: "Scegli prima la cartella da copiare.", advice: "" };
       return;
     }
     if (stepId === "destination" && !destination.trim()) {
-      error = "Scegli prima dove mettere la copia.";
+      error = { title: "Scegli prima dove mettere la copia.", advice: "" };
       return;
     }
     if (stepId === "name" && suggesting) return;
     if (stepId === "name" && !name.trim()) {
-      error = "Scrivi un nome per riconoscere questa sincronizzazione.";
+      error = { title: "Scrivi un nome per riconoscere questa sincronizzazione.", advice: "" };
       return;
     }
     if (stepId === "destination") {
@@ -137,14 +137,14 @@
         try {
           await checkDestination(checked[0], checked[1]);
         } catch (e) {
-          error = String(e);
+          error = e as Explanation;
           return;
         }
         // The user may have edited a path while Rust was answering: check what is there now.
       } while (checked[0] !== source.trim() || checked[1] !== destination.trim());
       if (step !== here) return; // a second click got there first
     }
-    error = "";
+    error = null;
     step++;
     if (STEPS[step].id === "name") suggestName();
     if (STEPS[step].id === "preview") scan();
@@ -173,7 +173,7 @@
   function back() {
     scanId++; // ignore a preview that is still running
     scanning = false;
-    error = "";
+    error = null;
     if (step === 0 || sync) onexit();
     else step--;
   }
@@ -187,7 +187,7 @@
       const result = await previewSync(source.trim(), destination.trim(), mode);
       if (id === scanId) preview = result;
     } catch (e) {
-      if (id === scanId) previewError = e as Explanation; // previewSync rejects with an Explanation
+      if (id === scanId) previewError = e as Explanation;
     } finally {
       if (id === scanId) scanning = false;
     }
@@ -205,7 +205,7 @@
     try {
       run = await runSync(await saveIfNew(), preview.previewToken, consent);
     } catch (e) {
-      failure = String(e);
+      failure = e as Explanation;
     }
     phase = "result";
   }
@@ -213,7 +213,7 @@
   /** "Riprova" on the result: back to a fresh preview of the same sync, never straight to a run. */
   function retry() {
     run = null;
-    failure = "";
+    failure = null;
     saving = false;
     phase = "steps";
     step = STEPS.length - 1;
@@ -227,7 +227,7 @@
       await saveIfNew();
       onexit();
     } catch (e) {
-      previewError = { title: String(e), advice: "" };
+      previewError = e as Explanation;
       saving = false;
     }
   }

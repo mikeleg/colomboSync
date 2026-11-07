@@ -3,10 +3,14 @@
   import LogViewer from "../shared/LogViewer.svelte";
   import RunChips from "../shared/RunChips.svelte";
   import RunStats from "../shared/RunStats.svelte";
-  import type { RunReport } from "../shared/types";
+  import type { Explanation, RunReport } from "../shared/types";
 
-  /** Newest first, as returned by `list_runs`. */
-  let { runs, status }: { runs: RunReport[]; status: "loading" | "ready" | "error" } = $props();
+  /** Newest first, as returned by `list_runs`; `error` is why that failed. */
+  let {
+    runs,
+    status,
+    error = null,
+  }: { runs: RunReport[]; status: "loading" | "ready"; error?: Explanation | null } = $props();
 
   let viewing = $state<RunReport | null>(null);
 
@@ -59,8 +63,8 @@
 <p class="lead">Tutte le copie fatte, dalla più recente. Ogni riga ha il suo registro completo.</p>
 {#if status === "loading"}
   <p class="muted" role="status">Sto leggendo lo storico…</p>
-{:else if status === "error"}
-  <p class="err-msg" role="alert">Non riesco a leggere lo storico.</p>
+{:else if error}
+  <p class="err-msg" role="alert">{error.title} {error.advice}</p>
 {/if}
 {#if runs.length > 0}
   <div class="filters">

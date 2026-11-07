@@ -4,12 +4,13 @@
   import { formatWhen } from "./format";
   import RunChips from "./RunChips.svelte";
   import RunStats from "./RunStats.svelte";
-  import type { RunLog, RunReport } from "./types";
+  import type { Explanation, RunLog, RunReport } from "./types";
 
   let { run, onclose }: { run: RunReport; onclose: () => void } = $props();
 
   let log = $state<RunLog>({ text: "", errorLines: [] });
-  let unavailable = $state(false);
+  /** Why the log cannot be shown, in Rust's words. */
+  let unavailable = $state<Explanation | null>(null);
   let closeButton: HTMLButtonElement;
   let dialog: HTMLElement;
 
@@ -18,7 +19,7 @@
     closeButton.focus();
     readRunLog(run.logPath).then(
       (read) => (log = read),
-      () => (unavailable = true),
+      (e: unknown) => (unavailable = e as Explanation),
     );
     return () => opener?.focus();
   });
@@ -75,7 +76,7 @@
       {/if}
     </section>
     {#if unavailable}
-      <p class="gone">Il registro di questa copia non è più disponibile.</p>
+      <p class="gone">{unavailable.title} {unavailable.advice}</p>
     {:else}
       {#if log.errorLines.length > 0}
         <button type="button" class="link jump" onclick={goToFirstError}>Vai al primo errore</button>

@@ -1,12 +1,13 @@
 <script lang="ts">
   import FolderPicker from "./FolderPicker.svelte";
+  import type { Explanation } from "../shared/types";
 
   let {
     path = $bindable(),
     source,
     error,
     onenter,
-  }: { path: string; source: string; error: string; onenter: () => void } = $props();
+  }: { path: string; source: string; error: Explanation | null; onenter: () => void } = $props();
 </script>
 
 <FolderPicker

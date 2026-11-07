@@ -9,7 +9,7 @@
   import { emptySchema, type SchemaModel } from "./schema/schema";
   import SchemaView from "./schema/SchemaView.svelte";
   import ThemeSwitch from "./shared/ThemeSwitch.svelte";
-  import type { RunReport, Sync } from "./shared/types";
+  import type { Explanation, RunReport, Sync } from "./shared/types";
   import type { HistorySummary } from "./history/types";
   import Wizard from "./wizard/Wizard.svelte";
 
@@ -34,7 +34,8 @@
 
   let runs = $state<RunReport[]>([]);
   let summary = $state<HistorySummary | null>(null);
-  let historyStatus = $state<"loading" | "ready" | "error">("ready");
+  let historyStatus = $state<"loading" | "ready">("ready");
+  let historyError = $state<Explanation | null>(null);
   let historyLoads = 0;
 
   async function openHistory() {
@@ -42,6 +43,7 @@
     view = "history";
     runs = [];
     summary = null;
+    historyError = null;
     historyStatus = "loading";
     try {
       const result = await listRuns();
@@ -49,8 +51,10 @@
       runs = result.runs;
       summary = result.summary;
       historyStatus = "ready";
-    } catch {
-      if (load === historyLoads) historyStatus = "error";
+    } catch (e) {
+      if (load !== historyLoads) return;
+      historyError = e as Explanation;
+      historyStatus = "ready";
     }
   }
 
@@ -103,7 +107,7 @@
       {#if view === "home"}
         <Home onnew={() => openWizard()} onrun={openWizard} onschema={(model) => (schema = model)} />
       {:else if view === "history"}
-        <History {runs} status={historyStatus} />
+        <History {runs} status={historyStatus} error={historyError} />
       {:else}
         <Wizard
           sync={rerun}

@@ -27,7 +27,7 @@ fn run_list(runs: Vec<Run>, syncs: &[SavedSync]) -> RunList {
 /// A `syncs.json` that cannot be read only means the syncs keep the names they had in their runs.
 #[tauri::command]
 pub async fn list_runs() -> Result<RunList, String> {
-    let storage = Storage::from_env()?;
+    let storage = Storage::from_env().map_err(|e| e.title)?;
     blocking(move || {
         let runs = read(&storage.history_file()).map_err(|e| e.to_string())?;
         let syncs = sync_store::load(&storage.syncs_file()).unwrap_or_default();
@@ -40,7 +40,7 @@ pub async fn list_runs() -> Result<RunList, String> {
 /// logs folder.
 #[tauri::command]
 pub async fn read_run_log(path: String) -> Result<RunLog, String> {
-    let storage = Storage::from_env()?;
+    let storage = Storage::from_env().map_err(|e| e.title)?;
     blocking(move || read_log(&storage.logs_dir(), Path::new(&path)).map_err(|e| e.to_string()))
         .await
 }

@@ -120,6 +120,76 @@ pub fn explain_missing_parent() -> Explanation {
     }
 }
 
+fn explanation(title: &str, advice: &str) -> Explanation {
+    Explanation {
+        title: title.into(),
+        advice: advice.into(),
+    }
+}
+
+const REDO_PREVIEW: &str = "Controlla di nuovo le cartelle con l’anteprima, poi avvia.";
+
+/// A run was asked for with no preview token at all.
+pub fn run_without_preview() -> Explanation {
+    explanation(
+        "Non ho avviato la copia: manca l’anteprima.",
+        "Prima controlla le due cartelle con l’anteprima, poi avvia.",
+    )
+}
+
+/// The token is not the one of the last preview: it was never given, it was replaced by a newer
+/// preview, or it already confirmed a run.
+pub fn run_with_stale_preview() -> Explanation {
+    explanation(
+        "Non ho avviato la copia: l’anteprima non è più valida.",
+        REDO_PREVIEW,
+    )
+}
+
+/// The preview is of other folders, or of the other mode, than the sync that was asked to run.
+pub fn run_with_other_preview() -> Explanation {
+    explanation(
+        "Non ho avviato la copia: l’anteprima è di altre cartelle o di un’altra modalità.",
+        REDO_PREVIEW,
+    )
+}
+
+/// A mirror run that would delete files from B, without the user's confirmation.
+pub fn mirror_without_consent() -> Explanation {
+    explanation(
+        "Non ho avviato la copia: manca la tua conferma.",
+        "Con lo specchio i file che ci sono solo in B vengono cancellati. Conferma di aver capito e riprova.",
+    )
+}
+
+pub fn run_already_in_progress() -> Explanation {
+    "C’è già una copia in corso.".into()
+}
+
+/// The folder for the logs could not be made.
+pub fn cannot_prepare_logs() -> Explanation {
+    explanation(
+        "Non riesco a preparare la cartella dei registri.",
+        "Controlla lo spazio sul disco e i permessi, poi riprova.",
+    )
+}
+
+/// The Run is over, but its line could not be added to the history.
+pub fn cannot_write_history() -> Explanation {
+    explanation(
+        "Non riesco a salvare questa copia nello storico.",
+        "Controlla lo spazio sul disco e i permessi. La copia potrebbe essere già stata fatta: guarda in B.",
+    )
+}
+
+/// The engine was started but how it ended could not be read.
+pub fn cannot_follow_engine() -> Explanation {
+    explanation(
+        "Non riesco a sapere come è finita la copia.",
+        "Guarda cosa c’è in B e riprova.",
+    )
+}
+
 /// The title and the advice for a failure; a generic one when the cause is unknown.
 pub fn describe(
     cause: Option<Cause>,

@@ -5,6 +5,7 @@ use crate::engine::preview_parser::Counts;
 use crate::engine::{self, Verdict};
 use crate::history;
 use crate::shared::domain::{Outcome, Run, SavedSync, SyncMode};
+use crate::shared::error_messages::{self, Explanation};
 use crate::shared::mirror_guard;
 use crate::shared::path_rules;
 use crate::shared::storage::Storage;
@@ -126,21 +127,21 @@ pub fn run(
     counts: Counts,
     active: &ActiveRun,
     mut on_progress: impl FnMut(&Progress),
-) -> Result<Run, String> {
+) -> Result<Run, Explanation> {
     let (source, destination, mode) = (sync.source.as_str(), sync.destination.as_str(), sync.mode);
     path_rules::check_destination(source, destination)?;
     if mode == SyncMode::Mirror
         && let Some(reason) = mirror_guard::problem(Path::new(source), counts)
     {
-        return Err(reason.to_string());
+        return Err(reason.into());
     }
     let started = Local::now();
     let log = storage.log_file(&sync.name, started.naive_local());
-    fs::create_dir_all(storage.logs_dir()).map_err(|e| e.to_string())?;
+    fs::create_dir_all(storage.logs_dir()).map_err(|_| error_messages::cannot_prepare_logs())?;
 
     let clock = Instant::now();
     // Every way a Run can end is made and written to the history here.
-    let save = |verdict: Verdict| -> Result<Run, String> {
+    let save = |verdict: Verdict| -> Result<Run, Explanation> {
         let (outcome, counts, partial, cause) = match verdict {
             Verdict::Ok => (Outcome::Ok, counts, None, None),
             Verdict::Cancelled { partial } => {
@@ -166,12 +167,13 @@ pub fn run(
             partial,
             cause,
         };
-        history::append(&storage.history_file(), &run).map_err(|e| e.to_string())?;
+        history::append(&storage.history_file(), &run)
+            .map_err(|_| error_messages::cannot_write_history())?;
         Ok(run)
     };
     let mut stdout = match active.start(mode, source, destination, &log) {
         Ok(stdout) => stdout,
-        Err(StartError::Busy) => return Err("C’è già una copia in corso.".into()),
+        Err(StartError::Busy) => return Err(error_messages::run_already_in_progress()),
         // The engine could not even start: a failed Run like any other, in the history.
         Err(StartError::Failed(error)) => {
             return save(Verdict::Error {
@@ -202,10 +204,12 @@ pub fn run(
     }
     // The state the throttle may have skipped, so the UI ends on the real count.
     on_progress(&progress(&follower));
-    let status = active.wait().map_err(|e| e.to_string())?;
+    let status = active
+        .wait()
+        .map_err(|_| error_messages::cannot_follow_engine())?;
 
     let cancelled = active.cancelled.load(Ordering::SeqCst);
-    let code = engine::exit_code(status).map_err(|e| e.to_string())?;
+    let code = engine::exit_code(status).map_err(|_| error_messages::cannot_follow_engine())?;
     save(engine::verdict(code, cancelled, &log, source, destination))
 }
 
@@ -228,7 +232,7 @@ mod tests {
                     ..sample_sync()
                 };
                 let result = run(&storage, &sync, Counts::default(), &active, |_| {});
-                assert_eq!(result.unwrap_err(), message);
+                assert_eq!(result.unwrap_err(), Explanation::from(message));
             }
         }
         assert!(!storage.history_file().exists());

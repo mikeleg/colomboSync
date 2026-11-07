@@ -3,6 +3,7 @@
 use colombo_sync_lib::engine::preview_parser::Counts;
 use colombo_sync_lib::run::runner::{self, ActiveRun};
 use colombo_sync_lib::shared::domain::{Run, SavedSync, SyncMode};
+use colombo_sync_lib::shared::error_messages::Explanation;
 use colombo_sync_lib::shared::storage::Storage;
 use std::fs;
 use std::path::Path;
@@ -41,7 +42,12 @@ pub fn saved(name: &str, a: &Path, b: &Path) -> SavedSync {
     }
 }
 
-pub fn run_mirror(storage: &Storage, a: &Path, b: &Path, counts: Counts) -> Result<Run, String> {
+pub fn run_mirror(
+    storage: &Storage,
+    a: &Path,
+    b: &Path,
+    counts: Counts,
+) -> Result<Run, Explanation> {
     runner::run(
         storage,
         &SavedSync {

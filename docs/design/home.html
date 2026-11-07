@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ColomboSync – Home</title>
+    <style>
+      body {
+        margin: 0;
+        background: #000;
+        font-family:
+          "Segoe UI Variable Display",
+          "Segoe UI Variable Text",
+          "Segoe UI",
+          system-ui,
+          -apple-system,
+          "Helvetica Neue",
+          Arial,
+          sans-serif;
+        color: #f5f5f7;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: #6ff0d6;
+      }
+      a:hover {
+        color: #b5f7ea;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      style="
+        width: 100%;
+        min-height: 820px;
+        box-sizing: border-box;
+        background: radial-gradient(70% 55% at 85% 0%, rgba(59, 224, 193, 0.14) 0%, rgba(0, 0, 0, 0) 70%), #000000;
+        padding: 24px 40px 48px;
+        display: flex;
+        flex-direction: column;
+        gap: 40px;
+      "
+    >
+      <header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <svg viewBox="0 0 100 100" width="34" height="34" aria-hidden="true">
+            <defs>
+              <linearGradient id="hEcl" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#6ff0d6"></stop>
+                <stop offset="1" stop-color="#0a7d6e"></stop>
+              </linearGradient>
+            </defs>
+            <circle cx="58" cy="50" r="30" fill="url(#hEcl)"></circle>
+            <circle cx="45" cy="50" r="30" fill="#000" stroke="#fff" stroke-opacity="0.2" stroke-width="2"></circle>
+          </svg>
+          <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em"
+            >Colombo<span style="font-weight: 300; color: #a1a1a6">Sync</span></span
+          >
+        </div>
+        <nav
+          aria-label="Sezioni"
+          style="display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.08)"
+        >
+          <a
+            href="#"
+            aria-current="page"
+            style="
+              text-decoration: none;
+              font-size: 15px;
+              font-weight: 600;
+              color: #000;
+              background: #f5f5f7;
+              padding: 8px 18px;
+              border-radius: 999px;
+            "
+            >Sincronizzazioni</a
+          >
+          <a
+            href="#"
+            style="
+              text-decoration: none;
+              font-size: 15px;
+              font-weight: 600;
+              color: #a1a1a6;
+              padding: 8px 18px;
+              border-radius: 999px;
+            "
+            >Storico</a
+          >
+        </nav>
+        <div style="font-size: 13px; color: #6e6e73">Auto · Chiaro · <b style="color: #f5f5f7">Scuro</b></div>
+      </header>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start">
+        <main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 28px">
+          <div style="display: flex; flex-direction: column; gap: 12px">
+            <h1 style="margin: 0; font-size: 60px; line-height: 1; font-weight: 700; letter-spacing: -0.045em">
+              Le tue sincronizzazioni
+            </h1>
+            <p style="margin: 0; font-size: 19px; color: #a1a1a6; max-width: 60ch">
+              Ogni sincronizzazione copia i file da una cartella (A) in un’altra (B). Prima di copiare ti mostro sempre
+              cosa cambierà.
+            </p>
+          </div>
+
+          <section
+            style="
+              border-radius: 28px;
+              padding: 28px;
+              background: #121214;
+              box-shadow:
+                inset 0 0 0 1.5px rgba(95, 224, 198, 0.55),
+                0 30px 60px -40px rgba(59, 224, 193, 0.6);
+              display: flex;
+              flex-direction: column;
+              gap: 18px;
+            "
+          >
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+              <h2 style="margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.025em; flex-grow: 1">
+                Foto su NAS
+              </h2>
+              <span
+                style="
+                  font-size: 13px;
+                  font-weight: 700;
+                  color: #f5f5f7;
+                  background: rgba(255, 255, 255, 0.1);
+                  padding: 5px 12px;
+                  border-radius: 999px;
+                "
+                >Copia</span
+              >
+            </div>
+            <p
+              style="
+                margin: 0;
+                font-size: 16px;
+                color: #a1a1a6;
+                display: flex;
+                gap: 10px;
+                align-items: center;
+                flex-wrap: wrap;
+              "
+            >
+              <span style="color: #f5f5f7; font-weight: 600">D:\Foto</span><span aria-hidden="true">→</span
+              ><span style="color: #f5f5f7; font-weight: 600">\\NAS\Backup\Foto</span>
+            </p>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
+              <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; color: #a1a1a6">
+                Ultima volta: 02/11/2026 21:30
+                <span
+                  style="
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #002a0c;
+                    background: #30d158;
+                    padding: 4px 11px;
+                    border-radius: 999px;
+                  "
+                  >OK</span
+                >
+              </div>
+              <button
+                type="button"
+                style="
+                  font: inherit;
+                  font-size: 17px;
+                  font-weight: 700;
+                  border: 0;
+                  border-radius: 999px;
+                  padding: 13px 26px;
+                  color: #00211b;
+                  background: linear-gradient(90deg, #6ff0d6, #1fc7a8);
+                  box-shadow: 0 10px 30px -10px rgba(31, 199, 168, 0.8);
+                "
+              >
+                Controlla e avvia
+              </button>
+            </div>
+          </section>
+
+          <section
+            style="
+              border-radius: 28px;
+              padding: 28px;
+              background: #121214;
+              box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+              display: flex;
+              flex-direction: column;
+              gap: 18px;
+            "
+          >
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+              <h2 style="margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.025em; flex-grow: 1">
+                Documenti ufficio
+              </h2>
+              <span
+                style="
+                  font-size: 13px;
+                  font-weight: 700;
+                  color: #f5f5f7;
+                  background: rgba(255, 255, 255, 0.1);
+                  padding: 5px 12px;
+                  border-radius: 999px;
+                "
+                >Copia</span
+              >
+            </div>
+            <p
+              style="
+                margin: 0;
+                font-size: 16px;
+                color: #a1a1a6;
+                display: flex;
+                gap: 10px;
+                align-items: center;
+                flex-wrap: wrap;
+              "
+            >
+              <span style="color: #f5f5f7; font-weight: 600">C:\Users\Anna\Documenti</span
+              ><span aria-hidden="true">→</span><span style="color: #f5f5f7; font-weight: 600">E:\Backup</span>
+            </p>
+            <p
+              style="
+                margin: 0;
+                font-size: 15px;
+                font-weight: 600;
+                color: #ffb4a8;
+                background: rgba(255, 69, 58, 0.14);
+                padding: 12px 16px;
+                border-radius: 16px;
+              "
+            >
+              Il disco E: non era raggiungibile. Controlla che sia collegato e riprova.
+            </p>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
+              <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; color: #a1a1a6">
+                Ultima volta: 01/11/2026 18:05
+                <span
+                  style="
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #ffffff;
+                    background: #ff453a;
+                    padding: 4px 11px;
+                    border-radius: 999px;
+                  "
+                  >Errore</span
+                >
+              </div>
+              <button
+                type="button"
+                style="
+                  font: inherit;
+                  font-size: 17px;
+                  font-weight: 700;
+                  border: 0;
+                  border-radius: 999px;
+                  padding: 13px 26px;
+                  color: #f5f5f7;
+                  background: rgba(255, 255, 255, 0.12);
+                "
+              >
+                Riprova
+              </button>
+            </div>
+          </section>
+
+          <button
+            type="button"
+            style="
+              font: inherit;
+              font-size: 19px;
+              font-weight: 700;
+              color: #6ff0d6;
+              background: transparent;
+              border: 1.5px dashed rgba(95, 224, 198, 0.45);
+              border-radius: 28px;
+              min-height: 76px;
+            "
+          >
+            + Nuova sincronizzazione
+          </button>
+        </main>
+
+        <aside
+          aria-label="Schema di cosa succede"
+          style="
+            flex: 1 1 340px;
+            min-width: 0;
+            border-radius: 32px;
+            padding: 28px;
+            background: rgba(255, 255, 255, 0.05);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+          "
+        >
+          <h2
+            style="
+              margin: 0 0 4px;
+              font-size: 13px;
+              font-weight: 700;
+              letter-spacing: 0.08em;
+              text-transform: uppercase;
+              color: #a1a1a6;
+            "
+          >
+            Cosa succede
+          </h2>
+          <div style="border-radius: 20px; padding: 16px 18px; background: #1c1c1e">
+            <div
+              style="
+                font-size: 12px;
+                font-weight: 700;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                color: #a1a1a6;
+              "
+            >
+              A · Da copiare
+            </div>
+            <div style="font-size: 14px; color: #a1a1a6; margin-top: 8px">D: Dati</div>
+            <div style="font-size: 18px; font-weight: 700">D:\Foto</div>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 10px">
+            <svg viewBox="0 0 40 70" width="34" height="58" aria-hidden="true">
+              <defs>
+                <linearGradient id="hArr" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#6ff0d6"></stop>
+                  <stop offset="1" stop-color="#0a7d6e"></stop>
+                </linearGradient>
+              </defs>
+              <path
+                d="M20 4v54"
+                stroke="url(#hArr)"
+                stroke-width="4"
+                stroke-linecap="round"
+                stroke-dasharray="6 7"
+              ></path>
+              <path
+                d="M9 48l11 14 11-14"
+                fill="none"
+                stroke="#1fc7a8"
+                stroke-width="4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              ></path>
+            </svg>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%">
+              <div style="border-radius: 16px; padding: 12px; background: #1c1c1e; text-align: center">
+                <div style="font-size: 30px; font-weight: 700; letter-spacing: -0.03em">—</div>
+                <div style="font-size: 13px; color: #a1a1a6">Nuovi</div>
+              </div>
+              <div style="border-radius: 16px; padding: 12px; background: #1c1c1e; text-align: center">
+                <div style="font-size: 30px; font-weight: 700; letter-spacing: -0.03em">—</div>
+                <div style="font-size: 13px; color: #a1a1a6">Aggiornati</div>
+              </div>
+            </div>
+          </div>
+          <div style="border-radius: 20px; padding: 16px 18px; background: #1c1c1e">
+            <div
+              style="
+                font-size: 12px;
+                font-weight: 700;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                color: #a1a1a6;
+              "
+            >
+              B · Copia
+            </div>
+            <div style="font-size: 14px; color: #a1a1a6; margin-top: 8px">Rete · NAS</div>
+            <div style="font-size: 18px; font-weight: 700">\\NAS\Backup\Foto</div>
+          </div>
+          <p style="margin: 0; font-size: 15px; font-weight: 700; color: #30d158; text-align: center">
+            ✓ Nessun file viene cancellato in B
+          </p>
+          <p style="margin: 0; font-size: 15px; color: #a1a1a6; text-align: center">
+            Premi "Controlla e avvia": prima ti mostro cosa cambierà, poi decidi tu.
+          </p>
+        </aside>
+      </div>
+    </div>
+  </body>
+</html>

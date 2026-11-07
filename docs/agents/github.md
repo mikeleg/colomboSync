@@ -1,6 +1,6 @@
 # GitHub and CI
 
-Repo: `mikeleg/colomboSync` (private). Default branch `main`. This is also the only way to compile and test the macOS and Linux code, because the dev machine is Windows.
+Repo: `mikeleg/colomboSync` (public as of 2026-11-07). Default branch `main`. This is also the only way to compile and test the macOS and Linux code, because the dev machine is Windows.
 
 ## Access: token per command, never switch accounts
 The local `gh` has two accounts and the active one is **not** the repo owner. Never run `gh auth switch`. Use the owner's token for each command:
@@ -37,7 +37,7 @@ A tag `v*` runs: version check → `ci.yml` in release mode (checks and builds o
 Version rule: `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` must be identical. The tag without the `v` must equal that version, or that version plus a pre-release suffix (`v0.1.0-rc.1` is accepted while the files say `0.1.0`; `v0.1.1` is not). The suffix lets you test the pipeline without bumping files; it ends up in the file names.
 
 Steps:
-1. Bump the three files to the new version (`npm version X.Y.Z --no-git-tag-version` for `package.json` + lock, edit `tauri.conf.json` and `Cargo.toml` by hand, `cd src-tauri && cargo check` to refresh `Cargo.lock`). Commit `chore(release): X.Y.Z` on `main`, push (CI green).
+1. Bump the three files to the new version (`npm version X.Y.Z --no-git-tag-version` for `package.json` + lock, edit `tauri.conf.json` and `Cargo.toml` by hand, `cd src-tauri && cargo check` to refresh `Cargo.lock`). Commit `chore(release): X.Y.Z` on a branch (e.g. `release/X.Y.Z`), open a PR to `main` and merge it with CI green.
 2. Tag **the commit on `main`** and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z` (with the token recipe's credential helper). The `version` job fails a tag whose commit is not an ancestor of `origin/main`: tags never go on slice branches. It checks only that the commit is on main, not that main's CI passed on it; the release-mode CI run (step 3) is the test gate. To try the pipeline on a branch, use a dry run (below), not a tag.
 3. `gh run watch <id> -R mikeleg/colomboSync --exit-status` (run id: `gh run list -R mikeleg/colomboSync --workflow release.yml --limit 1`). Any red job → no release; fix, bump patch, new tag.
 4. Smoke checklist from `docs/release-plan.md` on a clean machine per OS with the **release files**, not local builds. Note the result as a comment on the draft.
@@ -54,7 +54,7 @@ Dry run without a tag: `gh workflow run release.yml -R mikeleg/colomboSync --ref
 5. Get the run id for a pushed branch with `gh run list -R mikeleg/colomboSync --branch <branch> --limit 1`.
 
 ## Rules
-- Never push to `main` unless the full suite is green on all three OS (merge slice branches one at a time; CI on `main` after the merge must be green too).
+- `main` changes only through a pull request, for everyone including the owner: a ruleset ("main: solo via pull request") on the default branch requires a PR (0 approvals, since the owner can't approve their own), blocks force-push and deletion, and has no bypass. A direct `git push origin main` is rejected. Merge a PR only with the full suite green on all three OS (one at a time; CI on `main` after the merge must be green too): `gh pr create -R mikeleg/colomboSync --base main --head <branch> --fill`, then `gh pr merge <n> -R mikeleg/colomboSync --merge --delete-branch`. Tags are not covered by the ruleset: release tags are still pushed directly.
 - Never switch the active `gh` account; never store the token in a file, a remote URL or a commit.
 - Delete remote slice branches after merge: `git push origin --delete slice/sN` (with the token recipe's credential helper).
 - Download artifacts into a new empty directory; treat them as untrusted. macOS/Linux apps can't be run on this machine: say "not opened by hand" in reports.

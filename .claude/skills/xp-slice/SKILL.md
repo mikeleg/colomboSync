@@ -11,7 +11,7 @@ Input: a slice id (e.g. `S8`) and, if parallel, the worktree path you work in.
 - `CLAUDE.md` (repo root) – commands and boundaries.
 - The slice section in `docs/backlog/colombo-sync/backlog.md` + its "Shared conventions" section; `scope.md` for decisions already taken.
 - `docs/agents/glossary.md`, `docs/agents/xp.md`; `docs/agents/robocopy.md` / `docs/agents/rsync.md` if the slice touches the engine; `docs/agents/github.md` if it has Unix-only code.
-- `docs/backlog/colombo-sync/prototype.html` for flow and **exact Italian copy** of this slice's screens; the design canvas (link in `CLAUDE.md`) and `src/theme.css` for look. Tokens only, no inline colors.
+- `docs/backlog/colombo-sync/prototype.html` for flow and **exact Italian copy** of this slice's screens; `docs/design/` and `src/theme.css` for look. Tokens only, no inline colors.
 - The existing code you will change.
 
 ## 2. Test list

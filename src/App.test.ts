@@ -198,6 +198,23 @@ test("when Rust refuses the run, the result shows its title and advice", async (
   expect(screen.getByText("Controlla di nuovo le cartelle con l’anteprima, poi avvia.")).toBeTruthy();
 });
 
+test("when Tauri itself rejects with a plain string, the result says the fixed sentence, never undefined", async () => {
+  backend({
+    preview_sync: () => preview(2, 1),
+    run_sync: () => {
+      throw "invalid args `consent` for command `run_sync`";
+    },
+  });
+  render(App);
+  await goToPreview();
+
+  await click(await screen.findByRole("button", { name: "Sì, avvia" }));
+
+  expect(await screen.findByRole("heading", { name: "Qualcosa è andato storto dentro l’app." })).toBeTruthy();
+  expect(screen.getByText("Riprova. Se succede ancora, chiudi e riapri ColomboSync.")).toBeTruthy();
+  expect(document.body.textContent).not.toContain("undefined");
+});
+
 test("while the copy runs the UI says Sto copiando…", async () => {
   backend({ preview_sync: () => preview(2, 1), run_sync: () => new Promise(() => {}) });
   render(App);

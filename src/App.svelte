@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { isElevated } from "./shared/api";
+  import { toExplanation } from "./shared/explanation";
   import { listRuns } from "./history/api";
   import History from "./history/History.svelte";
   import HistoryPanel from "./history/HistoryPanel.svelte";
@@ -53,7 +54,7 @@
       historyStatus = "ready";
     } catch (e) {
       if (load !== historyLoads) return;
-      historyError = e as Explanation;
+      historyError = toExplanation(e);
       historyStatus = "ready";
     }
   }

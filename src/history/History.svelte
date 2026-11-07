@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ErrorText from "../shared/ErrorText.svelte";
   import { formatWhen, modeChip, outcomeChip } from "../shared/format";
   import LogViewer from "../shared/LogViewer.svelte";
   import RunChips from "../shared/RunChips.svelte";
@@ -64,7 +65,7 @@
 {#if status === "loading"}
   <p class="muted" role="status">Sto leggendo lo storico…</p>
 {:else if error}
-  <p class="err-msg" role="alert">{error.title} {error.advice}</p>
+  <p class="err-msg" role="alert"><ErrorText explanation={error} /></p>
 {/if}
 {#if runs.length > 0}
   <div class="filters">

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import ErrorText from "../shared/ErrorText.svelte";
+  import { toExplanation } from "../shared/explanation";
   import Icon from "../shared/Icon.svelte";
   import { listSyncs } from "./api";
   import { formatWhen, isNetworkPath, modeChip, outcomeChip } from "../shared/format";
@@ -29,7 +31,7 @@
       syncs = listed.syncs;
       setAside = listed.setAside;
     } catch (e) {
-      loadError = e as Explanation;
+      loadError = toExplanation(e);
     }
   });
 
@@ -107,7 +109,7 @@
 {#if setAside}<p class="note aside">
     Le sincronizzazioni salvate non erano leggibili: ne ho messo da parte una copia.
   </p>{/if}
-{#if loadError}<div class="err-msg" role="alert">{loadError.title} {loadError.advice}</div>{/if}
+{#if loadError}<div class="err-msg" role="alert"><ErrorText explanation={loadError} /></div>{/if}
 <button type="button" class="newcard" disabled={!!loadError} onclick={onnew}
   ><Icon name="plus" />Nuova sincronizzazione</button
 >

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { readRunLog } from "./api";
+  import ErrorText from "./ErrorText.svelte";
+  import { toExplanation } from "./explanation";
   import { formatWhen } from "./format";
   import RunChips from "./RunChips.svelte";
   import RunStats from "./RunStats.svelte";
@@ -19,7 +21,7 @@
     closeButton.focus();
     readRunLog(run.logPath).then(
       (read) => (log = read),
-      (e: unknown) => (unavailable = e as Explanation),
+      (e: unknown) => (unavailable = toExplanation(e)),
     );
     return () => opener?.focus();
   });
@@ -76,7 +78,7 @@
       {/if}
     </section>
     {#if unavailable}
-      <p class="gone">{unavailable.title} {unavailable.advice}</p>
+      <p class="gone"><ErrorText explanation={unavailable} /></p>
     {:else}
       {#if log.errorLines.length > 0}
         <button type="button" class="link jump" onclick={goToFirstError}>Vai al primo errore</button>

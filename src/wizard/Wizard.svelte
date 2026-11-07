@@ -4,6 +4,7 @@
   import { checkDestination, previewSync } from "./api";
   import { defaultSyncName, saveSync } from "../syncs/api";
   import { onCloseRequested, runSync } from "../run/api";
+  import { toExplanation } from "../shared/explanation";
   import { formatNumber } from "../shared/format";
   import type { SchemaModel } from "../schema/schema";
   import type { Counts, Explanation, RunReport, Sync, SyncMode } from "../shared/types";
@@ -137,7 +138,7 @@
         try {
           await checkDestination(checked[0], checked[1]);
         } catch (e) {
-          error = e as Explanation;
+          error = toExplanation(e);
           return;
         }
         // The user may have edited a path while Rust was answering: check what is there now.
@@ -187,7 +188,7 @@
       const result = await previewSync(source.trim(), destination.trim(), mode);
       if (id === scanId) preview = result;
     } catch (e) {
-      if (id === scanId) previewError = e as Explanation;
+      if (id === scanId) previewError = toExplanation(e);
     } finally {
       if (id === scanId) scanning = false;
     }
@@ -205,7 +206,7 @@
     try {
       run = await runSync(await saveIfNew(), preview.previewToken, consent);
     } catch (e) {
-      failure = e as Explanation;
+      failure = toExplanation(e);
     }
     phase = "result";
   }
@@ -227,7 +228,7 @@
       await saveIfNew();
       onexit();
     } catch (e) {
-      previewError = e as Explanation;
+      previewError = toExplanation(e);
       saving = false;
     }
   }

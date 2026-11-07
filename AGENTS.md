@@ -24,7 +24,7 @@ Step-by-step checklists in `.claude/skills/*/SKILL.md`. They are plain markdown:
 
 ## Commands
 ```
-npm test / npm run check / npm run format     # vitest, svelte-check, Prettier (CI runs format:check)
+npm test / npm run check / npm run format:check   # vitest, svelte-check, Prettier: fixes what it can, then fails on what is left (CI only checks)
 cd src-tauri && cargo fmt && cargo test && cargo clippy --all-targets -- -D warnings
 npm run tauri dev                             # dev
 npm run portable                              # src-tauri\target\release\colombo-sync.exe (~5 min first time)

@@ -11,7 +11,7 @@
     "portable": "tauri build --no-bundle",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --write . && prettier --check ."
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4"

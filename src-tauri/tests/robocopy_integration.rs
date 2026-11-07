@@ -134,6 +134,8 @@ fn run_reports_progress_with_the_current_file() {
     let counts = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy)
         .unwrap()
         .counts();
+    // The progress is measured against this total: the extra file in B is not in it.
+    assert_eq!(counts.total(), 3, "extras in B are not counted");
 
     let mut events = Vec::new();
     let run = runner::run(

@@ -1,4 +1,4 @@
-// The home and the wizard's save step talk to Rust through these Tauri commands.
+// The home and the wizard's save step talk to Rust through these Tauri commands. Those that can fail reject with an `Explanation`.
 import { invoke } from "@tauri-apps/api/core";
 import type { Sync, SyncMode } from "../shared/types";
 import type { ListedSyncs } from "./types";

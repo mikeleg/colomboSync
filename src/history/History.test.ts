@@ -81,10 +81,16 @@ test("while the history is being read there are no rows, only a short message", 
   expect(screen.queryByRole("listitem")).toBeNull();
 });
 
-test("when the history cannot be read, a short message says so", () => {
-  render(History, { runs: [], status: "error" });
+test("when the history cannot be read, Rust's title and advice say so", () => {
+  render(History, {
+    runs: [],
+    status: "ready",
+    error: { title: "Non riesco a leggere lo storico.", advice: "Riprova tra poco." },
+  });
 
-  expect(screen.getByRole("alert").textContent).toContain("Non riesco a leggere lo storico.");
+  const alert = screen.getByRole("alert").textContent;
+  expect(alert).toContain("Non riesco a leggere lo storico.");
+  expect(alert).toContain("Riprova tra poco.");
 });
 
 test("Registro opens the log modal of that run; Chiudi closes it", async () => {
@@ -319,12 +325,16 @@ test("with no runs there are no filters", () => {
 });
 
 test("a deleted log file says it is no longer available", async () => {
-  invokeMock.mockRejectedValueOnce("os error 2");
+  invokeMock.mockRejectedValueOnce({
+    title: "Non riesco ad aprire il registro di questa copia.",
+    advice: "Controlla che il file ci sia ancora e di avere il permesso di leggerlo.",
+  });
   render(History, { runs: [run()], status: "ready" });
 
   await fireEvent.click(screen.getByRole("button", { name: "Registro" }));
 
-  expect(await screen.findByText("Il registro di questa copia non è più disponibile.")).toBeTruthy();
+  expect(await screen.findByText(/^Non riesco ad aprire il registro di questa copia\./)).toBeTruthy();
+  expect(screen.getByText(/Controlla che il file ci sia ancora/)).toBeTruthy();
 });
 
 test("with no period chosen, a run whose start time does not parse is still listed", () => {

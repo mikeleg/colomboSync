@@ -5,5 +5,5 @@ import type { RunLog } from "./types";
 /** The app was started as administrator: mapped network drives are then not visible. */
 export const isElevated = () => invoke<boolean>("is_elevated");
 
-/** A run's engine log with its error lines; rejects when the file is gone. */
+/** A run's engine log with its error lines; rejects with an `Explanation` when the file is gone. */
 export const readRunLog = (path: string) => invoke<RunLog>("read_run_log", { path });

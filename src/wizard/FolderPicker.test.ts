@@ -35,7 +35,7 @@ const props = {
   label: "Clicca sulla cartella da copiare (A)",
   placeholder: String.raw`Per esempio: D:\Foto`,
   value: "",
-  error: "",
+  error: null,
   onenter: () => {},
 };
 
@@ -221,7 +221,7 @@ test("a step error opens the manual section and focuses the input", async () => 
   const details = screen.getByText("Preferisci scrivere il percorso a mano?").closest("details")!;
   expect(details.open).toBe(false);
 
-  await rerender({ ...props, error: "Scegli prima la cartella da copiare." });
+  await rerender({ ...props, error: { title: "Scegli prima la cartella da copiare.", advice: "" } });
 
   expect(screen.getByRole("alert").textContent).toContain("Scegli prima la cartella da copiare.");
   expect(details.open).toBe(true);

@@ -19,6 +19,7 @@ const preview = (n: number, u: number): Preview => ({
   deleted: { count: 0, files: [] },
   bytes: 3_000_000,
   blocked: null,
+  previewToken: "token-1",
 });
 
 const doneRun: Run = {
@@ -161,7 +162,7 @@ test("only the preview step fills the window: the other steps scroll with the pa
   expect(document.querySelector(".content.fill")).not.toBeNull();
 });
 
-test("Sì, avvia runs with the previewed counts and says Fatto", async () => {
+test("Sì, avvia runs with the token of the preview and no counts, and says Fatto", async () => {
   backend({ preview_sync: () => preview(2, 1), run_sync: () => doneRun });
   render(App);
   await goToPreview();
@@ -171,8 +172,47 @@ test("Sì, avvia runs with the previewed counts and says Fatto", async () => {
   expect(await screen.findByText("Fatto: 2 file copiati, 1 aggiornato in < 1 min")).toBeTruthy();
   expect(invokeMock).toHaveBeenLastCalledWith("run_sync", {
     sync: { id: 7, name: "Copia di Foto", source: "D:\\Foto", destination: "E:\\Backup", mode: "Copy" },
-    counts: { new: 2, updated: 1, deleted: 0 },
+    previewToken: "token-1",
+    consent: false,
   });
+});
+
+test("when Rust refuses the run, the result shows its title and advice", async () => {
+  backend({
+    preview_sync: () => preview(2, 1),
+    run_sync: () => {
+      throw {
+        title: "Non ho avviato la copia: l’anteprima non è più valida.",
+        advice: "Controlla di nuovo le cartelle con l’anteprima, poi avvia.",
+      };
+    },
+  });
+  render(App);
+  await goToPreview();
+
+  await click(await screen.findByRole("button", { name: "Sì, avvia" }));
+
+  expect(
+    await screen.findByRole("heading", { name: "Non ho avviato la copia: l’anteprima non è più valida." }),
+  ).toBeTruthy();
+  expect(screen.getByText("Controlla di nuovo le cartelle con l’anteprima, poi avvia.")).toBeTruthy();
+});
+
+test("when Tauri itself rejects with a plain string, the result says the fixed sentence, never undefined", async () => {
+  backend({
+    preview_sync: () => preview(2, 1),
+    run_sync: () => {
+      throw "invalid args `consent` for command `run_sync`";
+    },
+  });
+  render(App);
+  await goToPreview();
+
+  await click(await screen.findByRole("button", { name: "Sì, avvia" }));
+
+  expect(await screen.findByRole("heading", { name: "Qualcosa è andato storto dentro l’app." })).toBeTruthy();
+  expect(screen.getByText("Riprova. Se succede ancora, chiudi e riapri ColomboSync.")).toBeTruthy();
+  expect(document.body.textContent).not.toContain("undefined");
 });
 
 test("while the copy runs the UI says Sto copiando…", async () => {
@@ -213,7 +253,7 @@ test("nothing to do: B è già aggiornato, an Indietro link and no Sì, avvia", 
 test("a failed preview shows the error, a way back and no Sì, avvia", async () => {
   backend({
     preview_sync: () => {
-      throw "robocopy ha restituito il codice 16.";
+      throw { title: "robocopy ha restituito il codice 16.", advice: "" };
     },
   });
   render(App);
@@ -320,7 +360,8 @@ test("the new sync is saved when the run starts, under the name typed, and the r
   ]);
   expect(invokeMock).toHaveBeenLastCalledWith("run_sync", {
     sync: { id: 7, name: "Copia di Foto", source: "D:\\Foto", destination: "E:\\Backup", mode: "Copy" },
-    counts: { new: 2, updated: 1, deleted: 0 },
+    previewToken: "token-1",
+    consent: false,
   });
 });
 
@@ -351,7 +392,7 @@ test("a sync that cannot be saved says so and does not leave the preview", async
   backend({
     preview_sync: () => preview(2, 1),
     save_sync: () => {
-      throw "Non riesco a salvare la sincronizzazione: disco pieno.";
+      throw { title: "Non riesco a salvare la sincronizzazione: disco pieno.", advice: "" };
     },
   });
   render(App);
@@ -445,7 +486,8 @@ test("Controlla e avvia on a saved Mirror sync still shows the red group and ask
     "run_sync",
     expect.objectContaining({
       sync: expect.objectContaining({ id: 7, mode: "Mirror" }),
-      counts: { new: 20, updated: 1, deleted: 3 },
+      previewToken: "token-1",
+      consent: true,
     }),
   );
   expect(calls("save_sync")).toHaveLength(0);
@@ -454,7 +496,7 @@ test("Controlla e avvia on a saved Mirror sync still shows the red group and ask
 test("a syncs.json that cannot be read nor set aside says so, shows no list and does not let a new sync be started over it", async () => {
   backend({
     list_syncs: () => {
-      throw "Non riesco a leggere le sincronizzazioni salvate.";
+      throw { title: "Non riesco a leggere le sincronizzazioni salvate.", advice: "" };
     },
   });
   render(App);
@@ -589,7 +631,7 @@ test("Storico lists the runs from Rust and swaps the schema for the summary pane
 test("a failed list_runs says so instead of showing an empty history", async () => {
   backend({
     list_runs: () => {
-      throw "boom";
+      throw { title: "Non riesco a leggere lo storico.", advice: "" };
     },
   });
   render(App);
@@ -711,7 +753,8 @@ test("mirror on: the preview runs in Mirror mode, lists what is deleted and the 
       destination: String.raw`E:\Backup`,
       mode: "Mirror",
     },
-    counts: { new: 20, updated: 1, deleted: 12 },
+    previewToken: "token-1",
+    consent: true,
   });
 });
 
@@ -759,7 +802,7 @@ test("Dove: Avanti is blocked with the message from Rust when B is A or inside A
   let message = "La destinazione è la stessa cartella da copiare. Scegline un’altra.";
   backend({
     check_destination: () => {
-      throw message;
+      throw { title: message, advice: "" };
     },
   });
   render(App);
@@ -792,7 +835,7 @@ test("Dove: if the paths change while they are being checked, the new ones are c
     check_destination: () => {
       calls++;
       if (calls === 1) return new Promise<void>((resolve) => (release = resolve));
-      throw "La destinazione non può stare dentro la cartella da copiare.";
+      throw { title: "La destinazione non può stare dentro la cartella da copiare.", advice: "" };
     },
   });
   render(App);
@@ -836,7 +879,11 @@ test("a run that fails says why in plain Italian, with Riprova and the log link"
 });
 
 test("Riprova opens a fresh preview of the same saved sync and never runs by itself", async () => {
-  backend({ preview_sync: () => preview(2, 1), run_sync: () => failedRun });
+  let previews = 0;
+  backend({
+    preview_sync: () => ({ ...preview(2, 1), previewToken: `token-${++previews}` }),
+    run_sync: () => failedRun,
+  });
   render(App);
   await goToPreview();
   await click(await screen.findByRole("button", { name: "Sì, avvia" }));
@@ -854,8 +901,9 @@ test("Riprova opens a fresh preview of the same saved sync and never runs by its
   await screen.findByRole("button", { name: "Riprova" });
   expect(calls("save_sync")).toHaveLength(1);
   expect(calls("run_sync")).toHaveLength(2);
-  expect(calls("run_sync")[1]).toEqual(
-    expect.arrayContaining([expect.objectContaining({ sync: expect.objectContaining({ id: 7 }) })]),
+  expect(calls("run_sync")[0][1]).toEqual(expect.objectContaining({ previewToken: "token-1" }));
+  expect(calls("run_sync")[1][1]).toEqual(
+    expect.objectContaining({ sync: expect.objectContaining({ id: 7 }), previewToken: "token-2" }),
   );
 });
 

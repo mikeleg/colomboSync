@@ -2,7 +2,7 @@
   import Icon from "../shared/Icon.svelte";
   import LogViewer from "../shared/LogViewer.svelte";
   import { formatDuration, formatNumber, partialText } from "../shared/format";
-  import type { RunReport } from "../shared/types";
+  import type { Explanation, RunReport } from "../shared/types";
 
   let {
     run,
@@ -10,8 +10,14 @@
     onhome,
     onretry,
     onhistory,
-  }: { run: RunReport | null; failure: string; onhome: () => void; onretry: () => void; onhistory: () => void } =
-    $props();
+  }: {
+    run: RunReport | null;
+    /** Why no Run exists (Rust refused it, or the sync could not be saved). */
+    failure: Explanation | null;
+    onhome: () => void;
+    onretry: () => void;
+    onhistory: () => void;
+  } = $props();
 
   let viewingLog = $state(false);
 
@@ -26,8 +32,8 @@
   const partialLine = $derived(
     run?.partial === undefined ? "" : run.partial === 0 ? "Nessun file è stato copiato." : partialText(run.partial),
   );
-  // What Rust says about the failure; a command that failed before any Run exists has only its message.
-  const why = $derived(run?.explanation ?? { title: "Non completato", advice: failure });
+  // What Rust says about the failure, of the Run or of the command that failed before any Run existed.
+  const why = $derived(run?.explanation ?? failure ?? { title: "Non completato", advice: "" });
   const title = $derived(
     run && ok
       ? `Fatto: ${formatNumber(run.new)} ${run.new === 1 ? "file copiato" : "file copiati"}, ${formatNumber(run.updated)} ${run.updated === 1 ? "aggiornato" : "aggiornati"}${deletedText} in ${formatDuration(run.durationMs)}`

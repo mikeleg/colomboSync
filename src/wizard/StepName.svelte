@@ -1,12 +1,14 @@
 <script lang="ts">
   import { tick } from "svelte";
+  import ErrorText from "../shared/ErrorText.svelte";
+  import type { Explanation } from "../shared/types";
 
   let {
     name = $bindable(),
     error,
     onedit,
     onenter,
-  }: { name: string; error: string; onedit: () => void; onenter: () => void } = $props();
+  }: { name: string; error: Explanation | null; onedit: () => void; onenter: () => void } = $props();
 
   let input: HTMLInputElement;
 
@@ -27,4 +29,4 @@
   onkeydown={(e) => e.key === "Enter" && onenter()}
 />
 <p class="help">Serve solo a riconoscerla nell’elenco. Puoi tenere questo nome o cambiarlo.</p>
-{#if error}<div class="err-msg" role="alert">{error}</div>{/if}
+{#if error}<div class="err-msg" role="alert"><ErrorText explanation={error} /></div>{/if}

@@ -23,7 +23,8 @@
     error: Explanation | null;
     /** Re-running a saved sync: nothing to save, nothing to change, "No" just returns to the list. */
     saved?: boolean;
-    onstart: () => void;
+    /** `consent`: the box "Ho capito" was ticked (it is only shown when a mirror would delete files). */
+    onstart: (consent: boolean) => void;
     onstop: () => void;
     onback: () => void;
     onretry: () => void;
@@ -123,8 +124,11 @@
       {/if}
       <div class="btns">
         {#if !preview.blocked}
-          <button type="button" class="btn primary big" disabled={needsConsent && !consent} onclick={onstart}
-            >Sì, avvia</button
+          <button
+            type="button"
+            class="btn primary big"
+            disabled={needsConsent && !consent}
+            onclick={() => onstart(consent)}>Sì, avvia</button
           >
         {/if}
         <button type="button" class="btn big" onclick={onstop}

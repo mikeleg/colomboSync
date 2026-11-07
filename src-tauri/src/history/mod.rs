@@ -74,13 +74,28 @@ pub struct RunLog {
     pub error_lines: Vec<usize>,
 }
 
+/// Why a log could not be read.
+#[derive(Debug)]
+pub enum LogError {
+    /// The file is not inside the folder of the logs: asked for by a wrong path, never by the app.
+    OutsideLogsFolder,
+    /// The OS could not open or read it (gone, no permission, …).
+    Io(io::Error),
+}
+
+impl From<io::Error> for LogError {
+    fn from(error: io::Error) -> Self {
+        LogError::Io(error)
+    }
+}
+
 /// A run's log as text (robocopy's `/UNILOG`, UTF-16LE with BOM, or rsync's UTF-8 output), only
 /// if the file is inside `logs_dir`. Long logs are cut to their last part.
-pub fn read_log(logs_dir: &Path, file: &Path) -> io::Result<RunLog> {
+pub fn read_log(logs_dir: &Path, file: &Path) -> Result<RunLog, LogError> {
     read_log_capped(logs_dir, file, MAX_LOG_BYTES)
 }
 
-fn read_log_capped(logs_dir: &Path, file: &Path, max_bytes: u64) -> io::Result<RunLog> {
+fn read_log_capped(logs_dir: &Path, file: &Path, max_bytes: u64) -> Result<RunLog, LogError> {
     read_log_with_limits(logs_dir, file, max_bytes, MAX_SCAN_BYTES)
 }
 
@@ -91,7 +106,7 @@ fn read_log_with_limits(
     file: &Path,
     max_bytes: u64,
     max_scan_bytes: u64,
-) -> io::Result<RunLog> {
+) -> Result<RunLog, LogError> {
     let text = read_text_capped(logs_dir, file, max_bytes, max_scan_bytes)?;
     Ok(RunLog {
         error_lines: engine::error_lines(&text),
@@ -104,14 +119,11 @@ fn read_text_capped(
     file: &Path,
     max_bytes: u64,
     max_scan_bytes: u64,
-) -> io::Result<String> {
+) -> Result<String, LogError> {
     let lower = |p: &Path| PathBuf::from(p.to_string_lossy().to_lowercase());
     let file = file.canonicalize()?;
     if !lower(&file).starts_with(lower(&logs_dir.canonicalize()?)) {
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "Il file non è nella cartella dei registri.",
-        ));
+        return Err(LogError::OutsideLogsFolder);
     }
     let mut input = File::open(&file)?;
     let len = input.metadata()?.len();
@@ -383,8 +395,25 @@ mod tests {
         fs::write(logs.join("ok.log"), unilog("ok")).unwrap();
 
         assert_eq!(read_log(&logs, &logs.join("ok.log")).unwrap().text, "ok");
-        assert!(read_log(&logs, &outside).is_err());
-        assert!(read_log(&logs, &logs.join("..").join("secret.txt")).is_err());
+        assert!(matches!(
+            read_log(&logs, &outside),
+            Err(LogError::OutsideLogsFolder)
+        ));
+        assert!(matches!(
+            read_log(&logs, &logs.join("..").join("secret.txt")),
+            Err(LogError::OutsideLogsFolder)
+        ));
+    }
+
+    #[test]
+    fn a_log_that_is_not_there_is_an_io_error_not_an_outside_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("gone.log");
+
+        let Err(LogError::Io(error)) = read_log(dir.path(), &missing) else {
+            panic!("a missing file is an I/O error");
+        };
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
     }
 
     #[test]

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { tick } from "svelte";
+  import ErrorText from "../shared/ErrorText.svelte";
+  import { toExplanation } from "../shared/explanation";
   import Icon from "../shared/Icon.svelte";
   import { browseFolders, createFolder } from "./api";
   import type { Explanation } from "../shared/types";
@@ -19,7 +21,7 @@
     label: string;
     placeholder: string;
     value: string;
-    error: string;
+    error: Explanation | null;
     onenter: () => void;
     /** Offers "Nuova cartella" inside the folder being browsed. */
     canCreate?: boolean;
@@ -35,7 +37,7 @@
   /** The folder the name box was opened in: the box belongs to it and goes away with any other choice. */
   let creatingIn = $state<string | null>(null);
   let newName = $state("");
-  let createError = $state("");
+  let createError = $state<Explanation | null>(null);
   let nameInput = $state<HTMLInputElement>();
   let createBusy = false;
 
@@ -72,7 +74,7 @@
   function stopCreating() {
     creatingIn = null;
     newName = "";
-    createError = "";
+    createError = null;
   }
 
   async function create() {
@@ -81,8 +83,7 @@
     try {
       pick(await createFolder(source, chosen, newName));
     } catch (e) {
-      const { title, advice } = e as Explanation; // createFolder rejects with an Explanation
-      createError = `${title} ${advice}`.trim();
+      createError = toExplanation(e);
     } finally {
       createBusy = false;
     }
@@ -146,7 +147,7 @@
         <button type="button" class="btn primary" onclick={create}>Crea</button>
         <button type="button" class="btn" onclick={stopCreating}>Annulla</button>
       </div>
-      {#if createError}<div class="err-msg" role="alert">{createError}</div>{/if}
+      {#if createError}<div class="err-msg" role="alert"><ErrorText explanation={createError} /></div>{/if}
     </div>
   {/if}
   <div class="rows">
@@ -163,7 +164,7 @@
     {/each}
   </div>
 </div>
-{#if error}<div class="err-msg" role="alert">{error}</div>{/if}
+{#if error}<div class="err-msg" role="alert"><ErrorText explanation={error} /></div>{/if}
 <details class="manual" bind:open={manualOpen}>
   <summary>Preferisci scrivere il percorso a mano?</summary>
   <div class="manualbody">

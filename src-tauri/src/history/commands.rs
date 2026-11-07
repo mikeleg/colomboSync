@@ -1,9 +1,10 @@
 //! Thin `#[tauri::command]` wrappers for the Storico screen.
 
 use super::summary::{self, HistorySummary};
-use super::{Run, RunLog, read, read_log};
+use super::{LogError, Run, RunLog, read, read_log};
 use crate::shared::blocking::blocking;
 use crate::shared::domain::{RunReport, SavedSync};
+use crate::shared::error_messages::{self, Explanation};
 use crate::shared::storage::Storage;
 use crate::shared::sync_store;
 use serde::Serialize;
@@ -26,10 +27,11 @@ fn run_list(runs: Vec<Run>, syncs: &[SavedSync]) -> RunList {
 
 /// A `syncs.json` that cannot be read only means the syncs keep the names they had in their runs.
 #[tauri::command]
-pub async fn list_runs() -> Result<RunList, String> {
+pub async fn list_runs() -> Result<RunList, Explanation> {
     let storage = Storage::from_env()?;
     blocking(move || {
-        let runs = read(&storage.history_file()).map_err(|e| e.to_string())?;
+        let runs =
+            read(&storage.history_file()).map_err(|_| error_messages::cannot_read_history())?;
         let syncs = sync_store::load(&storage.syncs_file()).unwrap_or_default();
         Ok(run_list(runs, &syncs))
     })
@@ -39,10 +41,15 @@ pub async fn list_runs() -> Result<RunList, String> {
 /// The engine log of one run with its error lines; fails when the file is gone or not inside the
 /// logs folder.
 #[tauri::command]
-pub async fn read_run_log(path: String) -> Result<RunLog, String> {
+pub async fn read_run_log(path: String) -> Result<RunLog, Explanation> {
     let storage = Storage::from_env()?;
-    blocking(move || read_log(&storage.logs_dir(), Path::new(&path)).map_err(|e| e.to_string()))
-        .await
+    blocking(move || {
+        read_log(&storage.logs_dir(), Path::new(&path)).map_err(|e| match e {
+            LogError::OutsideLogsFolder => error_messages::not_a_log(),
+            LogError::Io(e) => error_messages::explain_log_error(&e),
+        })
+    })
+    .await
 }
 
 #[cfg(test)]

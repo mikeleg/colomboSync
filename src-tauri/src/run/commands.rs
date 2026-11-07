@@ -2,27 +2,28 @@
 //! never freezes.
 
 use super::runner::{self, ActiveRun};
-use crate::engine::preview_parser::Counts;
 use crate::shared::blocking::blocking;
 use crate::shared::domain::{RunReport, SavedSync};
+use crate::shared::error_messages::Explanation;
 use crate::shared::storage::Storage;
 use crate::wizard::preview::PreviewMemo;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+/// Runs `sync` as the preview whose `preview_token` `preview_sync` gave confirms it. What the UI
+/// sends is only a claim: the counts are the ones Rust measured in that preview, and the run is
+/// refused with an `Explanation` unless the token is the last preview's, for this A, B and mode,
+/// and `consent` is given when a mirror would delete from B.
 #[tauri::command]
 pub async fn run_sync(
     app: AppHandle,
     sync: SavedSync,
-    counts: Counts,
-) -> Result<RunReport, String> {
+    preview_token: Option<String>,
+    consent: bool,
+) -> Result<RunReport, Explanation> {
     let storage = Storage::from_env()?;
-    // The counts of the preview Rust measured count, not the ones the UI sends back.
-    let counts = app.state::<PreviewMemo>().take_counts(
-        &sync.source,
-        &sync.destination,
-        sync.mode,
-        counts,
-    )?;
+    let counts = app
+        .state::<PreviewMemo>()
+        .confirm(preview_token.as_deref(), &sync, consent)?;
     let run = blocking({
         let app = app.clone();
         move || {

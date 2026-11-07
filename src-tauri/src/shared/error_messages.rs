@@ -120,6 +120,117 @@ pub fn explain_missing_parent() -> Explanation {
     }
 }
 
+fn explanation(title: &str, advice: &str) -> Explanation {
+    Explanation {
+        title: title.into(),
+        advice: advice.into(),
+    }
+}
+
+const REDO_PREVIEW: &str = "Controlla di nuovo le cartelle con l’anteprima, poi avvia.";
+
+/// A run was asked for with no preview token at all.
+pub fn run_without_preview() -> Explanation {
+    explanation(
+        "Non ho avviato la copia: manca l’anteprima.",
+        "Prima controlla le due cartelle con l’anteprima, poi avvia.",
+    )
+}
+
+/// The token is not the one of the last preview: it was never given, it was replaced by a newer
+/// preview, or it already confirmed a run.
+pub fn run_with_stale_preview() -> Explanation {
+    explanation(
+        "Non ho avviato la copia: l’anteprima non è più valida.",
+        REDO_PREVIEW,
+    )
+}
+
+/// The preview is of other folders, or of the other mode, than the sync that was asked to run.
+pub fn run_with_other_preview() -> Explanation {
+    explanation(
+        "Non ho avviato la copia: l’anteprima è di altre cartelle o di un’altra modalità.",
+        REDO_PREVIEW,
+    )
+}
+
+/// A mirror run that would delete files from B, without the user's confirmation.
+pub fn mirror_without_consent() -> Explanation {
+    explanation(
+        "Non ho avviato la copia: manca la tua conferma.",
+        "Con lo specchio i file che ci sono solo in B vengono cancellati. Conferma di aver capito e riprova.",
+    )
+}
+
+/// A background task died instead of answering: nothing the user did.
+pub fn unexpected_failure() -> Explanation {
+    explanation(
+        "Qualcosa è andato storto dentro l’app.",
+        "Riprova. Se succede ancora, chiudi e riapri ColomboSync.",
+    )
+}
+
+/// `syncs.json` can be read neither nor set aside.
+pub fn cannot_read_syncs() -> Explanation {
+    "Non riesco a leggere le sincronizzazioni salvate.".into()
+}
+
+/// Fixed words: what the OS said is for the developer, not for the user.
+pub fn cannot_save_sync() -> Explanation {
+    explanation(
+        "Non riesco a salvare la sincronizzazione.",
+        "Controlla lo spazio sul disco e i permessi, poi riprova.",
+    )
+}
+
+pub fn cannot_read_history() -> Explanation {
+    "Non riesco a leggere lo storico.".into()
+}
+
+/// The path asked for is not inside the folder of the logs: nothing the user can fix.
+pub fn not_a_log() -> Explanation {
+    "Questo file non è un registro di ColomboSync.".into()
+}
+
+/// A run's log could not be shown: the file is gone, or the OS could not read it.
+pub fn explain_log_error(error: &io::Error) -> Explanation {
+    if error.kind() == io::ErrorKind::NotFound {
+        return "Il registro di questa copia non è più disponibile.".into();
+    }
+    explanation(
+        "Non riesco ad aprire il registro di questa copia.",
+        "Controlla che il file ci sia ancora e di avere il permesso di leggerlo.",
+    )
+}
+
+pub fn run_already_in_progress() -> Explanation {
+    "C’è già una copia in corso.".into()
+}
+
+/// The folder for the logs could not be made.
+pub fn cannot_prepare_logs() -> Explanation {
+    explanation(
+        "Non riesco a preparare la cartella dei registri.",
+        "Controlla lo spazio sul disco e i permessi, poi riprova.",
+    )
+}
+
+/// The Run is over, but its line could not be added to the history.
+pub fn cannot_write_history() -> Explanation {
+    explanation(
+        "Non riesco a salvare questa copia nello storico.",
+        "Controlla lo spazio sul disco e i permessi. La copia potrebbe essere già stata fatta: guarda in B.",
+    )
+}
+
+/// The engine was started but how it ended could not be read.
+pub fn cannot_follow_engine() -> Explanation {
+    explanation(
+        "Non riesco a sapere come è finita la copia.",
+        "Guarda cosa c’è in B e riprova.",
+    )
+}
+
 /// The title and the advice for a failure; a generic one when the cause is unknown.
 pub fn describe(
     cause: Option<Cause>,
@@ -332,6 +443,64 @@ mod tests {
 
     const A: &str = r"D:\Foto";
     const NAS_B: &str = r"\\NAS\Backup";
+
+    #[test]
+    fn the_commands_words_keep_what_the_ui_used_to_say() {
+        assert_eq!(
+            cannot_read_syncs().title,
+            "Non riesco a leggere le sincronizzazioni salvate."
+        );
+        assert_eq!(
+            cannot_save_sync().title,
+            "Non riesco a salvare la sincronizzazione."
+        );
+        assert_eq!(
+            cannot_read_history().title,
+            "Non riesco a leggere lo storico."
+        );
+        assert_eq!(
+            run_already_in_progress().title,
+            "C’è già una copia in corso."
+        );
+        assert_eq!(
+            run_without_preview().advice,
+            "Prima controlla le due cartelle con l’anteprima, poi avvia."
+        );
+    }
+
+    #[test]
+    fn a_log_that_cannot_be_shown_says_if_it_is_gone_or_unreadable_and_never_the_os_text() {
+        let gone = explain_log_error(&io::Error::from(io::ErrorKind::NotFound));
+        assert_eq!(
+            gone.title,
+            "Il registro di questa copia non è più disponibile."
+        );
+        assert_eq!(gone.advice, "");
+
+        let denied = io::Error::new(io::ErrorKind::PermissionDenied, "os says no");
+        for error in [denied, io::Error::from(io::ErrorKind::TimedOut)] {
+            let unreadable = explain_log_error(&error);
+            assert_eq!(
+                unreadable.title,
+                "Non riesco ad aprire il registro di questa copia."
+            );
+            assert!(!unreadable.advice.contains("os says no"));
+        }
+    }
+
+    #[test]
+    fn a_path_outside_the_logs_folder_has_its_own_words_and_no_advice_to_follow() {
+        let outside = not_a_log();
+        assert_eq!(
+            outside.title,
+            "Questo file non è un registro di ColomboSync."
+        );
+        assert_eq!(outside.advice, "");
+        assert_ne!(
+            outside,
+            explain_log_error(&io::Error::from(io::ErrorKind::PermissionDenied))
+        );
+    }
 
     #[test]
     fn the_os_error_decides_the_message_of_a_failed_folder_creation() {

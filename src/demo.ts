@@ -285,22 +285,81 @@ const SAMPLES: Record<string, Sample> = {
 };
 const sampleFor = (source: string) => SAMPLES[source] ?? SAMPLES[FOTO_FROM];
 
-async function previewSync(source: string, mode: SyncMode): Promise<Preview> {
+/** Like Rust (`PreviewMemo`): the last preview with its token, A, B and mode; a run takes its counts from here. */
+let lastPreview: { token: string; source: string; destination: string; mode: SyncMode; counts: Counts } | null = null;
+let previews = 0;
+
+/** The Mirror of this folder is blocked in the demo, as MirrorGuard blocks an A that looks empty or unplugged. */
+const EMPTY_SOURCE = "E:\\Chiavetta";
+const SOURCE_EMPTY =
+  "A sembra vuota o scollegata: con lo specchio verrebbe svuotato B. Controlla che il disco di A sia collegato.";
+
+async function previewSync(source: string, destination: string, mode: SyncMode): Promise<Preview> {
+  lastPreview = null; // a preview that starts makes every earlier token stale
   await wait(600);
   const sample = sampleFor(source);
-  return {
+  if (mode === "Mirror" && source === EMPTY_SOURCE) {
+    return {
+      new: { count: 0, files: [] },
+      updated: { count: 0, files: [] },
+      deleted: { count: 0, files: [] },
+      bytes: 0,
+      blocked: SOURCE_EMPTY,
+      previewToken: null, // a blocked preview confirms nothing
+    };
+  }
+  const previewToken = `demo-${++previews}`;
+  const preview: Preview = {
     new: { count: 120, files: sample.new },
     updated: { count: 40, files: sample.updated },
     deleted: mode === "Mirror" ? { count: 25, files: sample.deleted } : { count: 0, files: [] },
     bytes: Math.round(1.8 * 1024 ** 3),
     blocked: null,
+    previewToken,
   };
+  lastPreview = {
+    token: previewToken,
+    source,
+    destination,
+    mode,
+    counts: { new: preview.new.count, updated: preview.updated.count, deleted: preview.deleted.count },
+  };
+  return preview;
 }
 
 const RUN_MS = 8000;
 const RUN_STEPS = 40;
 
-async function runSync(sync: Sync, counts: Counts): Promise<RunReport> {
+const REDO_PREVIEW = "Controlla di nuovo le cartelle con l’anteprima, poi avvia.";
+
+/** Like Rust's `PreviewMemo::confirm`: the counts of the preview, or a refusal (thrown) in the same order and words. */
+function confirmPreview(sync: Sync, previewToken: string | null, consent: boolean): Counts {
+  const refuse = (title: string, advice: string): never => {
+    const refused: Explanation = { title: `Non ho avviato la copia: ${title}`, advice };
+    throw refused;
+  };
+  if (!previewToken) {
+    return refuse("manca l’anteprima.", "Prima controlla le due cartelle con l’anteprima, poi avvia.");
+  }
+  if (!lastPreview || lastPreview.token !== previewToken) {
+    return refuse("l’anteprima non è più valida.", REDO_PREVIEW);
+  }
+  const { source, destination, mode, counts } = lastPreview;
+  lastPreview = null; // a preview confirms one run, also a refused one
+  if (source !== sync.source || destination !== sync.destination || mode !== sync.mode) {
+    return refuse("l’anteprima è di altre cartelle o di un’altra modalità.", REDO_PREVIEW);
+  }
+  if (mode === "Mirror" && counts.deleted > 0 && !consent) {
+    return refuse(
+      "manca la tua conferma.",
+      "Con lo specchio i file che ci sono solo in B vengono cancellati. Conferma di aver capito e riprova.",
+    );
+  }
+  return counts;
+}
+
+async function runSync(sync: Sync, previewToken: string | null, consent: boolean): Promise<RunReport> {
+  const counts = confirmPreview(sync, previewToken, consent);
   const total = counts.new + counts.updated + counts.deleted;
   const started = Date.now();
   const names = sampleFor(sync.source).new;
@@ -414,7 +473,7 @@ mockIPC(
       case "list_runs":
         return { runs: newestFirst(runs), summary: historySummary() } satisfies RunList;
       case "preview_sync":
-        return previewSync(text("source"), args.mode as SyncMode);
+        return previewSync(text("source"), text("destination"), args.mode as SyncMode);
       case "browse_folders":
         return browseFolders(text("path"));
       case "create_folder":
@@ -446,7 +505,7 @@ mockIPC(
       case "cancel_run":
         return true;
       case "run_sync":
-        return runSync(args.sync as Sync, args.counts as Counts);
+        return runSync(args.sync as Sync, (args.previewToken as string | null) ?? null, args.consent === true);
       default:
         console.warn(`demo: comando non simulato: ${cmd}`);
         return null;

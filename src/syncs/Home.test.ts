@@ -121,11 +121,13 @@ test("a damaged store set aside by Rust: empty state with a note and the new syn
 
 test("a store that could not even be set aside: a message, no list, and a new sync cannot be started", async () => {
   invokeMock.mockImplementation(async () => {
-    throw "Non riesco a leggere le sincronizzazioni salvate.";
+    throw { title: "Non riesco a leggere le sincronizzazioni salvate.", advice: "Riavvia l’app." };
   });
   render(Home, props);
 
-  expect((await screen.findByRole("alert")).textContent).toContain("Non riesco a leggere le sincronizzazioni salvate.");
+  const alert = (await screen.findByRole("alert")).textContent;
+  expect(alert).toContain("Non riesco a leggere le sincronizzazioni salvate.");
+  expect(alert).toContain("Riavvia l’app.");
   expect((screen.getByRole("button", { name: "Nuova sincronizzazione" }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.queryByRole("listitem")).toBeNull();
 });

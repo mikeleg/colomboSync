@@ -2,6 +2,7 @@
 //! `~/Library/Application Support/ColomboSync` on macOS, `$XDG_DATA_HOME/ColomboSync` or
 //! `~/.local/share/ColomboSync` on Linux.
 
+use super::error_messages::Explanation;
 use super::path_rules;
 use chrono::NaiveDateTime;
 use std::ffi::OsString;
@@ -16,7 +17,7 @@ pub struct Storage {
 
 impl Storage {
     /// Reads the environment (not Tauri's app dir).
-    pub fn from_env() -> Result<Self, String> {
+    pub fn from_env() -> Result<Self, Explanation> {
         let env = |name: &str| std::env::var_os(name);
         let root = if cfg!(windows) {
             windows_dir(env)

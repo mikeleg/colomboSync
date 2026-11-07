@@ -1,15 +1,15 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { formatDuration, formatNumber, partialText } from "./format";
-  import type { Run } from "./types";
+  import { formatNumber } from "./format";
+  import type { RunReport } from "./types";
 
   /** The figures of a run, as the Storico rows and the log window show them; `extra` adds one more item at the end. */
-  let { run, extra }: { run: Run; extra?: Snippet } = $props();
+  let { run, extra }: { run: RunReport; extra?: Snippet } = $props();
 </script>
 
 <dl class="stats">
-  {#if run.partial != null}
-    <div><dd>{partialText(run.partial)}</dd></div>
+  {#if run.partialText !== null}
+    <div><dd>{run.partialText}</dd></div>
   {:else}
     <div>
       <dt>Nuovi</dt>
@@ -26,7 +26,7 @@
   </div>
   <div>
     <dt>Durata</dt>
-    <dd>{formatDuration(run.durationMs)}</dd>
+    <dd>{run.durationText}</dd>
   </div>
   {@render extra?.()}
 </dl>

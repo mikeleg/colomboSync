@@ -1,6 +1,6 @@
 <script lang="ts">
   import ErrorText from "../shared/ErrorText.svelte";
-  import { formatWhen, modeChip, outcomeChip } from "../shared/format";
+  import { modeChip, outcomeChip } from "../shared/format";
   import LogViewer from "../shared/LogViewer.svelte";
   import RunChips from "../shared/RunChips.svelte";
   import RunStats from "../shared/RunStats.svelte";
@@ -119,7 +119,7 @@
     <li class="run">
       <div class="top">
         <strong>{run.syncName}</strong>
-        <span class="when">{formatWhen(run.startedAt)}</span>
+        <span class="when">{run.when}</span>
         <span class="chips">
           <RunChips {run} />
         </span>

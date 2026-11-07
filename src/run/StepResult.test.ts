@@ -23,6 +23,13 @@ const run = (over: Partial<RunReport> = {}): RunReport => ({
   startedAt: "2026-11-03T12:00:00+01:00",
   logPath: "C:\\L\\x.log",
   explanation: null,
+  // What Rust sends for this run (see the tests of shared/copy_text.rs): the screen shows it as it is.
+  title: "Fatto: 12 file copiati, 3 aggiornati in < 1 min",
+  caption: "Fatto.",
+  resultNote: null,
+  partialText: null,
+  when: "03/11/2026 12:00",
+  durationText: "< 1 min",
   ...over,
 });
 
@@ -31,6 +38,9 @@ const generic = {
   title: "Non completato: la copia si è fermata per un problema.",
   advice: "Apri il registro per vedere i dettagli.",
 };
+const failed = (over: Partial<RunReport> = {}) =>
+  run({ outcome: "Error", explanation: generic, title: generic.title, caption: "Non completato.", ...over });
+const NOTHING_COPIED = "Nessun file è stato copiato.";
 
 test("success: Fatto with copied and updated counts and the duration", () => {
   render(StepResult, { run: run(), failure: null, ...handlers });
@@ -39,15 +49,16 @@ test("success: Fatto with copied and updated counts and the duration", () => {
   expect(screen.getByRole("button", { name: "Torna all’elenco" })).toBeTruthy();
 });
 
-test("success uses the singular", () => {
-  render(StepResult, { run: run({ new: 1, updated: 1 }), failure: null, ...handlers });
+test("the heading is the title Rust made, as it is", () => {
+  const title = "Fatto: 1 file copiato, 1 aggiornato, 1 cancellato da B in 2 min";
+  render(StepResult, { run: run({ title }), failure: null, ...handlers });
 
-  expect(screen.getByRole("heading").textContent).toBe("Fatto: 1 file copiato, 1 aggiornato in < 1 min");
+  expect(screen.getByRole("heading").textContent).toBe(title);
 });
 
 test("error outcome without a known cause: the generic title and where to look", () => {
   render(StepResult, {
-    run: run({ outcome: "Error", explanation: generic }),
+    run: failed(),
     failure: null,
     ...handlers,
   });
@@ -68,26 +79,18 @@ test("a command failure before any Run exists shows Rust's title and advice", ()
   expect(screen.getByText(failure.advice)).toBeTruthy();
 });
 
-test("a mirror run also says how many files were deleted from B", () => {
-  render(StepResult, { run: run({ mode: "Mirror", deleted: 12 }), failure: null, ...handlers });
-
-  expect(screen.getByRole("heading").textContent).toBe(
-    "Fatto: 12 file copiati, 3 aggiornati, 12 cancellati da B in < 1 min",
-  );
-});
-
-test("a mirror run that deleted nothing, or one file, reads naturally", () => {
-  const { unmount } = render(StepResult, { run: run({ mode: "Mirror", deleted: 0 }), failure: null, ...handlers });
-  expect(screen.getByRole("heading").textContent).toBe("Fatto: 12 file copiati, 3 aggiornati in < 1 min");
-  unmount();
-
-  render(StepResult, { run: run({ mode: "Mirror", deleted: 1 }), failure: null, ...handlers });
-  expect(screen.getByRole("heading").textContent).toContain(", 1 cancellato da B in ");
-});
-
 test("cancelled: Annullato with what stays in B, and the partial count", () => {
   render(StepResult, {
-    run: run({ outcome: "Cancelled", new: 0, updated: 0, partial: 40 }),
+    run: run({
+      outcome: "Cancelled",
+      new: 0,
+      updated: 0,
+      partial: 40,
+      title: "Annullato: ho fermato la copia.",
+      caption: "Annullato.",
+      resultNote: "40 file copiati (parziale). I file già copiati restano in B.",
+      partialText: "40 file copiati (parziale)",
+    }),
     failure: null,
     ...handlers,
   });
@@ -98,21 +101,30 @@ test("cancelled: Annullato with what stays in B, and the partial count", () => {
 });
 
 test("cancelled before any file was copied", () => {
-  render(StepResult, { run: run({ outcome: "Cancelled", partial: 0 }), failure: null, ...handlers });
+  render(StepResult, {
+    run: run({
+      outcome: "Cancelled",
+      partial: 0,
+      title: "Annullato: ho fermato la copia.",
+      resultNote: NOTHING_COPIED,
+    }),
+    failure: null,
+    ...handlers,
+  });
 
-  expect(screen.getByText("Nessun file è stato copiato.")).toBeTruthy();
+  expect(screen.getByText(NOTHING_COPIED)).toBeTruthy();
   expect(screen.queryByText(/restano in B/)).toBeNull();
 });
 
 test("error before any file was copied", () => {
-  render(StepResult, { run: run({ outcome: "Error", explanation: generic, partial: 0 }), failure: null, ...handlers });
+  render(StepResult, { run: failed({ partial: 0, resultNote: NOTHING_COPIED }), failure: null, ...handlers });
 
-  expect(screen.getByText("Nessun file è stato copiato.")).toBeTruthy();
+  expect(screen.getByText(NOTHING_COPIED)).toBeTruthy();
 });
 
-test("error after copying 40 files says 40 file copiati (parziale) next to the message", () => {
+test("error after copying 40 files shows Rust's note next to the message", () => {
   render(StepResult, {
-    run: run({ outcome: "Error", explanation: generic, partial: 40 }),
+    run: failed({ partial: 40, resultNote: "40 file copiati (parziale)" }),
     failure: null,
     ...handlers,
   });
@@ -149,7 +161,11 @@ test("an unreachable share: the reason in the title, what to do under it", () =>
     title: String.raw`Non completato: la cartella di rete \\NAS non è raggiungibile.`,
     advice: "Controlla la connessione e riprova.",
   };
-  render(StepResult, { run: run({ outcome: "Error", explanation }), failure: null, ...handlers });
+  render(StepResult, {
+    run: run({ outcome: "Error", explanation, title: explanation.title }),
+    failure: null,
+    ...handlers,
+  });
 
   expect(screen.getByRole("heading").textContent).toBe(explanation.title);
   expect(screen.getByText(explanation.advice)).toBeTruthy();
@@ -192,10 +208,4 @@ test("when no Run exists there is no log to open, but Riprova is still there", (
   render(StepResult, { run: null, failure: { title: "spawn failed", advice: "" }, ...handlers });
 
   expect(buttons()).toEqual(["Riprova", "Torna all’elenco", "Vai allo storico"]);
-});
-
-test("a failed run without an explanation (an older one) still says Non completato", () => {
-  render(StepResult, { run: run({ outcome: "Error" }), failure: null, ...handlers });
-
-  expect(screen.getByRole("heading").textContent).toBe("Non completato");
 });

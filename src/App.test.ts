@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { act, fireEvent, render, screen, within } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App.svelte";
-import type { Run, RunReport } from "./shared/types";
+import type { RunReport } from "./shared/types";
 import type { HistorySummary, RunList } from "./history/types";
 import type { Preview } from "./wizard/types";
 import type { SyncSummary } from "./syncs/types";
@@ -22,7 +22,8 @@ const preview = (n: number, u: number): Preview => ({
   previewToken: "token-1",
 });
 
-const doneRun: Run = {
+// A run as Rust sends it, texts included: the screens show them as they are.
+const doneRun: RunReport = {
   syncName: "Copia di Foto",
   source: "D:\\Foto",
   destination: "E:\\Backup",
@@ -34,11 +35,18 @@ const doneRun: Run = {
   outcome: "Ok",
   startedAt: "2026-11-03T12:00:00+01:00",
   logPath: "C:\\L\\logs\\x.log",
+  explanation: null,
+  title: "Fatto: 2 file copiati, 1 aggiornato in < 1 min",
+  caption: "Fatto.",
+  resultNote: null,
+  partialText: null,
+  when: "03/11/2026 12:00",
+  durationText: "< 1 min",
 };
 
 /** What `list_runs` answers: the runs plus a summary (all zeros unless a test gives one). */
-const runList = (runs: Run[], summary: Partial<HistorySummary> = {}): RunList => ({
-  runs: runs.map((run) => ({ explanation: null, ...run })),
+const runList = (runs: RunReport[], summary: Partial<HistorySummary> = {}): RunList => ({
+  runs,
   summary: { runs: 0, ok: 0, failed: 0, cancelled: 0, filesCopied: 0, filesDeleted: 0, syncs: [], ...summary },
 });
 
@@ -223,19 +231,6 @@ test("while the copy runs the UI says Sto copiando…", async () => {
   await click(await screen.findByRole("button", { name: "Sì, avvia" }));
 
   expect(screen.getByRole("heading", { name: /^Sto copiando/ })).toBeTruthy();
-});
-
-test("a failed run with no explanation still says Non completato", async () => {
-  backend({
-    preview_sync: () => preview(2, 1),
-    run_sync: () => ({ ...doneRun, outcome: "Error", explanation: null }),
-  });
-  render(App);
-  await goToPreview();
-
-  await click(await screen.findByRole("button", { name: "Sì, avvia" }));
-
-  expect(await screen.findByRole("heading", { name: "Non completato" })).toBeTruthy();
 });
 
 test("nothing to do: B è già aggiornato, an Indietro link and no Sì, avvia", async () => {
@@ -724,7 +719,12 @@ test("turning on the mirror switch shows the red warning at once and the schema 
 test("mirror on: the preview runs in Mirror mode, lists what is deleted and the schema counts it", async () => {
   backend({
     preview_sync: () => ({ ...preview(20, 1), deleted: { count: 12, files: ["vecchio.txt"] } }),
-    run_sync: () => ({ ...doneRun, mode: "Mirror", deleted: 12 }),
+    run_sync: () => ({
+      ...doneRun,
+      mode: "Mirror",
+      deleted: 12,
+      title: "Fatto: 2 file copiati, 1 aggiornato, 12 cancellati da B in < 1 min",
+    }),
   });
   render(App);
   await toOpzioni();
@@ -863,7 +863,16 @@ const unreachable = {
   title: String.raw`Non completato: la cartella di rete \\NAS non è raggiungibile.`,
   advice: "Controlla la connessione e riprova.",
 };
-const failedRun: RunReport = { ...doneRun, outcome: "Error", explanation: unreachable, partial: 0 };
+const failedRun: RunReport = {
+  ...doneRun,
+  outcome: "Error",
+  explanation: unreachable,
+  partial: 0,
+  title: unreachable.title,
+  caption: "Non completato.",
+  resultNote: "Nessun file è stato copiato.",
+  partialText: "0 file copiati (parziale)",
+};
 
 test("a run that fails says why in plain Italian, with Riprova and the log link", async () => {
   backend({ preview_sync: () => preview(2, 1), run_sync: () => failedRun });
@@ -922,7 +931,15 @@ test("Torna all’elenco and Vai allo storico leave the result", async () => {
 test("Riprova after a stopped run shows the preview again", async () => {
   backend({
     preview_sync: () => preview(2, 1),
-    run_sync: () => ({ ...doneRun, outcome: "Cancelled", partial: 1 }),
+    run_sync: () => ({
+      ...doneRun,
+      outcome: "Cancelled",
+      partial: 1,
+      title: "Annullato: ho fermato la copia.",
+      caption: "Annullato.",
+      resultNote: "1 file copiato (parziale). I file già copiati restano in B.",
+      partialText: "1 file copiato (parziale)",
+    }),
   });
   render(App);
   await goToPreview();

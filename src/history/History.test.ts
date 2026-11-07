@@ -20,6 +20,13 @@ const run = (over: Partial<RunReport> = {}): RunReport => ({
   startedAt: "2026-11-02T21:30:00+01:00",
   logPath: String.raw`C:\L\logs\a.log`,
   explanation: null,
+  // What Rust sends for this run (see the tests of shared/copy_text.rs): the screen shows it as it is.
+  title: "Fatto: 12 file copiati, 1 aggiornato in 1 min",
+  caption: "Fatto.",
+  resultNote: null,
+  partialText: null,
+  when: "02/11/2026 21:30",
+  durationText: "1 min",
   ...over,
 });
 
@@ -27,7 +34,10 @@ beforeEach(() => invokeMock.mockReset());
 
 test("lead and one row per run, in the order given (newest first)", () => {
   render(History, {
-    runs: [run({ syncName: "Recente", startedAt: "2026-11-03T08:05:00+01:00" }), run({ syncName: "Vecchia" })],
+    runs: [
+      run({ syncName: "Recente", startedAt: "2026-11-03T08:05:00+01:00", when: "03/11/2026 08:05" }),
+      run({ syncName: "Vecchia" }),
+    ],
     status: "ready",
   });
 
@@ -56,7 +66,10 @@ test("a row shows mode and outcome chips, counts and duration", () => {
 });
 
 test("a stopped or failed run shows the files really copied, not the previewed counts", () => {
-  render(History, { runs: [run({ outcome: "Cancelled", new: 12, updated: 1, partial: 40 })], status: "ready" });
+  render(History, {
+    runs: [run({ outcome: "Cancelled", new: 12, updated: 1, partial: 40, partialText: "40 file copiati (parziale)" })],
+    status: "ready",
+  });
 
   const row = screen.getByRole("listitem");
   expect(within(row).getByText("40 file copiati (parziale)")).toBeTruthy();
@@ -338,9 +351,13 @@ test("a deleted log file says it is no longer available", async () => {
 });
 
 test("with no period chosen, a run whose start time does not parse is still listed", () => {
-  render(History, { runs: [run({ syncName: "Strana", startedAt: "non è una data" }), run()], status: "ready" });
+  render(History, {
+    runs: [run({ syncName: "Strana", startedAt: "non è una data", when: "non è una data" }), run()],
+    status: "ready",
+  });
 
   expect(names()).toEqual(["Strana", "Copia di Foto"]);
+  expect(screen.getAllByRole("listitem")[0].textContent).toContain("non è una data");
 });
 
 test("a sync that ran before and after ids existed is one entry showing all its runs", async () => {

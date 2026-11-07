@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import Icon from "../shared/Icon.svelte";
   import { cancelRun, onRunProgress } from "./api";
-  import { etaText, formatNumber } from "../shared/format";
+  import { formatNumber } from "../shared/format";
   import type { RunProgress } from "./types";
 
   /**
@@ -11,6 +11,9 @@
    * its mount on, so none is lost while this view is still starting.
    */
   let { total, closeRequests = 0 }: { total: number; closeRequests?: number } = $props();
+
+  /** Shown until Rust sends the first event, which carries the real text. */
+  const CALCULATING = "Calcolo il tempo che manca…";
 
   let progress = $state<RunProgress | null>(null);
   let confirming = $state(false);
@@ -87,7 +90,7 @@
   >
     <i style:width="{percent}%"></i>
   </div>
-  <p class="rp-eta">{etaText(done, total, progress?.elapsedMs ?? 0)}</p>
+  <p class="rp-eta">{progress?.eta ?? CALCULATING}</p>
   <p class="sr" aria-live="polite">{announcement}</p>
 </div>
 <div class="curfile" aria-hidden="true">{progress?.currentFile ? `Sto copiando: ${progress.currentFile}` : ""}</div>

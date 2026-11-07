@@ -28,7 +28,46 @@ const syncs: Sync[] = [
 ];
 let nextId = 4;
 
-const runs: RunReport[] = [
+// Rust words the texts of a run (shared/copy_text.rs); here a small imitation of it.
+const num = (n: number) => n.toLocaleString("it-IT");
+const whenText = (startedAt: string) =>
+  `${startedAt.slice(8, 10)}/${startedAt.slice(5, 7)}/${startedAt.slice(0, 4)} ${startedAt.slice(11, 16)}`;
+const durationText = (ms: number) => (Math.round(ms / MINUTE) < 1 ? "< 1 min" : `${Math.round(ms / MINUTE)} min`);
+const partialText = (n: number) => `${num(n)} ${n === 1 ? "file copiato" : "file copiati"} (parziale)`;
+
+/** A run as `run_sync` and `list_runs` send it: the stored fields, the explanation and the finished texts. */
+function toReport(run: Run & { explanation: Explanation | null }): RunReport {
+  const noneCopied = "Nessun file è stato copiato.";
+  const resultNote =
+    run.partial === undefined
+      ? null
+      : run.partial === 0
+        ? noneCopied
+        : run.outcome === "Cancelled"
+          ? `${partialText(run.partial)}. I file già copiati restano in B.`
+          : partialText(run.partial);
+  const deleted =
+    run.mode === "Mirror" && run.deleted > 0
+      ? `, ${num(run.deleted)} ${run.deleted === 1 ? "cancellato" : "cancellati"} da B`
+      : "";
+  const title =
+    run.outcome === "Ok"
+      ? `Fatto: ${num(run.new)} ${run.new === 1 ? "file copiato" : "file copiati"}, ${num(run.updated)} ${run.updated === 1 ? "aggiornato" : "aggiornati"}${deleted} in ${durationText(run.durationMs)}`
+      : run.outcome === "Cancelled"
+        ? "Annullato: ho fermato la copia."
+        : (run.explanation?.title ?? "Non completato");
+  return {
+    ...run,
+    title,
+    caption: run.outcome === "Ok" ? "Fatto." : run.outcome === "Cancelled" ? "Annullato." : "Non completato.",
+    resultNote,
+    partialText: run.partial === undefined ? null : partialText(run.partial),
+    when: whenText(run.startedAt),
+    durationText: durationText(run.durationMs),
+  };
+}
+
+const seeds: (Run & { explanation: Explanation | null })[] = [
   {
     syncName: "Foto di famiglia",
     source: FOTO_FROM,
@@ -148,6 +187,7 @@ const runs: RunReport[] = [
     explanation: null,
   },
 ];
+const runs = seeds.map(toReport);
 
 /** Runs sorted by startedAt, newest first (ISO timestamps compare as strings). */
 const newestFirst = <T extends Run>(list: T[]): T[] => [...list].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
@@ -365,16 +405,20 @@ async function runSync(sync: Sync, previewToken: string | null, consent: boolean
   const names = sampleFor(sync.source).new;
   for (let tick = 1; tick <= RUN_STEPS; tick++) {
     await wait(RUN_MS / RUN_STEPS);
+    const done = Math.round((total * tick) / RUN_STEPS);
+    const elapsedMs = Date.now() - started;
+    const left = Math.ceil((total - done) / (done / (elapsedMs / 1000)));
     const progress: RunProgress = {
       syncName: sync.name,
-      done: Math.round((total * tick) / RUN_STEPS),
+      done,
       total,
-      elapsedMs: Date.now() - started,
+      elapsedMs,
       currentFile: names[tick % names.length],
+      eta: left <= 1 ? "Quasi finito." : `Mancano circa ${num(left)} secondi.`,
     };
     await emit("run-progress", progress);
   }
-  return {
+  return toReport({
     syncName: sync.name,
     source: sync.source,
     destination: sync.destination,
@@ -387,7 +431,7 @@ async function runSync(sync: Sync, previewToken: string | null, consent: boolean
     startedAt: new Date(started).toISOString(),
     logPath: logPath("demo-" + started),
     explanation: null,
-  };
+  });
 }
 
 const DRIVES = ["C:\\", "D:\\", "E:\\"];

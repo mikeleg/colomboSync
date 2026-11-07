@@ -84,7 +84,8 @@
     if (phase === "result") {
       const ok = run?.outcome === "Ok";
       const counts = run && ok ? { new: run.new, updated: run.updated, deleted: run.deleted } : null;
-      const caption = ok ? "Fatto." : run?.outcome === "Cancelled" ? "Annullato." : "Non completato.";
+      // No Run when Rust refused to start one: there is no outcome for it to word.
+      const caption = run ? run.caption : "Non completato.";
       return { ...places, counts, caption, mirror, warnCaption: false, outcome: run?.outcome };
     }
     if (phase === "running") {

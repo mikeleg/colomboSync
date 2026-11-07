@@ -5,4 +5,6 @@ export interface RunProgress {
   total: number;
   elapsedMs: number;
   currentFile: string;
+  /** Time left, in words, as Rust says it. */
+  eta: string;
 }

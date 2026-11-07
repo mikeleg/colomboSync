@@ -21,6 +21,13 @@ const run = (over: Partial<RunReport> = {}): RunReport => ({
   startedAt: "2026-11-03T12:00:00+01:00",
   logPath: String.raw`C:\L\logs\x.log`,
   explanation: null,
+  // What Rust sends for this run (see the tests of shared/copy_text.rs): the screen shows it as it is.
+  title: "Fatto: 12 file copiati, 3 aggiornati in 2 min",
+  caption: "Fatto.",
+  resultNote: null,
+  partialText: null,
+  when: "03/11/2026 12:00",
+  durationText: "2 min",
   ...over,
 });
 
@@ -48,7 +55,7 @@ test("the summary shows the outcome, the mode and the counts of the run above th
 });
 
 test("a stopped or failed run shows the files copied so far instead of the new and updated counts", () => {
-  show(run({ outcome: "Cancelled", partial: 40 }));
+  show(run({ outcome: "Cancelled", partial: 40, partialText: "40 file copiati (parziale)" }));
 
   expect(summary().getByText("Annullato")).toBeTruthy();
   expect(summary().getByText("40 file copiati (parziale)")).toBeTruthy();

@@ -15,6 +15,7 @@ const progressAt = (done: number, over: Partial<RunProgress> = {}): RunProgress 
   total: 151,
   elapsedMs: 10_000,
   currentFile: "IMG_0042.jpg",
+  eta: "Mancano circa 28 secondi.", // what Rust says for 40 of 151 files in 10 s (see run/progress.rs)
   ...over,
 });
 
@@ -52,7 +53,7 @@ test("progress: name, big percentage, N di M file, ETA from the rate so far and 
 test("ETA says Quasi finito when about a second is left", async () => {
   render(StepRunning, { total: 151 });
 
-  await emit(progressAt(150, { elapsedMs: 30_000 }));
+  await emit(progressAt(150, { elapsedMs: 30_000, eta: "Quasi finito." }));
 
   expect(screen.getByText("Quasi finito.")).toBeTruthy();
 });

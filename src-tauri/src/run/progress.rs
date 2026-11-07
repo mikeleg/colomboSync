@@ -33,22 +33,6 @@ impl Progress {
     }
 }
 
-#[cfg(test)]
-mod progress_tests {
-    use super::*;
-
-    #[test]
-    fn the_event_carries_the_time_left_in_words() {
-        let progress = Progress::new("Foto".into(), 40, 151, 10_000, "a.jpg".into());
-        let json = serde_json::to_value(&progress).unwrap();
-        assert_eq!(json["eta"], "Mancano circa 28 secondi.");
-
-        let json =
-            serde_json::to_value(Progress::new("Foto".into(), 0, 151, 0, String::new())).unwrap();
-        assert_eq!(json["eta"], "Calcolo il tempo che manca…");
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct StdoutFollower {
     done: usize,
@@ -87,8 +71,24 @@ impl StdoutFollower {
     }
 }
 
-#[cfg(all(test, windows))]
+#[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn the_event_carries_the_time_left_in_words() {
+        let progress = Progress::new("Foto".into(), 40, 151, 10_000, "a.jpg".into());
+        let json = serde_json::to_value(&progress).unwrap();
+        assert_eq!(json["eta"], "Mancano circa 28 secondi.");
+
+        let json =
+            serde_json::to_value(Progress::new("Foto".into(), 0, 151, 0, String::new())).unwrap();
+        assert_eq!(json["eta"], "Calcolo il tempo che manca…");
+    }
+}
+
+#[cfg(all(test, windows))]
+mod windows_tests {
     use super::*;
 
     // Real output of a run with /TEE on a pipe: a header line, a blank line, then one tab-led

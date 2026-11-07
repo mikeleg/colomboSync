@@ -10,6 +10,7 @@ const preview = (n: number, u: number, files = { n: ["a.jpg", "b.jpg"], u: ["c.p
   deleted: group(0),
   bytes: 5_000_000,
   blocked: null,
+  previewToken: "token-1",
 });
 
 const props = {
@@ -101,7 +102,7 @@ test("the three choices after the preview call back: Sì, avvia / No, salva e ba
   await fireEvent.click(screen.getByRole("button", { name: "No, salva e basta" }));
   await fireEvent.click(screen.getByRole("button", { name: "Indietro, cambio qualcosa" }));
 
-  expect(onstart).toHaveBeenCalledOnce();
+  expect(onstart).toHaveBeenCalledExactlyOnceWith(false); // no consent asked: none given
   expect(onstop).toHaveBeenCalledOnce();
   expect(onback).toHaveBeenCalledOnce();
 });
@@ -157,7 +158,7 @@ test("mirror: extras in B are a red group 'Da cancellare in B' and Sì, avvia wa
   await fireEvent.click(screen.getByLabelText("Ho capito: 12 file verranno cancellati da B"));
   expect(start.disabled).toBe(false);
   await fireEvent.click(start);
-  expect(onstart).toHaveBeenCalledOnce();
+  expect(onstart).toHaveBeenCalledExactlyOnceWith(true);
 
   await fireEvent.click(screen.getByLabelText("Ho capito: 12 file verranno cancellati da B"));
   expect(start.disabled).toBe(true);

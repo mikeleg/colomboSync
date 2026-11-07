@@ -19,6 +19,7 @@ const preview = (n: number, u: number): Preview => ({
   deleted: { count: 0, files: [] },
   bytes: 3_000_000,
   blocked: null,
+  previewToken: "token-1",
 });
 
 const doneRun: Run = {
@@ -161,7 +162,7 @@ test("only the preview step fills the window: the other steps scroll with the pa
   expect(document.querySelector(".content.fill")).not.toBeNull();
 });
 
-test("Sì, avvia runs with the previewed counts and says Fatto", async () => {
+test("Sì, avvia runs with the token of the preview and no counts, and says Fatto", async () => {
   backend({ preview_sync: () => preview(2, 1), run_sync: () => doneRun });
   render(App);
   await goToPreview();
@@ -171,7 +172,8 @@ test("Sì, avvia runs with the previewed counts and says Fatto", async () => {
   expect(await screen.findByText("Fatto: 2 file copiati, 1 aggiornato in < 1 min")).toBeTruthy();
   expect(invokeMock).toHaveBeenLastCalledWith("run_sync", {
     sync: { id: 7, name: "Copia di Foto", source: "D:\\Foto", destination: "E:\\Backup", mode: "Copy" },
-    counts: { new: 2, updated: 1, deleted: 0 },
+    previewToken: "token-1",
+    consent: false,
   });
 });
 
@@ -320,7 +322,8 @@ test("the new sync is saved when the run starts, under the name typed, and the r
   ]);
   expect(invokeMock).toHaveBeenLastCalledWith("run_sync", {
     sync: { id: 7, name: "Copia di Foto", source: "D:\\Foto", destination: "E:\\Backup", mode: "Copy" },
-    counts: { new: 2, updated: 1, deleted: 0 },
+    previewToken: "token-1",
+    consent: false,
   });
 });
 
@@ -445,7 +448,8 @@ test("Controlla e avvia on a saved Mirror sync still shows the red group and ask
     "run_sync",
     expect.objectContaining({
       sync: expect.objectContaining({ id: 7, mode: "Mirror" }),
-      counts: { new: 20, updated: 1, deleted: 3 },
+      previewToken: "token-1",
+      consent: true,
     }),
   );
   expect(calls("save_sync")).toHaveLength(0);
@@ -711,7 +715,8 @@ test("mirror on: the preview runs in Mirror mode, lists what is deleted and the 
       destination: String.raw`E:\Backup`,
       mode: "Mirror",
     },
-    counts: { new: 20, updated: 1, deleted: 12 },
+    previewToken: "token-1",
+    consent: true,
   });
 });
 
@@ -836,7 +841,11 @@ test("a run that fails says why in plain Italian, with Riprova and the log link"
 });
 
 test("Riprova opens a fresh preview of the same saved sync and never runs by itself", async () => {
-  backend({ preview_sync: () => preview(2, 1), run_sync: () => failedRun });
+  let previews = 0;
+  backend({
+    preview_sync: () => ({ ...preview(2, 1), previewToken: `token-${++previews}` }),
+    run_sync: () => failedRun,
+  });
   render(App);
   await goToPreview();
   await click(await screen.findByRole("button", { name: "Sì, avvia" }));
@@ -854,8 +863,9 @@ test("Riprova opens a fresh preview of the same saved sync and never runs by its
   await screen.findByRole("button", { name: "Riprova" });
   expect(calls("save_sync")).toHaveLength(1);
   expect(calls("run_sync")).toHaveLength(2);
-  expect(calls("run_sync")[1]).toEqual(
-    expect.arrayContaining([expect.objectContaining({ sync: expect.objectContaining({ id: 7 }) })]),
+  expect(calls("run_sync")[0][1]).toEqual(expect.objectContaining({ previewToken: "token-1" }));
+  expect(calls("run_sync")[1][1]).toEqual(
+    expect.objectContaining({ sync: expect.objectContaining({ id: 7 }), previewToken: "token-2" }),
   );
 });
 

@@ -1,11 +1,16 @@
 // The run screens talk to Rust through these Tauri commands and events.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Counts, RunReport, Sync } from "../shared/types";
+import type { RunReport, Sync } from "../shared/types";
 import type { RunProgress } from "./types";
 
-/** Runs a saved sync; the run is recorded in the history under its id. */
-export const runSync = (sync: Sync, counts: Counts) => invoke<RunReport>("run_sync", { sync, counts });
+/**
+ * Runs a saved sync as the preview whose `previewToken` Rust gave confirms it; the run is recorded in
+ * the history under its id. `consent`: the user understood that a mirror deletes files from B.
+ * Rejects with an `Explanation` when Rust refuses (no or old preview, other folders, no consent).
+ */
+export const runSync = (sync: Sync, previewToken: string | null, consent: boolean) =>
+  invoke<RunReport>("run_sync", { sync, previewToken, consent });
 
 /** Kills robocopy; the pending `runSync` then resolves with a Cancelled run. `exitWhenDone` closes the app after that. */
 export const cancelRun = (exitWhenDone = false) => invoke<boolean>("cancel_run", { exitWhenDone });

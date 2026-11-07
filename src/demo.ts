@@ -285,22 +285,42 @@ const SAMPLES: Record<string, Sample> = {
 };
 const sampleFor = (source: string) => SAMPLES[source] ?? SAMPLES[FOTO_FROM];
 
+/** Like Rust: the last preview and its token; a run takes its counts from here. */
+let lastPreview: { token: string; counts: Counts } | null = null;
+let previews = 0;
+
 async function previewSync(source: string, mode: SyncMode): Promise<Preview> {
   await wait(600);
   const sample = sampleFor(source);
-  return {
+  const previewToken = `demo-${++previews}`;
+  const preview: Preview = {
     new: { count: 120, files: sample.new },
     updated: { count: 40, files: sample.updated },
     deleted: mode === "Mirror" ? { count: 25, files: sample.deleted } : { count: 0, files: [] },
     bytes: Math.round(1.8 * 1024 ** 3),
     blocked: null,
+    previewToken,
   };
+  lastPreview = {
+    token: previewToken,
+    counts: { new: preview.new.count, updated: preview.updated.count, deleted: preview.deleted.count },
+  };
+  return preview;
 }
 
 const RUN_MS = 8000;
 const RUN_STEPS = 40;
 
-async function runSync(sync: Sync, counts: Counts): Promise<RunReport> {
+async function runSync(sync: Sync, previewToken: string | null): Promise<RunReport> {
+  if (!lastPreview || lastPreview.token !== previewToken) {
+    const refused: Explanation = {
+      title: "Non ho avviato la copia: l’anteprima non è più valida.",
+      advice: "Controlla di nuovo le cartelle con l’anteprima, poi avvia.",
+    };
+    throw refused;
+  }
+  const { counts } = lastPreview;
+  lastPreview = null;
   const total = counts.new + counts.updated + counts.deleted;
   const started = Date.now();
   const names = sampleFor(sync.source).new;
@@ -446,7 +466,7 @@ mockIPC(
       case "cancel_run":
         return true;
       case "run_sync":
-        return runSync(args.sync as Sync, args.counts as Counts);
+        return runSync(args.sync as Sync, (args.previewToken as string | null) ?? null);
       default:
         console.warn(`demo: comando non simulato: ${cmd}`);
         return null;

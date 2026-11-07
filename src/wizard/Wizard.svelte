@@ -197,13 +197,13 @@
   const saveIfNew = async (): Promise<Sync> =>
     (sync ??= await saveSync(name.trim(), source.trim(), destination.trim(), mode));
 
-  async function start() {
-    if (!previewCounts || saving) return;
+  async function start(consent: boolean) {
+    if (!preview || saving) return;
     saving = true;
     closeRequests = 0;
     phase = "running";
     try {
-      run = await runSync(await saveIfNew(), previewCounts);
+      run = await runSync(await saveIfNew(), preview.previewToken, consent);
     } catch (e) {
       failure = String(e);
     }

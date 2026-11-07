@@ -13,6 +13,8 @@ export interface Preview {
   bytes: number;
   /** MirrorGuard: why a mirror run must not start (Italian text from Rust); null when it may. */
   blocked: string | null;
+  /** What `runSync` must bring back to start a run from this preview; null when the preview is blocked. */
+  previewToken: string | null;
 }
 
 interface Folder {

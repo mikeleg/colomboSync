@@ -1,9 +1,10 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import Icon from "../shared/Icon.svelte";
-  import { formatNumber, isNetworkPath } from "../shared/format";
+  import { formatNumber } from "../shared/format";
+  import { describePlace } from "./api";
   import type { SchemaModel } from "./schema";
-  import type { Counts } from "../shared/types";
+  import type { Counts, Place } from "../shared/types";
 
   let { model }: { model: SchemaModel } = $props();
 
@@ -47,12 +48,20 @@
     lastOutcome = outcome;
   });
 
-  const place = (path: string) =>
-    isNetworkPath(path)
-      ? "Rete · " + path.slice(2).split("\\")[0]
-      : /^[A-Za-z]:/.test(path)
-        ? "Disco " + path.slice(0, 2).toUpperCase()
-        : "Cartella";
+  // What Rust says about each path shown, by path: asked once, when the path first appears.
+  let places = $state<Record<string, Place>>({});
+  $effect(() => {
+    for (const path of [model.source, model.destination]) {
+      if (path && !untrack(() => path in places)) {
+        describePlace(path).then(
+          (place) => (places[path] = place),
+          () => {
+            // Without an answer the path is shown with no label.
+          },
+        );
+      }
+    }
+  });
   const value = (key: keyof Counts) => (shown ? formatNumber(shown[key]) : "—");
 </script>
 
@@ -78,9 +87,9 @@
       {/if}
       <div class="tag">{tag}</div>
       <div class="nb">
-        <Icon name={isNetworkPath(path) ? "net" : "disk"} />
+        <Icon name={places[path]?.isNetwork ? "net" : "disk"} />
         <div>
-          <div class="dl">{place(path)}</div>
+          <div class="dl">{places[path]?.label ?? ""}</div>
           <div class="pth">{path}</div>
         </div>
       </div>

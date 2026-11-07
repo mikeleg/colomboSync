@@ -33,6 +33,7 @@ pub fn run() {
             history::commands::read_run_log,
             wizard::commands::check_destination,
             wizard::commands::check_step,
+            wizard::commands::describe_place,
             shared::elevation::is_elevated,
         ])
         .build(tauri::generate_context!())

@@ -59,7 +59,9 @@ const savedSync: SyncSummary = {
   source: "D:\\Foto",
   destination: "E:\\Backup",
   mode: "Copy",
-  lastRun: { startedAt: "2026-11-02T21:30:00+01:00", outcome: "Ok", note: null },
+  sourcePlace: { isNetwork: false, label: "Disco D:" },
+  destinationPlace: { isNetwork: false, label: "Disco E:" },
+  lastRun: { when: "02/11/2026 21:30", outcome: "Ok", note: null },
 };
 
 type Args = Record<string, unknown> | undefined;
@@ -82,6 +84,11 @@ type Handlers = Partial<
 function backend(handlers: Handlers = {}) {
   const defaults: Record<string, (args: Args) => unknown> = {
     browse_folders: () => ({ parent: "", folders: [], error: null }),
+    // What `describe_place` says for the paths these tests use (see shared/copy_text.rs).
+    describe_place: (args) => {
+      const labels: Record<string, string> = { "D:\\Foto": "Disco D:", "E:\\Backup": "Disco E:" };
+      return { isNetwork: false, label: labels[(args as { path: string }).path] ?? "Cartella" };
+    },
     list_syncs: () => ({ syncs: [], setAside: false }),
     default_sync_name: () => "Copia di Foto",
     check_destination: () => undefined, // B is fine
@@ -160,6 +167,8 @@ test("A and B through Opzioni: the preview and the schema show the same counts",
   const schema = screen.getByRole("complementary");
   expect(schema.textContent).toContain("D:\\Foto");
   expect(schema.textContent).toContain("E:\\Backup");
+  expect(await within(schema).findByText("Disco D:")).toBeTruthy();
+  expect(within(schema).getByText("Disco E:")).toBeTruthy();
   expect(screen.getByText("148", { selector: "aside b" })).toBeTruthy();
   expect(screen.getByText("3", { selector: "aside b" })).toBeTruthy();
   expect(screen.getByText("Nessun file viene cancellato in B")).toBeTruthy();
@@ -637,7 +646,9 @@ test("Storico lists the runs from Rust and swaps the schema for the summary pane
           ok: 1,
           failed: 1,
           filesCopied: 3,
-          syncs: [{ id: 7, name: "Foto di Anna", lastSuccess: "2026-11-03T12:00:00+01:00", warning: null }],
+          syncs: [
+            { id: 7, name: "Foto di Anna", lastSuccessText: "Ultima copia riuscita: 03/11/2026 12:00", warning: null },
+          ],
         },
       ),
   });

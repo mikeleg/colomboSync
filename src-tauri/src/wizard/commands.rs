@@ -5,7 +5,7 @@ use super::folder_browser::{self, FolderListing};
 use super::preview::{self, PreviewMemo};
 use crate::engine::preview_parser::Preview;
 use crate::shared::blocking::blocking;
-use crate::shared::copy_text;
+use crate::shared::copy_text::{self, Place};
 use crate::shared::domain::SyncMode;
 use crate::shared::error_messages::{self, Explanation};
 use crate::shared::path_rules;
@@ -16,6 +16,12 @@ use tauri::{AppHandle, Manager};
 #[tauri::command]
 pub fn check_destination(source: String, destination: String) -> Result<(), Explanation> {
     Ok(path_rules::check_destination(&source, &destination)?)
+}
+
+/// What kind of place a folder path is, for the schema panel next to the wizard.
+#[tauri::command]
+pub fn describe_place(path: String) -> Place {
+    copy_text::place(&path)
 }
 
 /// The steps of the wizard, in the words of the UI (`STEPS` in Wizard.svelte).
@@ -188,6 +194,13 @@ mod tests {
         let json = report(blocked, None, SyncMode::Mirror);
         assert_eq!(json["caption"], "Motivo deciso da Rust: non si parte.");
         assert_eq!(json["blocked"], "Motivo deciso da Rust: non si parte.");
+    }
+
+    #[test]
+    fn a_place_goes_to_the_ui_as_a_flag_and_a_label() {
+        let json = serde_json::to_value(describe_place(r"\\NAS\Backup".into())).unwrap();
+        assert_eq!(json["isNetwork"], true);
+        assert_eq!(json["label"], "Rete · NAS");
     }
 
     fn check(step: Step, source: &str, destination: &str, name: &str) -> Result<(), Explanation> {

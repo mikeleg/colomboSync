@@ -55,6 +55,14 @@ export type RunReport = Run & {
   durationText: string;
 };
 
+/** What kind of place a folder path is (src-tauri/src/shared/copy_text.rs, Place). */
+export interface Place {
+  /** A share on the network: it gets the network icon. */
+  isNetwork: boolean;
+  /** "Rete · NAS", "Disco D:" or "Cartella". */
+  label: string;
+}
+
 /** A saved A→B pair (src-tauri/src/shared/domain.rs, SavedSync). */
 export interface Sync {
   id: number;

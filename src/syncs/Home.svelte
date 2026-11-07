@@ -4,9 +4,9 @@
   import { toExplanation } from "../shared/explanation";
   import Icon from "../shared/Icon.svelte";
   import { listSyncs } from "./api";
-  import { formatWhen, isNetworkPath, modeChip, outcomeChip } from "../shared/format";
+  import { modeChip, outcomeChip } from "../shared/format";
   import { emptySchema, type SchemaModel } from "../schema/schema";
-  import type { Explanation, Sync } from "../shared/types";
+  import type { Explanation, Place, Sync } from "../shared/types";
   import type { SyncSummary } from "./types";
 
   let {
@@ -53,8 +53,8 @@
   });
 </script>
 
-{#snippet place(path: string)}
-  <Icon name={isNetworkPath(path) ? "net" : "disk"} /><span>{path}</span>
+{#snippet place(path: string, where: Place)}
+  <Icon name={where.isNetwork ? "net" : "disk"} /><span>{path}</span>
 {/snippet}
 
 <h1 id="h">Le tue sincronizzazioni</h1>
@@ -80,13 +80,16 @@
           <span class="chip {modeChip[sync.mode].cls}">{modeChip[sync.mode].label}</span>
         </div>
         <p class="route">
-          {@render place(sync.source)}<span class="ar">&rarr;</span>{@render place(sync.destination)}
+          {@render place(sync.source, sync.sourcePlace)}<span class="ar">&rarr;</span>{@render place(
+            sync.destination,
+            sync.destinationPlace,
+          )}
         </p>
         {#if sync.lastRun?.note}<p class="note" class:err={retry}>{sync.lastRun.note}</p>{/if}
         <div class="foot">
           <div class="last">
             {#if sync.lastRun && outcome}
-              <span>Ultima volta: <span>{formatWhen(sync.lastRun.startedAt)}</span></span>
+              <span>Ultima volta: <span>{sync.lastRun.when}</span></span>
               <span class="chip {outcome.cls}">{outcome.label}</span>
             {:else}
               <span>Mai avviata</span>

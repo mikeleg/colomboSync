@@ -1,8 +1,23 @@
+import { invoke } from "@tauri-apps/api/core";
 import { render, screen } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { tick } from "svelte";
 import { emptySchema, type SchemaModel } from "./schema";
 import SchemaView from "./SchemaView.svelte";
+
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+const invokeMock = vi.mocked(invoke);
+
+// What Rust says about each path (see shared/copy_text.rs).
+const places: Record<string, { isNetwork: boolean; label: string }> = {
+  [String.raw`\\NAS\Backup`]: { isNetwork: true, label: "Rete · NAS" },
+  [String.raw`D:\Foto`]: { isNetwork: false, label: "Disco D:" },
+  "/Volumes/Backup": { isNetwork: false, label: "Cartella" },
+};
+beforeEach(() => {
+  invokeMock.mockReset();
+  invokeMock.mockImplementation(async (_command, args) => places[(args as { path: string }).path]);
+});
 
 const picked: SchemaModel = {
   source: "D:\Foto",
@@ -22,6 +37,28 @@ test("shows A, B, the counts and that nothing is deleted in B", () => {
   expect(screen.getByText("3").nextElementSibling?.textContent).toBe("Aggiornati");
   expect(screen.getByText("Nessun file viene cancellato in B")).toBeTruthy();
   expect(screen.getByText(picked.caption)).toBeTruthy();
+});
+
+test("each path is labelled with what Rust says it is, and a share gets the network icon", async () => {
+  const model = { ...picked, source: String.raw`D:\Foto`, destination: String.raw`\\NAS\Backup` };
+  const { container } = render(SchemaView, { model });
+
+  expect(await screen.findByText("Rete · NAS")).toBeTruthy();
+  expect(screen.getByText("Disco D:")).toBeTruthy();
+  expect(invokeMock).toHaveBeenCalledWith("describe_place", { path: String.raw`D:\Foto` });
+  expect(invokeMock).toHaveBeenCalledWith("describe_place", { path: String.raw`\\NAS\Backup` });
+  const icons = [...container.querySelectorAll(".nb svg")].map((icon) => icon.innerHTML.includes("M7 7.5h.01"));
+  expect(icons).toEqual([false, true]);
+});
+
+test("a path that is neither a drive nor a share is a Cartella, and each path is asked about once", async () => {
+  const { rerender } = render(SchemaView, { model: { ...picked, source: "/Volumes/Backup", destination: "" } });
+  expect(await screen.findByText("Cartella")).toBeTruthy();
+
+  await rerender({ model: { ...picked, source: "/Volumes/Backup", destination: String.raw`D:\Foto` } });
+
+  expect(await screen.findByText("Disco D:")).toBeTruthy();
+  expect(invokeMock).toHaveBeenCalledTimes(2);
 });
 
 test("before the folders are chosen it asks for them and shows no numbers", () => {

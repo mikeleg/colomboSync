@@ -1,7 +1,7 @@
 // Demo nel browser con il backend Rust simulato (mockIPC), per screenshot e controlli visivi. Avvio: npx vite --port 5199 --strictPort, poi http://localhost:5199/demo.html.
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
-import type { Counts, Explanation, Run, RunLog, RunReport, Sync, SyncMode } from "./shared/types";
+import type { Counts, Explanation, Place, Run, RunLog, RunReport, Sync, SyncMode } from "./shared/types";
 import type { FolderListing, Preview } from "./wizard/types";
 import type { RunProgress } from "./run/types";
 import type { HistorySummary, RunList, SyncStatus } from "./history/types";
@@ -34,6 +34,12 @@ const whenText = (startedAt: string) =>
   `${startedAt.slice(8, 10)}/${startedAt.slice(5, 7)}/${startedAt.slice(0, 4)} ${startedAt.slice(11, 16)}`;
 const durationText = (ms: number) => (Math.round(ms / MINUTE) < 1 ? "< 1 min" : `${Math.round(ms / MINUTE)} min`);
 const partialText = (n: number) => `${num(n)} ${n === 1 ? "file copiato" : "file copiati"} (parziale)`;
+
+/** What kind of place a path is, as `describe_place` says it. */
+function placeOf(path: string): Place {
+  if (path.startsWith("\\\\")) return { isNetwork: true, label: `Rete · ${path.slice(2).split("\\")[0]}` };
+  return { isNetwork: false, label: /^[A-Za-z]:/.test(path) ? `Disco ${path.slice(0, 2).toUpperCase()}` : "Cartella" };
+}
 
 /** A run as `run_sync` and `list_runs` send it: the stored fields, the explanation and the finished texts. */
 function toReport(run: Run & { explanation: Explanation | null }): RunReport {
@@ -202,7 +208,12 @@ function listSyncs(): ListedSyncs {
     syncs: syncs.map((sync) => {
       const last = sorted.find((run) => run.syncName === sync.name);
       const note = last?.outcome === "Error" ? NAS_NOTE : last?.outcome === "Cancelled" ? "Annullata da te." : null;
-      return { ...sync, lastRun: last ? { startedAt: last.startedAt, outcome: last.outcome, note } : null };
+      return {
+        ...sync,
+        sourcePlace: placeOf(sync.source),
+        destinationPlace: placeOf(sync.destination),
+        lastRun: last ? { when: last.when, outcome: last.outcome, note } : null,
+      };
     }),
   };
 }
@@ -214,14 +225,13 @@ function historySummary(): HistorySummary {
     const own = sorted.filter((r) => r.syncName === sync.name);
     if (!own.length) return [];
     const failed = own[0].outcome === "Error";
+    const lastOk = own.find((r) => r.outcome === "Ok");
     return [
       {
         id: sync.id,
         name: sync.name,
-        lastSuccess: own.find((r) => r.outcome === "Ok")?.startedAt ?? null,
-        warning: failed
-          ? `L’ultima copia è finita con un errore il ${own[0].startedAt.slice(8, 10)}/${own[0].startedAt.slice(5, 7)}/${own[0].startedAt.slice(0, 4)} ${own[0].startedAt.slice(11, 16)}.`
-          : null,
+        lastSuccessText: lastOk ? `Ultima copia riuscita: ${lastOk.when}` : "Nessuna copia riuscita finora.",
+        warning: failed ? `L’ultima copia è finita con un errore il ${own[0].when}.` : null,
       },
     ];
   });
@@ -528,6 +538,8 @@ mockIPC(
         return createFolder(text("parent"), text("name"));
       case "default_sync_name":
         return lastSegment(text("source"));
+      case "describe_place":
+        return placeOf(text("path"));
       case "check_destination":
         return undefined;
       case "check_step": {

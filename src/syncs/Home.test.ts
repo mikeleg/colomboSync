@@ -13,7 +13,10 @@ const foto: SyncSummary = {
   source: String.raw`D:\Foto`,
   destination: String.raw`\\NAS\Backup`,
   mode: "Copy",
-  lastRun: { startedAt: "2026-11-02T21:30:00+01:00", outcome: "Ok", note: null },
+  // What kind of places Rust says these are (see shared/copy_text.rs).
+  sourcePlace: { isNetwork: false, label: "Disco D:" },
+  destinationPlace: { isNetwork: true, label: "Rete · NAS" },
+  lastRun: { when: "02/11/2026 21:30", outcome: "Ok", note: null },
 };
 const documenti: SyncSummary = {
   id: 1,
@@ -21,6 +24,8 @@ const documenti: SyncSummary = {
   source: String.raw`C:\Users\Anna\Documenti`,
   destination: String.raw`E:\Backup`,
   mode: "Mirror",
+  sourcePlace: { isNetwork: false, label: "Disco C:" },
+  destinationPlace: { isNetwork: false, label: "Disco E:" },
   lastRun: null,
 };
 
@@ -62,9 +67,20 @@ test("lists one card per sync: A → B, mode chip, last time with outcome, or Ma
   expect(screen.getByRole("button", { name: "Nuova sincronizzazione" })).toBeTruthy();
 });
 
+test("a share gets the network icon and a drive the disk icon, as Rust says", async () => {
+  invokeMock.mockResolvedValue({ syncs: [foto], setAside: false });
+  render(Home, props);
+
+  await screen.findByRole("heading", { name: "Copia di Foto" });
+  const isNetwork = [...card("Copia di Foto").querySelectorAll(".route svg")].map((icon) =>
+    icon.innerHTML.includes("M7 7.5h.01"),
+  );
+  expect(isNetwork).toEqual([false, true]);
+});
+
 test("when the last outcome is Errore the button reads Riprova and the chip says Errore", async () => {
   invokeMock.mockResolvedValue({
-    syncs: [{ ...foto, lastRun: { startedAt: "2026-11-01T18:05:00+01:00", outcome: "Error", note: unreachable } }],
+    syncs: [{ ...foto, lastRun: { when: "01/11/2026 18:05", outcome: "Error", note: unreachable } }],
     setAside: false,
   });
   render(Home, props);
@@ -80,7 +96,7 @@ test("when the last outcome is Errore the button reads Riprova and the chip says
 
 test("a stopped run shows the Annullato chip and keeps Controlla e avvia", async () => {
   invokeMock.mockResolvedValue({
-    syncs: [{ ...foto, lastRun: { startedAt: "2026-11-01T18:05:00+01:00", outcome: "Cancelled", note: stopped } }],
+    syncs: [{ ...foto, lastRun: { when: "01/11/2026 18:05", outcome: "Cancelled", note: stopped } }],
     setAside: false,
   });
   render(Home, props);

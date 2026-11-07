@@ -1,6 +1,7 @@
 //! The domain words that more than one slice speaks: the mode of a Sync, a saved Sync, one Run
 //! and why it failed. Plain data; the slices depend on this module, never on each other for it.
 
+use super::error_messages::{Explanation, explain_run};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -67,6 +68,24 @@ pub struct Run {
     /// texts are made from it when they are shown; runs without it read as a generic failure.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cause: Option<Cause>,
+}
+
+/// A Run as the UI gets it (result screen, Storico and its log window): what is stored, plus what
+/// to tell the user when it failed.
+#[derive(Serialize)]
+pub struct RunReport {
+    #[serde(flatten)]
+    run: Run,
+    explanation: Option<Explanation>,
+}
+
+impl From<Run> for RunReport {
+    fn from(run: Run) -> Self {
+        RunReport {
+            explanation: explain_run(&run),
+            run,
+        }
+    }
 }
 
 /// A finished Ok run of a copy of `D:\Foto` to `E:\Backup`, for the tests: take it with struct

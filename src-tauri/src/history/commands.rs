@@ -3,8 +3,7 @@
 use super::summary::{self, HistorySummary};
 use super::{Run, RunLog, read, read_log};
 use crate::shared::blocking::blocking;
-use crate::shared::domain::SavedSync;
-use crate::shared::error_messages::RunReport;
+use crate::shared::domain::{RunReport, SavedSync};
 use crate::shared::storage::Storage;
 use crate::shared::sync_store;
 use serde::Serialize;

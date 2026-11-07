@@ -30,6 +30,8 @@
   } = $props();
 
   let listing = $state<FolderListing>({ parent: "", folders: [], error: null });
+  /** Why the folder could not be listed: Rust's own message, or the refusal of the call. */
+  let listingError = $state<Explanation | null>(null);
   let manualOpen = $state(false);
   let head: HTMLElement;
   let input: HTMLInputElement;
@@ -47,12 +49,18 @@
   async function load(path: string) {
     const seq = ++lastLoad;
     let result: FolderListing;
+    let failure: Explanation | null = null;
     try {
       result = await browseFolders(path);
+      if (result.error) failure = { title: result.error, advice: "" };
     } catch (e) {
-      result = { parent: "", folders: [], error: toExplanation(e).title };
+      result = { parent: "", folders: [], error: null };
+      failure = toExplanation(e);
     }
-    if (seq === lastLoad) listing = result;
+    if (seq === lastLoad) {
+      listing = result;
+      listingError = failure;
+    }
   }
 
   function pick(path: string) {
@@ -101,11 +109,11 @@
 <p class="f">{label}</p>
 <p class="help intro">Ogni clic entra nella cartella e la sceglie. Quando sei in quella giusta, premi Avanti.</p>
 <div class="pick">
-  <div class="pickhead" class:chosen={chosen && !listing.error} bind:this={head} tabindex="-1">
+  <div class="pickhead" class:chosen={chosen && !listingError} bind:this={head} tabindex="-1">
     <span>
       {#if !chosen}
         Dischi del computer: scegline uno
-      {:else if listing.error}
+      {:else if listingError}
         <b>{chosen}</b>
       {:else}
         <Icon name="tick" />Cartella scelta: <b>{chosen}</b>
@@ -113,7 +121,7 @@
     </span>
     {#if chosen}
       <div class="acts">
-        {#if canCreate && !listing.error && !creating}
+        {#if canCreate && !listingError && !creating}
           <button type="button" class="btn small" onclick={startCreating}><Icon name="plus" /> Nuova cartella</button>
         {/if}
         <button type="button" class="btn small" onclick={() => pick(listing.parent)}
@@ -152,8 +160,8 @@
         <Icon name={chosen ? "folder" : "disk"} /><span>{folder.name}</span>
       </button>
     {:else}
-      {#if listing.error}
-        <div class="err-msg" role="alert">{listing.error}</div>
+      {#if listingError}
+        <div class="err-msg" role="alert"><ErrorText explanation={listingError} /></div>
       {:else if chosen}
         <p class="muted">Qui dentro non ci sono altre cartelle.</p>
       {/if}

@@ -104,10 +104,10 @@ test("a folder that cannot be opened says so, instead of looking empty and chose
 });
 
 test("when listing the folders is refused, it shows Rust's explanation as it is", async () => {
-  invokeMock.mockRejectedValue({ title: CANNOT_OPEN, advice: "" });
+  invokeMock.mockRejectedValue({ title: CANNOT_OPEN, advice: "Controlla il collegamento e riprova." });
   render(FolderPicker, { ...props, value: NAS });
 
-  expect((await screen.findByRole("alert")).textContent).toBe(CANNOT_OPEN);
+  expect((await screen.findByRole("alert")).textContent).toBe(`${CANNOT_OPEN} Controlla il collegamento e riprova.`);
 });
 
 test("typing a path by hand is tucked away; Enter there behaves as Avanti", async () => {

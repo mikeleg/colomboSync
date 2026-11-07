@@ -4,7 +4,9 @@
 
 use super::domain::{Outcome, Run, SyncMode};
 use super::error_messages::Explanation;
+use super::path_rules;
 use crate::engine::preview_parser::Counts;
+use chrono::DateTime;
 use serde::Serialize;
 
 /// `n.toLocaleString("it-IT")`: dots between the thousands, but only from five digits on (Italian
@@ -37,34 +39,24 @@ pub fn format_duration(ms: u64) -> String {
 /// "2026-11-02T21:30:00+01:00" -> "02/11/2026 21:30": the local time as it was stored, without any
 /// time zone conversion. What is not such a time is returned as it is.
 pub fn format_when(started_at: &str) -> String {
-    let shaped = started_at.as_bytes().get(..16).is_some_and(|stamp| {
-        stamp.iter().enumerate().all(|(i, c)| match i {
-            4 | 7 => *c == b'-',
-            10 => *c == b'T',
-            13 => *c == b':',
-            _ => c.is_ascii_digit(),
-        })
-    });
-    if !shaped {
-        return started_at.to_string();
-    }
+    DateTime::parse_from_rfc3339(started_at).map_or_else(
+        |_| started_at.to_string(),
+        |t| t.format("%d/%m/%Y %H:%M").to_string(),
+    )
+}
+
+/// "1 file copiato" / "40 file copiati": the number and the noun that agrees with it.
+fn counted(n: usize, singular: &str, plural: &str) -> String {
     format!(
-        "{}/{}/{} {}",
-        &started_at[8..10],
-        &started_at[5..7],
-        &started_at[..4],
-        &started_at[11..16]
+        "{} {}",
+        format_number(n),
+        if n == 1 { singular } else { plural }
     )
 }
 
 /// "1 file copiato (parziale)" / "40 file copiati (parziale)".
 pub fn partial_text(n: usize) -> String {
-    let files = if n == 1 {
-        "file copiato"
-    } else {
-        "file copiati"
-    };
-    format!("{} {files} (parziale)", format_number(n))
+    format!("{} (parziale)", counted(n, "file copiato", "file copiati"))
 }
 
 /// Time left, from the `done` files of `total` in `elapsed_ms`.
@@ -86,31 +78,17 @@ pub fn run_title(run: &Run, explanation: Option<&Explanation>) -> String {
     match run.outcome {
         Outcome::Ok => {
             let deleted = if run.mode == SyncMode::Mirror && run.deleted > 0 {
-                let word = if run.deleted == 1 {
-                    "cancellato"
-                } else {
-                    "cancellati"
-                };
-                format!(", {} {word} da B", format_number(run.deleted))
+                format!(
+                    ", {} da B",
+                    counted(run.deleted, "cancellato", "cancellati")
+                )
             } else {
                 String::new()
             };
-            let (new, updated) = (
-                if run.new == 1 {
-                    "file copiato"
-                } else {
-                    "file copiati"
-                },
-                if run.updated == 1 {
-                    "aggiornato"
-                } else {
-                    "aggiornati"
-                },
-            );
             format!(
-                "Fatto: {} {new}, {} {updated}{deleted} in {}",
-                format_number(run.new),
-                format_number(run.updated),
+                "Fatto: {}, {}{deleted} in {}",
+                counted(run.new, "file copiato", "file copiati"),
+                counted(run.updated, "aggiornato", "aggiornati"),
                 format_duration(run.duration_ms)
             )
         }
@@ -185,8 +163,8 @@ pub struct Place {
 }
 
 pub fn place(path: &str) -> Place {
-    if let Some(shared) = path.strip_prefix(r"\\") {
-        let server = shared.split('\\').next().unwrap_or_default();
+    if path_rules::is_unc(path) {
+        let server = path[2..].split('\\').next().unwrap_or_default();
         return Place {
             is_network: true,
             label: format!("Rete · {server}"),

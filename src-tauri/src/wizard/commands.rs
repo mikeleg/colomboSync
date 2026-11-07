@@ -12,12 +12,6 @@ use crate::shared::path_rules;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
-/// Rejects a destination that is A itself or inside A, with the message to show on step "Dove".
-#[tauri::command]
-pub fn check_destination(source: String, destination: String) -> Result<(), Explanation> {
-    Ok(path_rules::check_destination(&source, &destination)?)
-}
-
 /// What kind of place a folder path is, for the schema panel next to the wizard.
 #[tauri::command]
 pub fn describe_place(path: String) -> Place {
@@ -36,7 +30,8 @@ pub enum Step {
 }
 
 /// Avanti: whether the step has what it needs, as the error to show when it has not. `source`,
-/// `destination` and `name` are what the user has written so far.
+/// `destination` and `name` are what the user has written so far. On "Dove" B must also be a
+/// folder unrelated to A (not A itself, not inside it, not above it).
 #[tauri::command]
 pub fn check_step(
     step: Step,
@@ -46,10 +41,12 @@ pub fn check_step(
 ) -> Result<(), Explanation> {
     let missing = match step {
         Step::Source => source.trim().is_empty().then(error_messages::choose_source),
-        Step::Destination => destination
-            .trim()
-            .is_empty()
-            .then(error_messages::choose_destination),
+        Step::Destination if destination.trim().is_empty() => {
+            Some(error_messages::choose_destination())
+        }
+        Step::Destination => path_rules::check_destination(&source, &destination)
+            .err()
+            .map(Explanation::from),
         Step::Name => name.trim().is_empty().then(error_messages::name_missing),
         Step::Options | Step::Preview => None,
     };
@@ -226,10 +223,27 @@ mod tests {
     #[test]
     fn avanti_asks_only_about_its_own_step() {
         assert_eq!(check(Step::Source, r"D:\A", "", ""), Ok(()));
-        assert_eq!(check(Step::Destination, "", r"E:\B", ""), Ok(()));
+        assert_eq!(check(Step::Destination, "/A", "/B", ""), Ok(()));
         assert_eq!(check(Step::Name, "", "", "Foto"), Ok(()));
         assert_eq!(check(Step::Options, "", "", ""), Ok(()));
         assert_eq!(check(Step::Preview, "", "", ""), Ok(()));
+    }
+
+    #[test]
+    fn avanti_on_dove_refuses_a_destination_related_to_a() {
+        let refused = |source, destination| check(Step::Destination, source, destination, "n");
+        assert_eq!(
+            refused("/Foto", "/Foto"),
+            Err(path_rules::SAME_FOLDER.into())
+        );
+        assert_eq!(
+            refused("/Foto", "/Foto/Copia"),
+            Err(path_rules::INSIDE_SOURCE.into())
+        );
+        assert_eq!(
+            refused("/Foto/2024", "/Foto"),
+            Err(path_rules::SOURCE_INSIDE_DESTINATION.into())
+        );
     }
 
     #[test]

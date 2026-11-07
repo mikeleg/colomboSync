@@ -147,11 +147,7 @@ fn run_reports_progress_with_the_current_file() {
 
     assert_eq!(run.outcome, Outcome::Ok);
     let last = events.last().expect("at least one progress event");
-    assert_eq!(
-        (last.done, last.total),
-        (3, 3),
-        "extras in B are not counted"
-    );
+    assert_eq!(last.done, 3, "extras in B are not counted");
     assert_eq!(last.sync_name, "Copia di A");
     assert_eq!(
         last.current_file, "è già.txt",

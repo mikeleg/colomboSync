@@ -425,8 +425,6 @@ async function runSync(sync: Sync, previewToken: string | null, consent: boolean
     const progress: RunProgress = {
       syncName: sync.name,
       done,
-      total,
-      elapsedMs,
       currentFile: names[tick % names.length],
       eta: left <= 1 ? "Quasi finito." : `Mancano circa ${num(left)} secondi.`,
     };
@@ -540,8 +538,6 @@ mockIPC(
         return lastSegment(text("source"));
       case "describe_place":
         return placeOf(text("path"));
-      case "check_destination":
-        return undefined;
       case "check_step": {
         const missing: Record<string, [string, string]> = {
           source: [text("source"), "Scegli prima la cartella da copiare."],

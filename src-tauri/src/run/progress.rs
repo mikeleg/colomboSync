@@ -11,8 +11,6 @@ use serde::Serialize;
 pub struct Progress {
     pub sync_name: String,
     pub done: usize,
-    pub total: usize,
-    pub elapsed_ms: u64,
     pub current_file: String,
     /// Time left, in words ("Mancano circa 28 secondi.").
     pub eta: String,
@@ -30,8 +28,6 @@ impl Progress {
             eta: copy_text::eta_text(done, total, elapsed_ms),
             sync_name,
             done,
-            total,
-            elapsed_ms,
             current_file,
         }
     }
@@ -46,7 +42,6 @@ mod progress_tests {
         let progress = Progress::new("Foto".into(), 40, 151, 10_000, "a.jpg".into());
         let json = serde_json::to_value(&progress).unwrap();
         assert_eq!(json["eta"], "Mancano circa 28 secondi.");
-        assert_eq!(json["elapsedMs"], 10_000);
 
         let json =
             serde_json::to_value(Progress::new("Foto".into(), 0, 151, 0, String::new())).unwrap();

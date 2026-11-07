@@ -12,8 +12,6 @@ vi.mock("./api", () => ({
 const progressAt = (done: number, over: Partial<RunProgress> = {}): RunProgress => ({
   syncName: "Copia di Foto",
   done,
-  total: 151,
-  elapsedMs: 10_000,
   currentFile: "IMG_0042.jpg",
   eta: "Mancano circa 28 secondi.", // what Rust says for 40 of 151 files in 10 s (see run/progress.rs)
   ...over,
@@ -40,7 +38,7 @@ test("before the first event: 0%, 0 di total file, ETA still being computed", ()
 test("progress: name, big percentage, N di M file, ETA from the rate so far and the current file", async () => {
   render(StepRunning, { total: 151 });
 
-  await emit(progressAt(40, { elapsedMs: 10_000 })); // 4 files/s, 111 left -> 28 s
+  await emit(progressAt(40)); // 4 files/s, 111 left -> 28 s
 
   expect(screen.getByRole("heading").textContent).toBe("Sto copiando Copia di Foto…");
   expect(screen.getByText("26%")).toBeTruthy();
@@ -53,7 +51,7 @@ test("progress: name, big percentage, N di M file, ETA from the rate so far and 
 test("ETA says Quasi finito when about a second is left", async () => {
   render(StepRunning, { total: 151 });
 
-  await emit(progressAt(150, { elapsedMs: 30_000, eta: "Quasi finito." }));
+  await emit(progressAt(150, { eta: "Quasi finito." }));
 
   expect(screen.getByText("Quasi finito.")).toBeTruthy();
 });
@@ -62,13 +60,13 @@ test("screen readers hear the progress once every 10%", async () => {
   render(StepRunning, { total: 100 });
   const live = () => document.querySelector("[aria-live]")!.textContent;
 
-  await emit(progressAt(4, { total: 100 }));
+  await emit(progressAt(4));
   expect(live()).toBe("");
-  await emit(progressAt(10, { total: 100 }));
+  await emit(progressAt(10));
   expect(live()).toBe("Copia al 10%");
-  await emit(progressAt(19, { total: 100 }));
+  await emit(progressAt(19));
   expect(live()).toBe("Copia al 10%");
-  await emit(progressAt(23, { total: 100 }));
+  await emit(progressAt(23));
   expect(live()).toBe("Copia al 20%");
 });
 

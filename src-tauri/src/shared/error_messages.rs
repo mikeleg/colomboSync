@@ -120,13 +120,10 @@ pub fn explain_missing_parent() -> Explanation {
     }
 }
 
-/// What the folder picker says when a folder cannot be opened.
-pub const CANNOT_OPEN_FOLDER: &str =
-    "Non riesco ad aprire questa cartella. Il disco o la rete sono collegati?";
-
-/// The folders could not be listed at all (the background task died, not the disk).
+/// What the folder picker says when a folder cannot be opened (or could not be listed at all: the
+/// background task died, not the disk).
 pub fn cannot_open_folder() -> Explanation {
-    CANNOT_OPEN_FOLDER.into()
+    "Non riesco ad aprire questa cartella. Il disco o la rete sono collegati?".into()
 }
 
 /// Avanti on the step "Da dove" with no folder chosen.

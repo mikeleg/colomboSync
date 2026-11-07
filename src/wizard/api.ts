@@ -17,10 +17,9 @@ export const browseFolders = (path: string) => invoke<FolderListing>("browse_fol
 export const createFolder = (source: string, parent: string, name: string) =>
   invoke<string>("create_folder", { source, parent, name });
 
-/** Avanti: rejects with what is missing on `step` (a folder to copy, a place for the copy, a name). */
+/**
+ * Avanti: rejects with what is missing on `step` (a folder to copy, a place for the copy, a name),
+ * or with why B cannot be that folder (A itself, inside A, above A).
+ */
 export const checkStep = (step: StepId, source: string, destination: string, name: string) =>
   invoke<void>("check_step", { step, source, destination, name });
-
-/** Rejects for a B that is A itself or inside A. */
-export const checkDestination = (source: string, destination: string) =>
-  invoke<void>("check_destination", { source, destination });

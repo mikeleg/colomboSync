@@ -50,10 +50,7 @@ pub fn browse(path: &str) -> FolderListing {
     };
     let (folders, error) = match subfolders(Path::new(path)) {
         Ok(folders) => (folders, None),
-        Err(_) => (
-            Vec::new(),
-            Some(error_messages::CANNOT_OPEN_FOLDER.to_string()),
-        ),
+        Err(_) => (Vec::new(), Some(error_messages::cannot_open_folder().title)),
     };
     FolderListing {
         parent,

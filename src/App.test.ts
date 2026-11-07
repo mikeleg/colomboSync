@@ -72,7 +72,7 @@ type Handlers = Partial<
     | "list_syncs"
     | "save_sync"
     | "default_sync_name"
-    | "check_destination"
+    | "check_step"
     | "list_runs"
     | "read_run_log"
     | "is_elevated",
@@ -91,8 +91,7 @@ function backend(handlers: Handlers = {}) {
     },
     list_syncs: () => ({ syncs: [], setAside: false }),
     default_sync_name: () => "Copia di Foto",
-    check_destination: () => undefined, // B is fine
-    // The words and rules of `check_step` in Rust (wizard/commands.rs).
+    // The words and rules of `check_step` in Rust (wizard/commands.rs and shared/path_rules.rs).
     check_step: (args) => {
       const { step, source, destination, name } = args as Record<string, string>;
       const missing: Record<string, [string, string]> = {
@@ -102,6 +101,13 @@ function backend(handlers: Handlers = {}) {
       };
       const [value, title] = missing[step] ?? ["x", ""];
       if (!value.trim()) throw { title, advice: "" };
+      if (step === "destination") {
+        const plain = (path: string) => path.trim().toLowerCase().replace(/\\+$/, "");
+        if (plain(source) === plain(destination))
+          throw { title: "La destinazione è la stessa cartella da copiare. Scegline un’altra.", advice: "" };
+        if (plain(destination).startsWith(plain(source) + "\\"))
+          throw { title: "La destinazione non può stare dentro la cartella da copiare.", advice: "" };
+      }
     },
     is_elevated: () => false,
     save_sync: (args) => ({ id: 7, ...args }),
@@ -843,12 +849,7 @@ test("a blocked preview that still counts files does not say 'Da fare' in the sc
 });
 
 test("Dove: Avanti is blocked with the message from Rust when B is A or inside A", async () => {
-  let message = "La destinazione è la stessa cartella da copiare. Scegline un’altra.";
-  backend({
-    check_destination: () => {
-      throw { title: message, advice: "" };
-    },
-  });
+  backend();
   render(App);
   await click("Nuova sincronizzazione");
   await typeInto(/Percorso/, String.raw`D:\Foto`);
@@ -857,28 +858,34 @@ test("Dove: Avanti is blocked with the message from Rust when B is A or inside A
 
   await click("Avanti");
 
-  expect(invokeMock).toHaveBeenCalledWith("check_destination", {
+  expect(invokeMock).toHaveBeenCalledWith("check_step", {
+    step: "destination",
     source: String.raw`D:\Foto`,
     destination: "d:\\foto\\",
+    name: "",
   });
-  expect(screen.getByRole("alert").textContent).toContain(message);
+  expect(screen.getByRole("alert").textContent).toContain(
+    "La destinazione è la stessa cartella da copiare. Scegline un’altra.",
+  );
   expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();
 
-  message = "La destinazione non può stare dentro la cartella da copiare.";
   await typeInto(/Percorso/, String.raw`D:\Foto\Backup`);
   await click("Avanti");
 
-  expect(screen.getByRole("alert").textContent).toContain(message);
+  expect(screen.getByRole("alert").textContent).toContain(
+    "La destinazione non può stare dentro la cartella da copiare.",
+  );
   expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();
 });
 
 test("Dove: if the paths change while they are being checked, the new ones are checked before moving on", async () => {
   let release: () => void = () => {};
-  let calls = 0;
+  let destinationChecks = 0;
   backend({
-    check_destination: () => {
-      calls++;
-      if (calls === 1) return new Promise<void>((resolve) => (release = resolve));
+    check_step: (args) => {
+      if ((args as { step: string }).step !== "destination") return;
+      destinationChecks++;
+      if (destinationChecks === 1) return new Promise<void>((resolve) => (release = resolve));
       throw { title: "La destinazione non può stare dentro la cartella da copiare.", advice: "" };
     },
   });
@@ -892,11 +899,13 @@ test("Dove: if the paths change while they are being checked, the new ones are c
   await typeInto(/Percorso/, String.raw`D:\Foto\Backup`); // changed while the first check is pending
   release();
   await first;
-  await vi.waitFor(() => expect(calls).toBe(2));
+  await vi.waitFor(() => expect(destinationChecks).toBe(2));
 
-  expect(invokeMock).toHaveBeenLastCalledWith("check_destination", {
+  expect(invokeMock).toHaveBeenLastCalledWith("check_step", {
+    step: "destination",
     source: String.raw`D:\Foto`,
     destination: String.raw`D:\Foto\Backup`,
+    name: "",
   });
   await vi.waitFor(() => expect(screen.getByRole("alert").textContent).toContain("non può stare dentro"));
   expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();

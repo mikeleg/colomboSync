@@ -34,12 +34,10 @@
     <h1 id="h">{title}</h1>
     {#if ok}
       <p>B ora è aggiornato.</p>
-    {:else if cancelled}
-      {#if run?.resultNote}<p>{run.resultNote}</p>{/if}
-    {:else}
-      {#if advice}<p>{advice}</p>{/if}
-      {#if run?.resultNote}<p>{run.resultNote}</p>{/if}
+    {:else if !cancelled && advice}
+      <p>{advice}</p>
     {/if}
+    {#if !ok && run?.resultNote}<p>{run.resultNote}</p>{/if}
   </div>
 </div>
 <div class="btns">

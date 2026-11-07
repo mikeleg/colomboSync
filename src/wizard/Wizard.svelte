@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import Icon from "../shared/Icon.svelte";
-  import { checkDestination, checkStep, previewSync } from "./api";
+  import { checkStep, previewSync } from "./api";
   import { defaultSyncName, saveSync } from "../syncs/api";
   import { onCloseRequested, runSync } from "../run/api";
   import { toExplanation } from "../shared/explanation";
@@ -124,7 +124,6 @@
       checked = [source.trim(), destination.trim(), name.trim()];
       try {
         await checkStep(id, ...checked);
-        if (id === "destination") await checkDestination(checked[0], checked[1]);
       } catch (e) {
         error = toExplanation(e);
         return;

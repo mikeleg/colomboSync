@@ -61,6 +61,52 @@ test("a path that is neither a drive nor a share is a Cartella, and each path is
   expect(invokeMock).toHaveBeenCalledTimes(2);
 });
 
+describe("places", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  test("a model that carries its places shows them and asks Rust nothing", async () => {
+    render(SchemaView, {
+      model: {
+        ...picked,
+        sourcePlace: { isNetwork: false, label: "Disco D:" },
+        destinationPlace: { isNetwork: true, label: "Rete · NAS" },
+      },
+    });
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(screen.getByText("Disco D:")).toBeTruthy();
+    expect(screen.getByText("Rete · NAS")).toBeTruthy();
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  test("a path typed key by key is asked about once, when it stops changing", async () => {
+    const { rerender } = render(SchemaView, { model: { ...picked, source: "", destination: "" } });
+    for (const typed of ["D", "D:", String.raw`D:\F`, String.raw`D:\Fo`, String.raw`D:\Foto`]) {
+      await rerender({ model: { ...picked, source: typed, destination: "" } });
+      await vi.advanceTimersByTimeAsync(50);
+    }
+    expect(invokeMock).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(invokeMock).toHaveBeenCalledWith("describe_place", { path: String.raw`D:\Foto` });
+    expect(screen.getByText("Disco D:")).toBeTruthy();
+  });
+
+  test("a path whose answer is still on its way is not asked about again", async () => {
+    invokeMock.mockImplementation(() => new Promise(() => {}));
+    const { rerender } = render(SchemaView, { model: { ...picked, destination: "" } });
+    await vi.advanceTimersByTimeAsync(200);
+
+    await rerender({ model: { ...picked, destination: "", caption: "Un'altra frase." } });
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 test("before the folders are chosen it asks for them and shows no numbers", () => {
   render(SchemaView, { model: emptySchema });
 

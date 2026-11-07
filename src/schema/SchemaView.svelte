@@ -48,11 +48,19 @@
     lastOutcome = outcome;
   });
 
-  // What Rust says about each path shown, by path: asked once, when the path first appears.
+  // What Rust says about the paths the model has no place for, by path. A path is asked once, after it
+  // has stopped changing (typing must not make one call per key); until answered it has no label.
   let places = $state<Record<string, Place>>({});
+  const asked = new Set<string>();
+  // Strings, so that the effect below only runs when a path itself changes, not on every new model.
+  const sourceToAsk = $derived(model.sourcePlace ? "" : model.source);
+  const destinationToAsk = $derived(model.destinationPlace ? "" : model.destination);
   $effect(() => {
-    for (const path of [model.source, model.destination]) {
-      if (path && !untrack(() => path in places)) {
+    const paths = [sourceToAsk, destinationToAsk];
+    const timer = setTimeout(() => {
+      for (const path of paths) {
+        if (!path || asked.has(path)) continue;
+        asked.add(path);
         describePlace(path).then(
           (place) => (places[path] = place),
           () => {
@@ -60,12 +68,13 @@
           },
         );
       }
-    }
+    }, 150);
+    return () => clearTimeout(timer);
   });
   const value = (key: keyof Counts) => (shown ? formatNumber(shown[key]) : "—");
 </script>
 
-{#snippet node(tag: string, path: string, mir = false, isB = false)}
+{#snippet node(tag: string, path: string, known: Place | undefined, mir = false, isB = false)}
   {#if path}
     <div
       class="node"
@@ -87,9 +96,9 @@
       {/if}
       <div class="tag">{tag}</div>
       <div class="nb">
-        <Icon name={places[path]?.isNetwork ? "net" : "disk"} />
+        <Icon name={(known ?? places[path])?.isNetwork ? "net" : "disk"} />
         <div>
-          <div class="dl">{places[path]?.label ?? ""}</div>
+          <div class="dl">{(known ?? places[path])?.label ?? ""}</div>
           <div class="pth">{path}</div>
         </div>
       </div>
@@ -106,7 +115,7 @@
 {/snippet}
 
 <h2>Cosa succede</h2>
-{@render node("A · Da copiare", model.source)}
+{@render node("A · Da copiare", model.source, model.sourcePlace)}
 <div class="mid" class:mir={model.mirror} class:run={model.running}>
   <div class="arr">
     <svg
@@ -140,7 +149,7 @@
     {/if}
   </div>
 </div>
-{@render node("B · Copia", model.destination, model.mirror, true)}
+{@render node("B · Copia", model.destination, model.destinationPlace, model.mirror, true)}
 {#if !model.mirror && model.source && model.destination}
   <p class="safe"><Icon name="tick" />Nessun file viene cancellato in B</p>
 {/if}

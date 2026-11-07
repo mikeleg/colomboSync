@@ -158,6 +158,8 @@ test("the first card is shown in the schema; selecting another shows its A and B
   expect(onschema).toHaveBeenLastCalledWith({
     source: foto.source,
     destination: foto.destination,
+    sourcePlace: foto.sourcePlace,
+    destinationPlace: foto.destinationPlace,
     counts: null,
     caption,
     mirror: false,
@@ -169,6 +171,8 @@ test("the first card is shown in the schema; selecting another shows its A and B
   expect(onschema).toHaveBeenLastCalledWith({
     source: documenti.source,
     destination: documenti.destination,
+    sourcePlace: documenti.sourcePlace,
+    destinationPlace: documenti.destinationPlace,
     counts: null,
     caption,
     mirror: true,

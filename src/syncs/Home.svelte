@@ -43,6 +43,8 @@
         ? {
             source: selected.source,
             destination: selected.destination,
+            sourcePlace: selected.sourcePlace,
+            destinationPlace: selected.destinationPlace,
             counts: null,
             caption: CAPTION,
             mirror: selected.mode === "Mirror",

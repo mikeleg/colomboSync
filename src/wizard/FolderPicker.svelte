@@ -4,6 +4,7 @@
   import { toExplanation } from "../shared/explanation";
   import { focus } from "../shared/focus";
   import Icon from "../shared/Icon.svelte";
+  import { TYPING_DELAY_MS } from "../shared/typing";
   import { browseFolders, createFolder } from "./api";
   import type { Explanation } from "../shared/types";
   import type { FolderListing } from "./types";
@@ -37,10 +38,12 @@
   let head: HTMLElement;
   let input: HTMLInputElement;
   let lastLoad = 0;
+  /** The folder the latest load was started for. */
+  let loadedFor: string | undefined;
+  /** The wait after a typed path, before it is browsed. */
+  let pending: ReturnType<typeof setTimeout> | undefined;
   /** The folder the rows belong to. */
-  let listed = "";
-  /** Set by a key in the path box, consumed by the effect that loads: any other change of the path loads at once. */
-  let typing = false;
+  let listed = $state("");
   /** The folder the name box was opened in: the box belongs to it and goes away with any other choice. */
   let creatingIn = $state<string | null>(null);
   let newName = $state("");
@@ -49,8 +52,13 @@
 
   const chosen = $derived(value.trim());
   const creating = $derived(creatingIn === chosen);
+  /** False while the chosen path (typed, not yet browsed) is waiting for its rows: nothing is created in it. */
+  const listedChosen = $derived(listed === chosen);
 
-  async function load(path: string) {
+  /** Resolves to the folder's listing, or to null when a newer load took over. */
+  async function load(path: string): Promise<FolderListing | null> {
+    clearTimeout(pending);
+    loadedFor = path;
     const seq = ++lastLoad;
     let result: FolderListing;
     let failure: Explanation | null = null;
@@ -61,23 +69,24 @@
       result = { parent: "", folders: [], error: null };
       failure = toExplanation(e);
     }
-    if (seq === lastLoad) {
-      listing = result;
-      listingError = failure;
-      listed = path;
-    }
+    if (seq !== lastLoad) return null;
+    listing = result;
+    listingError = failure;
+    listed = path;
+    return result;
   }
 
   /** "Livello superiore": the parent of the chosen folder, even if typing has not been browsed yet. */
   async function up() {
-    if (listed !== chosen) await load(chosen);
-    pick(listing.parent);
+    const rows = listedChosen ? listing : await load(chosen);
+    if (rows) pick(rows.parent);
   }
 
+  /** Every change of the path that is not typed: it is browsed at once. */
   function pick(path: string) {
-    typing = false;
     stopCreating();
     value = path;
+    load(path);
     head?.focus();
   }
 
@@ -113,17 +122,17 @@
     }
   }
 
-  // The rows and the parent always follow the chosen path, however it got there (click or typing).
-  // Typing waits until the path has stopped changing (one Rust call per key would be wasted); a click does not wait.
+  // The rows and the parent always follow the chosen path. A path that pick() already browsed is left alone;
+  // a typed one is browsed once it has stopped changing. The first path is browsed at once.
   $effect(() => {
     const path = chosen;
-    if (!typing) {
+    if (path === loadedFor) return;
+    if (loadedFor === undefined) {
       load(path);
       return;
     }
-    typing = false;
-    const timer = setTimeout(() => load(path), 150);
-    return () => clearTimeout(timer);
+    pending = setTimeout(() => load(path), TYPING_DELAY_MS);
+    return () => clearTimeout(pending);
   });
 
   $effect(() => {
@@ -149,7 +158,7 @@
     </span>
     {#if chosen}
       <div class="acts">
-        {#if canCreate && !listingError && !creating}
+        {#if canCreate && listedChosen && !listingError && !creating}
           <button type="button" class="btn small" onclick={startCreating}
             ><Icon name="plus" size={20} /> Nuova cartella</button
           >
@@ -206,7 +215,6 @@
       {id}
       bind:value
       bind:this={input}
-      oninput={() => (typing = true)}
       {placeholder}
       autocomplete="off"
       spellcheck="false"

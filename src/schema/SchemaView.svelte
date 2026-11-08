@@ -2,6 +2,7 @@
   import { untrack } from "svelte";
   import Icon from "../shared/Icon.svelte";
   import { formatNumber } from "../shared/format";
+  import { TYPING_DELAY_MS } from "../shared/typing";
   import { describePlace } from "./api";
   import type { SchemaModel } from "../shared/schema";
   import type { Counts, Place } from "../shared/types";
@@ -70,7 +71,7 @@
           },
         );
       }
-    }, 150);
+    }, TYPING_DELAY_MS);
     return () => clearTimeout(timer);
   });
   const value = (key: keyof Counts) => (shown ? formatNumber(shown[key]) : "—");

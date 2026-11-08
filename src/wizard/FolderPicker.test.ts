@@ -135,6 +135,61 @@ describe("browsing while typing", () => {
 
     expect((screen.getByLabelText("Percorso") as HTMLInputElement).value).toBe(D);
   });
+
+  /** Browsing as usual, except that `path` answers only when the returned function is called. */
+  function holdBrowseOf(path: string) {
+    let answer!: (l: FolderListing) => void;
+    const held = new Promise<FolderListing>((resolve) => (answer = resolve));
+    invokeMock.mockImplementation(async (_cmd, args) => {
+      const asked = (args as { path: string }).path;
+      return asked === path ? held : (listings[asked] ?? listing(""));
+    });
+    return answer;
+  }
+
+  test("Livello superiore within the delay, with a slow browse, ends at the parent of the typed folder and browses it once", async () => {
+    render(FolderPicker, { ...props, value: D });
+    await vi.advanceTimersByTimeAsync(0);
+    invokeMock.mockClear();
+    const answer = holdBrowseOf(FOTO);
+
+    await fireEvent.input(screen.getByLabelText("Percorso"), { target: { value: FOTO } });
+    await fireEvent.click(screen.getByRole("button", { name: /Livello superiore/ }));
+    await vi.advanceTimersByTimeAsync(300);
+    answer(listing(D));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect((screen.getByLabelText("Percorso") as HTMLInputElement).value).toBe(D);
+    expect(browsed().filter(([, args]) => (args as { path: string }).path === FOTO)).toHaveLength(1);
+  });
+
+  test("a key that leaves the chosen path unchanged does not make a later click wait", async () => {
+    render(FolderPicker, { ...props, value: D });
+    await vi.advanceTimersByTimeAsync(0);
+    invokeMock.mockClear();
+
+    await fireEvent.input(screen.getByLabelText("Percorso"), { target: { value: `${D} ` } });
+    await fireEvent.click(screen.getByRole("button", { name: "Foto" }));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(browsed()).toEqual([["browse_folders", { path: FOTO }]]);
+  });
+
+  test("Nuova cartella is not offered for a typed path until its folders are listed", async () => {
+    render(FolderPicker, { ...props, value: D, canCreate: true, source: String.raw`C:\Sorgente` });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByRole("button", { name: /Nuova cartella/ })).toBeTruthy();
+    const answer = holdBrowseOf(FOTO);
+
+    await fireEvent.input(screen.getByLabelText("Percorso"), { target: { value: FOTO } });
+    expect(screen.queryByRole("button", { name: /Nuova cartella/ })).toBeNull();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(screen.queryByRole("button", { name: /Nuova cartella/ })).toBeNull();
+
+    answer(listing(D));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByRole("button", { name: /Nuova cartella/ })).toBeTruthy();
+  });
 });
 
 test("a folder that cannot be opened says so, instead of looking empty and chosen", async () => {

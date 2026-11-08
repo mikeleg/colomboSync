@@ -29,7 +29,7 @@
 
 <div class="kicker">Risultato</div>
 <div class="res" class:err={!ok && !cancelled} class:ann={cancelled} role="status">
-  <Icon name={ok ? "check" : cancelled ? "stop" : "cross"} />
+  <Icon name={ok ? "check" : cancelled ? "stop" : "cross"} size={52} />
   <div>
     <h1 id="h">{title}</h1>
     {#if ok}
@@ -70,9 +70,6 @@
     color: var(--on-warn-soft);
   }
   .res :global(svg) {
-    width: 52px;
-    height: 52px;
-    flex: none;
     color: var(--ok);
   }
   .res.err :global(svg) {

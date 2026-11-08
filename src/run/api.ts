@@ -12,7 +12,7 @@ import type { RunProgress } from "./types";
 export const runSync = (sync: Sync, previewToken: string | null, consent: boolean) =>
   invoke<RunReport>("run_sync", { sync, previewToken, consent });
 
-/** Kills robocopy; the pending `runSync` then resolves with a Cancelled run. `exitWhenDone` closes the app after that. */
+/** Stops the copy engine; the pending `runSync` then resolves with a Cancelled run. `exitWhenDone` closes the app after that. */
 export const cancelRun = (exitWhenDone = false) => invoke<boolean>("cancel_run", { exitWhenDone });
 
 export const onRunProgress = (handler: (progress: RunProgress) => void) =>

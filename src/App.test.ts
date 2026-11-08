@@ -1,15 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { act, fireEvent, render, screen, within } from "@testing-library/svelte";
-import { beforeEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import App from "./App.svelte";
+import { run } from "./testing/fixtures";
 import type { RunReport } from "./shared/types";
 import type { HistorySummary, RunList } from "./history/types";
 import type { Preview } from "./wizard/types";
 import type { SyncSummary } from "./syncs/types";
-
-vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
-vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
 
 const invokeMock = vi.mocked(invoke);
 
@@ -32,26 +30,15 @@ const preview = (n: number, u: number): Preview => ({
 });
 
 // A run as Rust sends it, texts included: the screens show them as they are.
-const doneRun: RunReport = {
-  syncName: "Copia di Foto",
-  source: "D:\\Foto",
-  destination: "E:\\Backup",
-  mode: "Copy",
+const doneRun = run({
   new: 2,
-  updated: 1,
-  deleted: 0,
   durationMs: 2_000,
-  outcome: "Ok",
   startedAt: "2026-11-03T12:00:00+01:00",
   logPath: "C:\\L\\logs\\x.log",
-  explanation: null,
   title: "Fatto: 2 file copiati, 1 aggiornato in < 1 min",
-  caption: "Fatto.",
-  resultNote: null,
-  partialText: null,
   when: "03/11/2026 12:00",
   durationText: "< 1 min",
-};
+});
 
 /** What `list_runs` answers: the runs plus a summary (all zeros unless a test gives one). */
 const runList = (runs: RunReport[], summary: Partial<HistorySummary> = {}): RunList => ({
@@ -143,10 +130,6 @@ async function goToPreview() {
   await click("Avanti"); // Come la chiamo?
   await click("Avanti"); // Opzioni
 }
-
-beforeEach(() => {
-  invokeMock.mockReset();
-});
 
 test("shell: brand, theme switch, sections, a way to start, and the schema docked on the side", () => {
   backend({});

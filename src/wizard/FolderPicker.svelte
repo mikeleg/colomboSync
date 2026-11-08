@@ -2,6 +2,7 @@
   import { tick } from "svelte";
   import ErrorText from "../shared/ErrorText.svelte";
   import { toExplanation } from "../shared/explanation";
+  import { focus } from "../shared/focus";
   import Icon from "../shared/Icon.svelte";
   import { browseFolders, createFolder } from "./api";
   import type { Explanation } from "../shared/types";
@@ -40,7 +41,6 @@
   let creatingIn = $state<string | null>(null);
   let newName = $state("");
   let createError = $state<Explanation | null>(null);
-  let nameInput = $state<HTMLInputElement>();
   let createBusy = false;
 
   const chosen = $derived(value.trim());
@@ -69,10 +69,18 @@
     head?.focus();
   }
 
-  async function startCreating() {
+  /** Set by the click on "Nuova cartella", consumed by the name box: it takes the focus only after that click. */
+  let focusNameBox = false;
+
+  function startCreating() {
+    focusNameBox = true;
     creatingIn = chosen;
-    await tick();
-    nameInput?.focus();
+  }
+
+  function focusAfterClick(node: HTMLElement) {
+    if (!focusNameBox) return;
+    focusNameBox = false;
+    focus(node);
   }
 
   function stopCreating() {
@@ -116,16 +124,18 @@
       {:else if listingError}
         <b>{chosen}</b>
       {:else}
-        <Icon name="tick" />Cartella scelta: <b>{chosen}</b>
+        <Icon name="tick" size={20} />Cartella scelta: <b>{chosen}</b>
       {/if}
     </span>
     {#if chosen}
       <div class="acts">
         {#if canCreate && !listingError && !creating}
-          <button type="button" class="btn small" onclick={startCreating}><Icon name="plus" /> Nuova cartella</button>
+          <button type="button" class="btn small" onclick={startCreating}
+            ><Icon name="plus" size={20} /> Nuova cartella</button
+          >
         {/if}
         <button type="button" class="btn small" onclick={() => pick(listing.parent)}
-          ><Icon name="up" /> Livello superiore</button
+          ><Icon name="up" size={20} /> Livello superiore</button
         >
       </div>
     {/if}
@@ -138,7 +148,7 @@
           type="text"
           id="{id}-new"
           bind:value={newName}
-          bind:this={nameInput}
+          {@attach focusAfterClick}
           placeholder="Per esempio: Backup"
           autocomplete="off"
           spellcheck="false"
@@ -157,7 +167,7 @@
   <div class="rows">
     {#each listing.folders as folder (folder.path)}
       <button type="button" class="row" onclick={() => pick(folder.path)}>
-        <Icon name={chosen ? "folder" : "disk"} /><span>{folder.name}</span>
+        <Icon name={chosen ? "folder" : "disk"} size={26} /><span>{folder.name}</span>
       </button>
     {:else}
       {#if listingError}
@@ -231,14 +241,7 @@
     flex-wrap: wrap;
   }
   .pickhead.chosen > span :global(svg) {
-    width: 20px;
-    height: 20px;
-    flex: none;
     color: var(--ok);
-  }
-  .pickhead :global(.btn svg) {
-    width: 20px;
-    height: 20px;
   }
   .acts {
     display: flex;
@@ -283,9 +286,6 @@
     background: color-mix(in srgb, var(--accent) 10%, var(--card-2));
   }
   .row :global(svg) {
-    width: 26px;
-    height: 26px;
-    flex: none;
     color: var(--accent);
   }
   .row span {

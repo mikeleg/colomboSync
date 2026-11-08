@@ -19,7 +19,7 @@
 <div class="seg" role="group" aria-label="Tema">
   {#each OPTIONS as o (o.value)}
     <button type="button" aria-pressed={theme === o.value} onclick={() => choose(o.value)}>
-      <Icon name={o.value} />
+      <Icon name={o.value} size={16} />
       {o.label}
     </button>
   {/each}
@@ -46,10 +46,6 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-  }
-  button :global(svg) {
-    width: 16px;
-    height: 16px;
   }
   button:hover {
     color: var(--fg);

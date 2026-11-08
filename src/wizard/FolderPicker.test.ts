@@ -4,7 +4,6 @@ import { beforeEach, expect, test, vi } from "vitest";
 import FolderPicker from "./FolderPicker.svelte";
 import type { FolderListing } from "./types";
 
-vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 const invokeMock = vi.mocked(invoke);
 
 const folder = (name: string, path: string) => ({ name, path });
@@ -40,7 +39,6 @@ const props = {
 };
 
 beforeEach(() => {
-  invokeMock.mockReset();
   invokeMock.mockImplementation(async (_cmd, args) => listings[(args as { path: string }).path] ?? listing(""));
 });
 
@@ -221,6 +219,22 @@ test("typing another path closes the name box, and coming back to the folder doe
   await fireEvent.click(await screen.findByRole("button", { name: /Livello superiore/ }));
   await screen.findByRole("button", { name: "Foto" });
   expect(screen.queryByLabelText("Nome della nuova cartella")).toBeNull();
+});
+
+test("the name box takes the focus when Nuova cartella opens it, and not when typing the path back brings it back", async () => {
+  render(FolderPicker, creating);
+
+  await fireEvent.click(await screen.findByRole("button", { name: /Nuova cartella/ }));
+  expect(document.activeElement).toBe(screen.getByLabelText("Nome della nuova cartella"));
+
+  const manual = screen.getByLabelText("Percorso") as HTMLInputElement;
+  manual.focus();
+  await fireEvent.input(manual, { target: { value: FOTO } });
+  expect(screen.queryByLabelText("Nome della nuova cartella")).toBeNull();
+  await fireEvent.input(manual, { target: { value: D } });
+
+  expect(screen.getByLabelText("Nome della nuova cartella")).toBeTruthy();
+  expect(document.activeElement).toBe(manual);
 });
 
 test("a step error opens the manual section and focuses the input", async () => {

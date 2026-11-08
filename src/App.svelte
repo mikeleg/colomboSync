@@ -7,11 +7,11 @@
   import HistoryPanel from "./history/HistoryPanel.svelte";
   import Home from "./syncs/Home.svelte";
   import Icon from "./shared/Icon.svelte";
-  import { emptySchema, type SchemaModel } from "./schema/schema";
+  import { emptySchema, type SchemaModel } from "./shared/schema";
   import SchemaView from "./schema/SchemaView.svelte";
   import ThemeSwitch from "./shared/ThemeSwitch.svelte";
-  import type { Explanation, RunReport, Sync } from "./shared/types";
-  import type { HistorySummary } from "./history/types";
+  import type { Sync } from "./shared/types";
+  import type { HistoryState } from "./history/types";
   import Wizard from "./wizard/Wizard.svelte";
 
   /** Started as administrator: mapped network drives are not visible then. */
@@ -24,7 +24,9 @@
   });
 
   let view = $state<"home" | "history" | "wizard">("home");
-  let schema = $state<SchemaModel>(emptySchema);
+  /** The screen on show (home or wizard): it knows what the schema panel draws. */
+  let screen = $state.raw<{ getSchema: () => SchemaModel }>();
+  const schema = $derived(screen?.getSchema() ?? emptySchema);
   /** The saved sync the wizard re-runs from its preview; undefined when it creates a new one. */
   let rerun = $state<Sync>();
 
@@ -33,35 +35,26 @@
     view = "wizard";
   }
 
-  let runs = $state<RunReport[]>([]);
-  let summary = $state<HistorySummary | null>(null);
-  let historyStatus = $state<"loading" | "ready">("ready");
-  let historyError = $state<Explanation | null>(null);
+  let history = $state.raw<HistoryState>({ status: "loading" });
+  const loaded = $derived(history.status === "ready" ? history : null);
   let historyLoads = 0;
 
   async function openHistory() {
     const load = ++historyLoads;
     view = "history";
-    runs = [];
-    summary = null;
-    historyError = null;
-    historyStatus = "loading";
+    history = { status: "loading" };
     try {
-      const result = await listRuns();
+      const { runs, summary } = await listRuns();
       if (load !== historyLoads) return; // a newer request owns the screen
-      runs = result.runs;
-      summary = result.summary;
-      historyStatus = "ready";
+      history = { status: "ready", runs, summary };
     } catch (e) {
       if (load !== historyLoads) return;
-      historyError = toExplanation(e);
-      historyStatus = "ready";
+      history = { status: "failed", error: toExplanation(e) };
     }
   }
 
   function leaveWizard() {
     view = "home";
-    schema = emptySchema;
   }
 </script>
 
@@ -99,20 +92,20 @@
   </header>
   {#if elevated}
     <p class="elevated" role="alert">
-      <Icon name="warn" />Le unità di rete potrebbero non essere visibili: apri ColomboSync senza 'Esegui come
+      <Icon name="warn" size={24} />Le unità di rete potrebbero non essere visibili: apri ColomboSync senza 'Esegui come
       amministratore'.
     </p>
   {/if}
   <div class="layout">
     <main class="screen">
       {#if view === "home"}
-        <Home onnew={() => openWizard()} onrun={openWizard} onschema={(model) => (schema = model)} />
+        <Home bind:this={screen} onnew={() => openWizard()} onrun={openWizard} />
       {:else if view === "history"}
-        <History {runs} status={historyStatus} error={historyError} />
+        <History {history} />
       {:else}
         <Wizard
+          bind:this={screen}
           sync={rerun}
-          onschema={(model) => (schema = model)}
           onexit={leaveWizard}
           onhistory={() => {
             leaveWizard();
@@ -121,9 +114,13 @@
         />
       {/if}
     </main>
-    <aside class="schema" aria-label={view === "history" ? "Riepilogo dello storico" : "Schema di cosa succede"}>
+    <aside
+      class="schema"
+      class:history={view === "history"}
+      aria-label={view === "history" ? "Riepilogo dello storico" : "Schema di cosa succede"}
+    >
       {#if view === "history"}
-        <HistoryPanel {summary} />
+        <HistoryPanel summary={loaded?.summary ?? null} />
       {:else}
         <SchemaView model={schema} />
       {/if}
@@ -195,11 +192,6 @@
     color: var(--on-warn-soft);
     font-weight: 700;
   }
-  .elevated :global(svg) {
-    width: 24px;
-    height: 24px;
-    flex: none;
-  }
   .layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 360px;
@@ -210,19 +202,25 @@
   .screen {
     min-width: 0;
   }
-  /* Only the preview step renders `.content.fill` (see Wizard.svelte): the other steps keep the page scrolling. */
+  /* Only the preview step renders `.content.fill` (see Wizard.svelte): it asks for the whole window, so the element
+     takes the rest of the screen as a column, and its scrolling part keeps at least `--scroll-min` (see
+     StepPreview.svelte). The other steps keep the page scrolling. */
   .screen:has(:global(.content.fill)) {
     display: flex;
     flex-direction: column;
   }
-  /* Wide and tall window: the wizard fills the window, so only its groups scroll and the start box stays at the bottom.
+  .screen > :global(.content.fill) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  /* Wide and tall window: the window is filled, so only the groups scroll and the start box stays at the bottom.
      Narrow or short window (below 760px high, where the header takes most of the height): the page scrolls and the
      start box sticks instead. */
   @media (min-width: 901px) and (min-height: 760px) {
-    .app:has(:global(.content.fill)) :global(.groups) {
-      min-height: 240px;
-    }
     .app:has(:global(.content.fill)) {
+      --scroll-min: 240px;
       height: 100vh;
       display: flex;
       flex-direction: column;
@@ -246,6 +244,14 @@
     align-self: start;
     position: sticky;
     top: 16px;
+  }
+  /* A tall summary (many syncs in the Storico) scrolls inside itself instead of running off the window. It must end
+     inside the window even at the bottom of the page: sticky `top` (16px) plus the layout's bottom padding (48px). */
+  @media (min-width: 901px) {
+    .schema.history {
+      max-height: calc(100vh - 64px);
+      overflow-y: auto;
+    }
   }
   .tabs {
     display: inline-flex;

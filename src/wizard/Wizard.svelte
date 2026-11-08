@@ -3,26 +3,23 @@
   import Icon from "../shared/Icon.svelte";
   import { checkStep, previewSync } from "./api";
   import { defaultSyncName, saveSync } from "../syncs/api";
-  import { onCloseRequested, runSync } from "../run/api";
+  import { onCloseRequested } from "../run/api";
   import { toExplanation } from "../shared/explanation";
-  import type { SchemaModel } from "../schema/schema";
+  import type { SchemaModel } from "../shared/schema";
   import type { Counts, Explanation, RunReport, Sync, SyncMode } from "../shared/types";
   import type { Preview, StepId } from "./types";
   import StepDestination from "./StepDestination.svelte";
   import StepName from "./StepName.svelte";
   import StepOptions from "./StepOptions.svelte";
   import StepPreview from "./StepPreview.svelte";
-  import StepResult from "../run/StepResult.svelte";
-  import StepRunning from "../run/StepRunning.svelte";
+  import RunFlow from "../run/RunFlow.svelte";
   import StepSource from "./StepSource.svelte";
 
   let {
-    onschema,
     onexit,
     onhistory,
     sync: syncToRerun,
   }: {
-    onschema: (model: SchemaModel) => void;
     onexit: () => void;
     /** "Vai allo storico" on the result. */
     onhistory: () => void;
@@ -41,7 +38,6 @@
     { id: "options", label: "Opzioni", title: "Opzioni" },
     { id: "preview", label: "Anteprima", title: "Anteprima" },
   ];
-  let phase = $state<"steps" | "running" | "result">("steps");
   let step = $state(rerun ? STEPS.length - 1 : 0);
   let source = $state(rerun?.source ?? "");
   let destination = $state(rerun?.destination ?? "");
@@ -52,8 +48,11 @@
   let preview = $state<Preview | null>(null);
   let scanning = $state(!!rerun);
   let previewError = $state<Explanation | null>(null);
+  /** Set by "Sì, avvia": from then on `RunFlow` replaces the steps; it reports the end of the run in `run` or `failure`. */
+  let started = $state<{ previewToken: string | null; consent: boolean } | null>(null);
   let run = $state<RunReport | null>(null);
   let failure = $state<Explanation | null>(null);
+  const phase = $derived(!started ? "steps" : run || failure ? "result" : "running");
   let scanId = 0;
   let suggestionId = 0;
   let suggesting = $state(false);
@@ -113,7 +112,8 @@
     return { ...places, counts: null, caption, mirror, warnCaption: mirror };
   });
 
-  $effect(() => onschema(schema));
+  /** What the schema panel beside this screen draws; the app reads it (`bind:this`), so nothing is sent up. */
+  export const getSchema = () => schema;
 
   async function next() {
     const here = step;
@@ -192,17 +192,11 @@
   const saveIfNew = async (): Promise<Sync> =>
     (sync ??= await saveSync(name.trim(), source.trim(), destination.trim(), mode));
 
-  async function start(consent: boolean) {
+  function start(consent: boolean) {
     if (!preview || saving) return;
     saving = true;
     closeRequests = 0;
-    phase = "running";
-    try {
-      run = await runSync(await saveIfNew(), preview.previewToken, consent);
-    } catch (e) {
-      failure = toExplanation(e);
-    }
-    phase = "result";
+    started = { previewToken: preview.previewToken, consent };
   }
 
   /** "Riprova" on the result: back to a fresh preview of the same sync, never straight to a run. */
@@ -210,7 +204,7 @@
     run = null;
     failure = null;
     saving = false;
-    phase = "steps";
+    started = null;
     step = STEPS.length - 1;
     scan();
   }
@@ -228,16 +222,25 @@
   }
 </script>
 
-{#if phase === "running"}
-  <StepRunning total={runTotal} {closeRequests} />
-{:else if phase === "result"}
-  <StepResult {run} {failure} onhome={onexit} onretry={retry} {onhistory} />
+{#if started}
+  <RunFlow
+    save={saveIfNew}
+    previewToken={started.previewToken}
+    consent={started.consent}
+    total={runTotal}
+    {closeRequests}
+    bind:run
+    bind:failure
+    {onexit}
+    onretry={retry}
+    {onhistory}
+  />
 {:else}
   <ol class="steps" aria-label="Passi">
     {#each STEPS as s, i (s.id)}
       <li class:done={i < step} class:cur={i === step} aria-current={i === step ? "step" : undefined}>
         <span class="n"
-          >{#if i < step}<Icon name="tick" />{:else}{i + 1}{/if}</span
+          >{#if i < step}<Icon name="tick" size={14} />{:else}{i + 1}{/if}</span
         >
         <span>{s.label}</span>
       </li>
@@ -245,7 +248,8 @@
   </ol>
   <div class="kicker">Passo {step + 1} di {STEPS.length}</div>
   <h1 id="h">{sync && stepId === "preview" ? `Anteprima: ${sync.name}` : STEPS[step].title}</h1>
-  <div class="content" class:fill={stepId === "preview"}>
+  <!-- `fill` asks the app to give the preview the whole window (see App.svelte). -->
+  <div class={["content", { fill: stepId === "preview" }]}>
     {#if stepId === "source"}
       <StepSource bind:path={source} {error} onenter={next} />
     {:else if stepId === "destination"}
@@ -308,8 +312,6 @@
     font-weight: 700;
   }
   .n :global(svg) {
-    width: 14px;
-    height: 14px;
     stroke-width: 3;
   }
   .steps li.done .n {
@@ -321,13 +323,6 @@
   }
   .content {
     margin-top: 18px;
-  }
-  /* On the preview the content takes the rest of the screen, so its groups can scroll (see App.svelte). */
-  .content.fill {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
   }
   .nav {
     display: flex;

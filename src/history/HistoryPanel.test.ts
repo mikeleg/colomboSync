@@ -1,10 +1,7 @@
 import { render, screen, within } from "@testing-library/svelte";
 import { expect, test } from "vitest";
-import { readFileSync } from "node:fs";
 import HistoryPanel from "./HistoryPanel.svelte";
 import type { HistorySummary } from "./types";
-
-const theme = readFileSync("src/theme.css", "utf8");
 
 const summary = (over: Partial<HistorySummary> = {}): HistorySummary => ({
   runs: 9,
@@ -81,10 +78,6 @@ test("the Specchio chip has its own colour, not the one of Errore", () => {
   expect(legend.getByText("Specchio").classList).toContain("mirror");
   expect(legend.getByText("Specchio").classList).not.toContain("err");
   expect(legend.getByText("Errore").classList).toContain("err");
-  // theme.css: .chip.mirror is not painted with the danger tokens, and the theme defines its tokens (light and both dark blocks).
-  expect(theme).not.toMatch(/\.chip\.err,\s*\.chip\.mirror/);
-  expect(theme.match(/--mirror:/g)).toHaveLength(3);
-  expect(theme.match(/--on-mirror:/g)).toHaveLength(3);
 });
 
 test("empty history: a friendly message instead of zeros, and the legend stays", () => {

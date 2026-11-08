@@ -3,7 +3,7 @@
   import Icon from "../shared/Icon.svelte";
   import { formatNumber } from "../shared/format";
   import { describePlace } from "./api";
-  import type { SchemaModel } from "./schema";
+  import type { SchemaModel } from "../shared/schema";
   import type { Counts, Place } from "../shared/types";
 
   let { model }: { model: SchemaModel } = $props();
@@ -96,7 +96,7 @@
       {/if}
       <div class="tag">{tag}</div>
       <div class="nb">
-        <Icon name={(known ?? places[path])?.isNetwork ? "net" : "disk"} />
+        <Icon name={(known ?? places[path])?.isNetwork ? "net" : "disk"} size={44} />
         <div>
           <div class="dl">{(known ?? places[path])?.label ?? ""}</div>
           <div class="pth">{path}</div>
@@ -107,14 +107,14 @@
     <div class="node empty-n">
       <div class="tag">{tag}</div>
       <div class="nb">
-        <Icon name="folder" />
+        <Icon name="folder" size={44} />
         <div><div class="pth">Scegli la cartella</div></div>
       </div>
     </div>
   {/if}
 {/snippet}
 
-<h2>Cosa succede</h2>
+<h2 class="section-title">Cosa succede</h2>
 {@render node("A · Da copiare", model.source, model.sourcePlace)}
 <div class="mid" class:mir={model.mirror} class:run={model.running}>
   <div class="arr">
@@ -151,19 +151,11 @@
 </div>
 {@render node("B · Copia", model.destination, model.destinationPlace, model.mirror, true)}
 {#if !model.mirror && model.source && model.destination}
-  <p class="safe"><Icon name="tick" />Nessun file viene cancellato in B</p>
+  <p class="safe"><Icon name="tick" size={20} />Nessun file viene cancellato in B</p>
 {/if}
-<p class="cap" class:mir={model.warnCaption}>{model.caption}</p>
+<p class={["cap", { "danger-note": model.warnCaption }]}>{model.caption}</p>
 
 <style>
-  h2 {
-    font-size: 13px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--fg-2);
-    margin-bottom: 14px;
-  }
   .node {
     background: var(--card-2);
     color: var(--fg);
@@ -188,11 +180,8 @@
     align-items: center;
   }
   .nb > :global(svg) {
-    width: 44px;
-    height: 44px;
     padding: 10px;
     border-radius: 14px;
-    flex: none;
     background: var(--accent-soft);
     color: var(--accent);
   }
@@ -451,27 +440,6 @@
     width: 100%;
     margin-top: 10px;
   }
-  .cnt {
-    text-align: center;
-    padding: 12px 6px;
-    border-radius: 16px;
-    background: var(--card-2);
-    color: var(--fg);
-    min-width: 0;
-  }
-  .cnt b {
-    display: block;
-    font-size: 30px;
-    line-height: 1.1;
-    font-weight: 700;
-    letter-spacing: -0.03em;
-  }
-  .cnt span {
-    font-size: 13px;
-    color: var(--fg-2);
-    display: block;
-    line-height: 1.2;
-  }
   .cnt.d {
     background: color-mix(in srgb, var(--danger) 20%, transparent);
   }
@@ -493,23 +461,12 @@
     font-weight: 700;
     text-align: center;
   }
-  .safe :global(svg) {
-    width: 20px;
-    height: 20px;
-    flex: none;
-  }
   .cap {
     margin-top: 14px;
+  }
+  .cap:not(.danger-note) {
     font-size: 15px;
     text-align: center;
     color: var(--fg-2);
-  }
-  .cap.mir {
-    background: var(--danger-soft);
-    color: var(--on-danger-soft);
-    font-weight: 700;
-    text-align: left;
-    padding: 12px 16px;
-    border-radius: var(--r-s);
   }
 </style>

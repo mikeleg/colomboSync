@@ -193,7 +193,14 @@ const seeds: (Run & { explanation: Explanation | null })[] = [
     explanation: null,
   },
 ];
-const runs = seeds.map(toReport);
+// Older runs of "Musica", so that the Storico has more than one page ("Mostra altre").
+const olderSeeds = Array.from({ length: 210 }, (_, i) => ({
+  ...seeds[2],
+  new: i,
+  startedAt: ago(7 * DAY + i * HOUR),
+  logPath: logPath(`musica-old-${i}`),
+}));
+const runs = [...seeds, ...olderSeeds].map(toReport);
 
 /** Runs sorted by startedAt, newest first (ISO timestamps compare as strings). */
 const newestFirst = <T extends Run>(list: T[]): T[] => [...list].sort((a, b) => b.startedAt.localeCompare(a.startedAt));

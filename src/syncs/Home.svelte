@@ -5,15 +5,11 @@
   import Icon from "../shared/Icon.svelte";
   import { listSyncs } from "./api";
   import { modeChip, outcomeChip } from "../shared/format";
-  import { emptySchema, type SchemaModel } from "../schema/schema";
+  import { emptySchema, type SchemaModel } from "../shared/schema";
   import type { Explanation, Place, Sync } from "../shared/types";
   import type { SyncSummary } from "./types";
 
-  let {
-    onnew,
-    onrun,
-    onschema,
-  }: { onnew: () => void; onrun: (sync: Sync) => void; onschema: (model: SchemaModel) => void } = $props();
+  let { onnew, onrun }: { onnew: () => void; onrun: (sync: Sync) => void } = $props();
 
   const CAPTION = 'Premi "Controlla e avvia": prima ti mostro cosa cambierà, poi decidi tu.';
 
@@ -37,22 +33,22 @@
 
   const selected = $derived(syncs.find((s) => s.id === selectedId) ?? syncs[0]);
 
-  $effect(() => {
-    onschema(
-      selected
-        ? {
-            source: selected.source,
-            destination: selected.destination,
-            sourcePlace: selected.sourcePlace,
-            destinationPlace: selected.destinationPlace,
-            counts: null,
-            caption: CAPTION,
-            mirror: selected.mode === "Mirror",
-            warnCaption: false,
-          }
-        : emptySchema,
-    );
-  });
+  const schema = $derived<SchemaModel>(
+    selected
+      ? {
+          source: selected.source,
+          destination: selected.destination,
+          sourcePlace: selected.sourcePlace,
+          destinationPlace: selected.destinationPlace,
+          counts: null,
+          caption: CAPTION,
+          mirror: selected.mode === "Mirror",
+          warnCaption: false,
+        }
+      : emptySchema,
+  );
+  /** What the schema panel beside this screen draws; the app reads it (`bind:this`), so nothing is sent up. */
+  export const getSchema = () => schema;
 </script>
 
 {#snippet place(path: string, where: Place)}
@@ -69,16 +65,13 @@
     {#each syncs as sync (sync.id)}
       {@const retry = sync.lastRun?.outcome === "Error"}
       {@const outcome = sync.lastRun && outcomeChip[sync.lastRun.outcome]}
-      <!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_click_events_have_key_events -->
-      <li
-        class="card"
-        class:sel={sync === selected}
-        class:bad={retry}
-        onclick={() => (selectedId = sync.id)}
-        onfocusin={() => (selectedId = sync.id)}
-      >
+      <!-- Focusing anything in the card (its button included) selects it; the name is the button that also selects it
+           with a click anywhere on the card (see `.pick::after`). -->
+      <li class={["card", { sel: sync === selected, bad: retry }]} onfocusin={() => (selectedId = sync.id)}>
         <div class="head">
-          <h2>{sync.name}</h2>
+          <h2>
+            <button type="button" class="pick" onclick={() => (selectedId = sync.id)}>{sync.name}</button>
+          </h2>
           <span class="chip {modeChip[sync.mode].cls}">{modeChip[sync.mode].label}</span>
         </div>
         <p class="route">
@@ -87,7 +80,7 @@
             sync.destinationPlace,
           )}
         </p>
-        {#if sync.lastRun?.note}<p class="note" class:err={retry}>{sync.lastRun.note}</p>{/if}
+        {#if sync.lastRun?.note}<p class={["note", { err: retry }]}>{sync.lastRun.note}</p>{/if}
         <div class="foot">
           <div class="last">
             {#if sync.lastRun && outcome}
@@ -99,8 +92,7 @@
           </div>
           <button
             type="button"
-            class="btn"
-            class:primary={!retry}
+            class={["btn", { primary: !retry }]}
             aria-label="{retry ? 'Riprova' : 'Controlla e avvia'} {sync.name}"
             onclick={() => onrun(sync)}
           >
@@ -116,7 +108,7 @@
   </p>{/if}
 {#if loadError}<div class="err-msg" role="alert"><ErrorText explanation={loadError} /></div>{/if}
 <button type="button" class="newcard" disabled={!!loadError} onclick={onnew}
-  ><Icon name="plus" />Nuova sincronizzazione</button
+  ><Icon name="plus" size={22} />Nuova sincronizzazione</button
 >
 
 <style>
@@ -133,8 +125,30 @@
     background: var(--card);
     box-shadow: var(--shadow);
     color: var(--fg);
-    cursor: pointer;
     min-width: 0;
+    position: relative;
+  }
+  /* A click anywhere on the card is a click on this button (its ::after covers the card); the card's own
+     button stays above it. */
+  .pick {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    text-align: left;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+  .pick::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: var(--r);
+  }
+  .foot .btn {
+    position: relative;
   }
   .card:hover {
     background: color-mix(in srgb, var(--fg) 3%, var(--card));
@@ -179,10 +193,7 @@
     font-weight: 600;
   }
   .route :global(svg) {
-    width: 18px;
-    height: 18px;
     color: var(--accent);
-    flex: none;
   }
   .route .ar {
     color: var(--fg-2);
@@ -242,9 +253,5 @@
   .newcard:hover:not(:disabled) {
     background: color-mix(in srgb, var(--accent) 8%, transparent);
     border-style: solid;
-  }
-  .newcard :global(svg) {
-    width: 22px;
-    height: 22px;
   }
 </style>

@@ -4,22 +4,29 @@
   import LogViewer from "../shared/LogViewer.svelte";
   import RunChips from "../shared/RunChips.svelte";
   import RunStats from "../shared/RunStats.svelte";
-  import type { Explanation, RunReport } from "../shared/types";
+  import type { RunReport } from "../shared/types";
+  import type { HistoryState } from "./types";
 
-  /** Newest first, as returned by `list_runs`; `error` is why that failed. */
-  let {
-    runs,
-    status,
-    error = null,
-  }: { runs: RunReport[]; status: "loading" | "ready"; error?: Explanation | null } = $props();
+  /** `list_runs` as the app holds it: runs newest first, `summary.syncs` the saved syncs; `failed` says why it failed. */
+  let { history }: { history: HistoryState } = $props();
+
+  const status = $derived(history.status === "loading" ? "loading" : "ready");
+  const error = $derived(history.status === "failed" ? history.error : null);
+  const runs = $derived(history.status === "ready" ? history.runs : []);
+  const syncs = $derived(history.status === "ready" ? history.summary.syncs : []);
+
+  /** How many runs show at first, and how many more each "Mostra altre" adds. */
+  const PAGE = 200;
+  // "" = no filter. Kept here, so they survive the Registro modal; not stored anywhere.
+  const NO_FILTERS = { sync: "", outcome: "", mode: "", period: "" };
 
   let viewing = $state<RunReport | null>(null);
-
-  // "" = no filter. Kept here, so they survive the Registro modal; not stored anywhere.
-  let syncFilter = $state("");
-  let outcomeFilter = $state("");
-  let modeFilter = $state("");
-  let periodDays = $state("");
+  let filters = $state({ ...NO_FILTERS });
+  // Other runs or another filter start the list again from the first page; "Mostra altre" then adds to it.
+  let limit = $derived.by(() => {
+    void [runs, ...Object.values(filters)];
+    return PAGE;
+  });
 
   /** Id of each name used by a run that has one (newest wins), so old lines without an id join their sync. */
   const idByName = $derived(
@@ -32,31 +39,35 @@
     return id != null ? `id:${id}` : `name:${run.syncName}`;
   };
 
-  const syncOptions = $derived(
-    // runs are newest first: a renamed sync shows under its latest name.
-    [...new Map([...runs].reverse().map((r): [string, string] => [syncKey(r), r.syncName]))].sort((a, b) =>
-      a[1].localeCompare(b[1], "it"),
-    ),
-  );
+  const syncOptions = $derived.by(() => {
+    const options = new Map(syncs.map((s): [string, string] => [`id:${s.id}`, s.name]));
+    for (const run of runs) {
+      const key = syncKey(run);
+      if (key.startsWith("name:")) options.set(key, run.syncName);
+    }
+    return [...options].sort((a, b) => a[1].localeCompare(b[1], "it"));
+  });
   const filtered = $derived.by(() => {
-    const since = Date.now() - Number(periodDays) * 86_400_000;
+    const { sync, outcome, mode, period } = filters;
+    const since = period ? Date.now() - Number(period) * 86_400_000 : 0;
     return (
       runs
         // The history only grows at the front: counting from the oldest run keeps a run's key when new ones arrive.
         .map((run, i) => ({ run, key: runs.length - i }))
         .filter(
           ({ run: r }) =>
-            (!syncFilter || syncKey(r) === syncFilter) &&
-            (!outcomeFilter || r.outcome === outcomeFilter) &&
-            (!modeFilter || r.mode === modeFilter) &&
-            (!periodDays || Date.parse(r.startedAt) >= since),
+            (!sync || syncKey(r) === sync) &&
+            (!outcome || r.outcome === outcome) &&
+            (!mode || r.mode === mode) &&
+            (!period || Date.parse(r.startedAt) >= since),
         )
     );
   });
-  const isFiltered = $derived(!!(syncFilter || outcomeFilter || modeFilter || periodDays));
+  const shown = $derived(filtered.slice(0, limit));
+  const isFiltered = $derived(Object.values(filters).some(Boolean));
 
   function clearFilters() {
-    syncFilter = outcomeFilter = modeFilter = periodDays = "";
+    filters = { ...NO_FILTERS };
   }
 </script>
 
@@ -71,7 +82,7 @@
   <div class="filters">
     <label>
       Sincronizzazione
-      <select bind:value={syncFilter}>
+      <select bind:value={filters.sync}>
         <option value="">Tutte</option>
         {#each syncOptions as [key, name] (key)}
           <option value={key}>{name}</option>
@@ -80,24 +91,25 @@
     </label>
     <label>
       Esito
-      <select bind:value={outcomeFilter}>
+      <select bind:value={filters.outcome}>
         <option value="">Tutti</option>
-        <option value="Ok">{outcomeChip.Ok.label}</option>
-        <option value="Error">{outcomeChip.Error.label}</option>
-        <option value="Cancelled">{outcomeChip.Cancelled.label}</option>
+        {#each Object.entries(outcomeChip) as [outcome, chip] (outcome)}
+          <option value={outcome}>{chip.label}</option>
+        {/each}
       </select>
     </label>
     <label>
       Modalità
-      <select bind:value={modeFilter}>
+      <select bind:value={filters.mode}>
         <option value="">Tutte</option>
-        <option value="Copy">{modeChip.Copy.label}</option>
-        <option value="Mirror">{modeChip.Mirror.label}</option>
+        {#each Object.entries(modeChip) as [mode, chip] (mode)}
+          <option value={mode}>{chip.label}</option>
+        {/each}
       </select>
     </label>
     <label>
       Periodo
-      <select bind:value={periodDays}>
+      <select bind:value={filters.period}>
         <option value="">Sempre</option>
         <option value="7">Ultimi 7 giorni</option>
         <option value="30">Ultimi 30 giorni</option>
@@ -115,7 +127,7 @@
   {/if}
 {/if}
 <ul class="runs">
-  {#each filtered as { run, key } (key)}
+  {#each shown as { run, key } (key)}
     <li class="run">
       <div class="top">
         <strong>{run.syncName}</strong>
@@ -132,6 +144,11 @@
     </li>
   {/each}
 </ul>
+{#if filtered.length > limit}
+  <div class="btns more">
+    <button type="button" class="btn" onclick={() => (limit += PAGE)}>Mostra altre</button>
+  </div>
+{/if}
 {#if viewing}
   <LogViewer run={viewing} onclose={() => (viewing = null)} />
 {/if}
@@ -150,17 +167,6 @@
     font-size: 14px;
     color: var(--fg-2);
   }
-  select {
-    min-height: 44px;
-    max-width: 100%;
-    padding: 6px 14px;
-    border: 0;
-    border-radius: 999px;
-    background: var(--card);
-    box-shadow: var(--shadow);
-    font-size: 16px;
-    color: var(--fg);
-  }
   .found {
     display: flex;
     flex-wrap: wrap;
@@ -175,6 +181,9 @@
     padding: 0;
     display: grid;
     gap: 14px;
+  }
+  .more {
+    margin-top: 18px;
   }
   .run {
     background: var(--card);

@@ -6,7 +6,7 @@
 </script>
 
 <div class="warnbox" role="alert">
-  <Icon name="warn" />
+  <Icon name="warn" size={52} />
   <div>{@render children()}</div>
 </div>
 
@@ -22,13 +22,10 @@
     color: var(--on-danger-soft);
   }
   .warnbox :global(svg) {
-    width: 52px;
-    height: 52px;
     padding: 12px;
     border-radius: 50%;
     background: var(--danger);
     color: var(--on-danger);
-    flex: none;
   }
   .warnbox > div {
     min-width: 0;

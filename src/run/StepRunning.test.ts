@@ -13,7 +13,7 @@ const progressAt = (done: number, over: Partial<RunProgress> = {}): RunProgress 
   syncName: "Copia di Foto",
   done,
   currentFile: "IMG_0042.jpg",
-  eta: "Mancano circa 28 secondi.", // what Rust says for 40 of 151 files in 10 s (see run/progress.rs)
+  eta: "Mancano circa 28 secondi.", // what Rust says for 40 of 151 files in 10 s (see `eta_text` in shared/copy_text.rs)
   ...over,
 });
 

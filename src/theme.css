@@ -182,11 +182,6 @@ h3 {
   font-weight: 700;
   cursor: pointer;
 }
-.btn svg {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-}
 .btn:not(:disabled):hover {
   background: color-mix(in srgb, var(--fg) 18%, transparent);
 }
@@ -222,6 +217,14 @@ h3 {
   color: color-mix(in srgb, var(--fg) 35%, transparent);
   cursor: not-allowed;
   box-shadow: none;
+}
+/* After :disabled on purpose: a stopping "Sì, ferma" stays red. */
+.btn.danger {
+  background: var(--danger);
+  color: var(--on-danger);
+}
+.btn.danger:not(:disabled):hover {
+  background: color-mix(in srgb, var(--on-danger) 12%, var(--danger));
 }
 .btns {
   display: flex;
@@ -320,6 +323,49 @@ h2 {
   content: "Attenzione: ";
 }
 
+/* docked panels: the schema and the summary of the Storico */
+.section-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-2);
+  margin-bottom: 14px;
+}
+.cnt {
+  text-align: center;
+  padding: 12px 6px;
+  border-radius: 16px;
+  background: var(--card-2);
+  color: var(--fg);
+  min-width: 0;
+}
+.cnt b {
+  display: block;
+  font-size: 30px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.cnt span {
+  display: block;
+  font-size: 13px;
+  line-height: 1.2;
+  color: var(--fg-2);
+}
+.danger-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 12px 16px;
+  border-radius: var(--r-s);
+  background: var(--danger-soft);
+  color: var(--on-danger-soft);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+}
+
 /* forms */
 .f {
   display: block;
@@ -336,6 +382,17 @@ input[type="text"] {
   color: var(--fg);
   font-size: 18px;
   font-weight: 600;
+}
+select {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  font-size: 16px;
+  color: var(--fg);
 }
 input[type="text"]::placeholder {
   color: var(--fg-2);

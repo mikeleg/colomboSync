@@ -33,6 +33,7 @@
   const total = $derived(preview ? preview.new.count + preview.updated.count + preview.deleted.count : 0);
   // The consent is per run: this component is built again every time the preview is shown, so it starts unchecked.
   const needsConsent = $derived(mirror && (preview?.deleted.count ?? 0) > 0);
+  const upToDate = $derived(!!preview && total === 0 && !preview.blocked);
   let consent = $state(false);
 </script>
 
@@ -49,6 +50,33 @@
       {/if}
     </details>
   {/if}
+{/snippet}
+
+{#snippet groups(p: Preview, canStart: boolean)}
+  <div class="groups">
+    {@render group("Da copiare (nuovi)", "File che ci sono in A e non ci sono ancora in B.", p.new)}
+    {@render group(
+      "Da aggiornare",
+      "File che ci sono sia in A sia in B ma sono diversi: verranno sostituiti con quelli di A.",
+      p.updated,
+    )}
+    {#if mirror}
+      {@render group(
+        "Da cancellare in B",
+        "File che ci sono solo in B. Verranno cancellati e non finiscono nel Cestino.",
+        p.deleted,
+        true,
+      )}
+      {#if p.deleted.count === 0 && canStart}
+        <p class="sum">In B non ci sono file in più: non verrà cancellato niente.</p>
+      {/if}
+    {/if}
+  </div>
+{/snippet}
+
+{#snippet leave()}
+  <button type="button" class="btn big" onclick={onstop}>{saved ? "No, torna all’elenco" : "No, salva e basta"}</button>
+  {#if !saved}<button type="button" class="link" onclick={onback}>Indietro, cambio qualcosa</button>{/if}
 {/snippet}
 
 {#snippet sentence(parts: Segment[])}{#each parts as part, i (i)}{#if part.bold}<b>{part.text}</b
@@ -68,9 +96,9 @@
     <button type="button" class="btn primary" onclick={onretry}>Riprova</button>
     <button type="button" class="link" onclick={onback}>Indietro</button>
   </div>
-{:else if preview && total === 0 && !preview.blocked}
+{:else if upToDate}
   <div class="empty">
-    <Icon name="check" />
+    <Icon name="check" size={60} />
     <h2>B è già aggiornato</h2>
     <p>Non c’è niente da copiare: B ha già tutto quello che c’è in A.</p>
   </div>
@@ -82,59 +110,38 @@
     </div>
   </div>
 {:else if preview}
-  <div class="preview">
-    {#if preview.blocked}
-      <div class="guard">
-        <Warnbox>
-          <p>{preview.blocked}</p>
-        </Warnbox>
-      </div>
-    {:else}
-      <p class="sum">{@render sentence(preview.summary)} Peso totale da copiare: <b>{formatSize(preview.bytes)}</b>.</p>
-    {/if}
-    <div class="groups">
-      {@render group("Da copiare (nuovi)", "File che ci sono in A e non ci sono ancora in B.", preview.new)}
-      {@render group(
-        "Da aggiornare",
-        "File che ci sono sia in A sia in B ma sono diversi: verranno sostituiti con quelli di A.",
-        preview.updated,
-      )}
-      {#if mirror}
-        {@render group(
-          "Da cancellare in B",
-          "File che ci sono solo in B. Verranno cancellati e non finiscono nel Cestino.",
-          preview.deleted,
-          true,
-        )}
-        {#if preview.deleted.count === 0 && !preview.blocked}
-          <p class="sum">In B non ci sono file in più: non verrà cancellato niente.</p>
-        {/if}
-      {/if}
+  {#if preview.blocked}
+    <div class="guard">
+      <Warnbox>
+        <p>{preview.blocked}</p>
+      </Warnbox>
     </div>
-    <section class="final footer" aria-labelledby={preview.blocked ? undefined : "fq"}>
-      {#if !preview.blocked}<h2 id="fq">Avviare adesso?</h2>{/if}
-      {#if needsConsent && !preview.blocked}
+    {@render groups(preview, false)}
+    <section class="final footer">
+      <div class="btns">{@render leave()}</div>
+    </section>
+  {:else}
+    <p class="sum">{@render sentence(preview.summary)} Peso totale da copiare: <b>{formatSize(preview.bytes)}</b>.</p>
+    {@render groups(preview, true)}
+    <section class="final footer" aria-labelledby="fq">
+      <h2 id="fq">Avviare adesso?</h2>
+      {#if needsConsent}
         <label class="ack">
           <input type="checkbox" bind:checked={consent} />
           <span>Ho capito: {formatNumber(preview.deleted.count)} file verranno cancellati da B</span>
         </label>
       {/if}
       <div class="btns">
-        {#if !preview.blocked}
-          <button
-            type="button"
-            class="btn primary big"
-            disabled={needsConsent && !consent}
-            onclick={() => onstart(consent)}>Sì, avvia</button
-          >
-        {/if}
-        <button type="button" class="btn big" onclick={onstop}
-          >{saved ? "No, torna all’elenco" : "No, salva e basta"}</button
+        <button
+          type="button"
+          class="btn primary big"
+          disabled={needsConsent && !consent}
+          onclick={() => onstart(consent)}>Sì, avvia</button
         >
-        {#if !saved}<button type="button" class="link" onclick={onback}>Indietro, cambio qualcosa</button>{/if}
+        {@render leave()}
       </div>
     </section>
-  </div>
+  {/if}
 {/if}
 
 <style>
@@ -279,8 +286,6 @@
     margin-bottom: 12px;
   }
   .empty :global(svg) {
-    width: 60px;
-    height: 60px;
     color: var(--ok);
   }
   .empty h2 {
@@ -300,16 +305,11 @@
   .back {
     margin-top: 12px;
   }
-  /* Summary on top, groups in the middle (scroll when the window is short), the start box pinned at the bottom. */
-  .preview {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
+  /* Summary on top, groups in the middle, the start box at the bottom. The groups scroll when the app gives this
+     step the whole window (see App.svelte: it sets the least height they keep); otherwise the page scrolls. */
   .groups {
     flex: 1;
-    min-height: 0;
+    min-height: var(--scroll-min, 0);
     overflow-y: auto;
     /* Room inside the box so the shadows of the group cards are not cut off. */
     padding: 12px 12px 24px;

@@ -7,7 +7,7 @@
   import HistoryPanel from "./history/HistoryPanel.svelte";
   import Home from "./syncs/Home.svelte";
   import Icon from "./shared/Icon.svelte";
-  import { emptySchema, type SchemaModel } from "./schema/schema";
+  import { emptySchema, type SchemaModel } from "./shared/schema";
   import SchemaView from "./schema/SchemaView.svelte";
   import ThemeSwitch from "./shared/ThemeSwitch.svelte";
   import type { Explanation, RunReport, Sync } from "./shared/types";

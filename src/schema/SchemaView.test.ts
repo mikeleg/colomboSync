@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { render, screen } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { tick } from "svelte";
-import { emptySchema, type SchemaModel } from "./schema";
+import { emptySchema, type SchemaModel } from "../shared/schema";
 import SchemaView from "./SchemaView.svelte";
 
 const invokeMock = vi.mocked(invoke);

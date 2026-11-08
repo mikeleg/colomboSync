@@ -3,7 +3,7 @@
   import Icon from "../shared/Icon.svelte";
   import { formatNumber } from "../shared/format";
   import { describePlace } from "./api";
-  import type { SchemaModel } from "./schema";
+  import type { SchemaModel } from "../shared/schema";
   import type { Counts, Place } from "../shared/types";
 
   let { model }: { model: SchemaModel } = $props();

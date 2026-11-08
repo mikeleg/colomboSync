@@ -5,7 +5,7 @@
   import Icon from "../shared/Icon.svelte";
   import { listSyncs } from "./api";
   import { modeChip, outcomeChip } from "../shared/format";
-  import { emptySchema, type SchemaModel } from "../schema/schema";
+  import { emptySchema, type SchemaModel } from "../shared/schema";
   import type { Explanation, Place, Sync } from "../shared/types";
   import type { SyncSummary } from "./types";
 

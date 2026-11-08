@@ -5,7 +5,7 @@
   import { defaultSyncName, saveSync } from "../syncs/api";
   import { onCloseRequested, runSync } from "../run/api";
   import { toExplanation } from "../shared/explanation";
-  import type { SchemaModel } from "../schema/schema";
+  import type { SchemaModel } from "../shared/schema";
   import type { Counts, Explanation, RunReport, Sync, SyncMode } from "../shared/types";
   import type { Preview, StepId } from "./types";
   import StepDestination from "./StepDestination.svelte";

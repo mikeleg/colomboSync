@@ -1,10 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
-import { beforeEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import Home from "./Home.svelte";
 import type { SyncSummary } from "./types";
 
-vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 const invokeMock = vi.mocked(invoke);
 
 const foto: SyncSummary = {
@@ -34,10 +33,6 @@ const unreachable = String.raw`La cartella di rete \\NAS non era raggiungibile. 
 const stopped = "La copia era stata fermata a mano: puoi riprenderla quando vuoi.";
 
 const props = { onnew: () => {}, onrun: () => {}, onschema: () => {} };
-
-beforeEach(() => {
-  invokeMock.mockReset();
-});
 
 const card = (name: string) => screen.getByRole("heading", { name }).closest("li") as HTMLElement;
 

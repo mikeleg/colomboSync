@@ -4,7 +4,6 @@ import { beforeEach, expect, test, vi } from "vitest";
 import FolderPicker from "./FolderPicker.svelte";
 import type { FolderListing } from "./types";
 
-vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 const invokeMock = vi.mocked(invoke);
 
 const folder = (name: string, path: string) => ({ name, path });
@@ -40,7 +39,6 @@ const props = {
 };
 
 beforeEach(() => {
-  invokeMock.mockReset();
   invokeMock.mockImplementation(async (_cmd, args) => listings[(args as { path: string }).path] ?? listing(""));
 });
 

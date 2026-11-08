@@ -1,36 +1,10 @@
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { invoke } from "@tauri-apps/api/core";
-import { beforeEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import History from "./History.svelte";
-import type { RunReport } from "../shared/types";
+import { run } from "../testing/fixtures";
 
-vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 const invokeMock = vi.mocked(invoke);
-
-const run = (over: Partial<RunReport> = {}): RunReport => ({
-  syncName: "Copia di Foto",
-  source: String.raw`D:\Foto`,
-  destination: String.raw`E:\Backup`,
-  mode: "Copy",
-  new: 12,
-  updated: 1,
-  deleted: 0,
-  durationMs: 61_000,
-  outcome: "Ok",
-  startedAt: "2026-11-02T21:30:00+01:00",
-  logPath: String.raw`C:\L\logs\a.log`,
-  explanation: null,
-  // What Rust sends for this run (see the tests of shared/copy_text.rs): the screen shows it as it is.
-  title: "Fatto: 12 file copiati, 1 aggiornato in 1 min",
-  caption: "Fatto.",
-  resultNote: null,
-  partialText: null,
-  when: "02/11/2026 21:30",
-  durationText: "1 min",
-  ...over,
-});
-
-beforeEach(() => invokeMock.mockReset());
 
 test("lead and one row per run, in the order given (newest first)", () => {
   render(History, {

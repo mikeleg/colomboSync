@@ -5,7 +5,6 @@ import { tick } from "svelte";
 import { emptySchema, type SchemaModel } from "./schema";
 import SchemaView from "./SchemaView.svelte";
 
-vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 const invokeMock = vi.mocked(invoke);
 
 // What Rust says about each path (see shared/copy_text.rs).
@@ -15,7 +14,6 @@ const places: Record<string, { isNetwork: boolean; label: string }> = {
   "/Volumes/Backup": { isNetwork: false, label: "Cartella" },
 };
 beforeEach(() => {
-  invokeMock.mockReset();
   invokeMock.mockImplementation(async (_command, args) => places[(args as { path: string }).path]);
 });
 

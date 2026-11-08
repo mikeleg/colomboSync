@@ -1,35 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
-import { beforeEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import LogViewer from "./LogViewer.svelte";
+import { run } from "../testing/fixtures";
 import type { RunReport } from "./types";
 
-vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 const invokeMock = vi.mocked(invoke);
-beforeEach(() => invokeMock.mockReset());
-
-const run = (over: Partial<RunReport> = {}): RunReport => ({
-  syncName: "Copia di Foto",
-  source: String.raw`D:\Foto`,
-  destination: String.raw`E:\Backup`,
-  mode: "Copy",
-  new: 12,
-  updated: 3,
-  deleted: 0,
-  durationMs: 125_000,
-  outcome: "Ok",
-  startedAt: "2026-11-03T12:00:00+01:00",
-  logPath: String.raw`C:\L\logs\x.log`,
-  explanation: null,
-  // What Rust sends for this run (see the tests of shared/copy_text.rs): the screen shows it as it is.
-  title: "Fatto: 12 file copiati, 3 aggiornati in 2 min",
-  caption: "Fatto.",
-  resultNote: null,
-  partialText: null,
-  when: "03/11/2026 12:00",
-  durationText: "2 min",
-  ...over,
-});
 
 const show = (r: RunReport, log = { text: "riga", errorLines: [] as number[] }) => {
   invokeMock.mockResolvedValue(log);
@@ -39,7 +15,7 @@ const show = (r: RunReport, log = { text: "riga", errorLines: [] as number[] }) 
 const summary = () => within(screen.getByRole("region", { name: "Riepilogo" }));
 
 test("the summary shows the outcome, the mode and the counts of the run above the log", async () => {
-  show(run({ mode: "Mirror", deleted: 5 }));
+  show(run({ mode: "Mirror", updated: 3, deleted: 5, durationText: "2 min" }));
 
   expect(summary().getByText("OK").classList.contains("ok")).toBe(true);
   expect(summary().getByText("Specchio").classList.contains("mirror")).toBe(true);

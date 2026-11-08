@@ -1,37 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { fireEvent, render, screen } from "@testing-library/svelte";
-import { beforeEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import type { RunReport } from "../shared/types";
+import { run } from "../testing/fixtures";
 import StepResult from "./StepResult.svelte";
 
-vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 const invokeMock = vi.mocked(invoke);
-beforeEach(() => invokeMock.mockReset());
 
 const handlers = { onhome: () => {}, onretry: () => {}, onhistory: () => {} };
-
-const run = (over: Partial<RunReport> = {}): RunReport => ({
-  syncName: "Copia di Foto",
-  source: "D:\\Foto",
-  destination: "E:\\Backup",
-  mode: "Copy",
-  new: 12,
-  updated: 3,
-  deleted: 0,
-  durationMs: 4_000,
-  outcome: "Ok",
-  startedAt: "2026-11-03T12:00:00+01:00",
-  logPath: "C:\\L\\x.log",
-  explanation: null,
-  // What Rust sends for this run (see the tests of shared/copy_text.rs): the screen shows it as it is.
-  title: "Fatto: 12 file copiati, 3 aggiornati in < 1 min",
-  caption: "Fatto.",
-  resultNote: null,
-  partialText: null,
-  when: "03/11/2026 12:00",
-  durationText: "< 1 min",
-  ...over,
-});
 
 // What Rust sends for a failure it has no cause for.
 const generic = {
@@ -45,7 +21,7 @@ const NOTHING_COPIED = "Nessun file è stato copiato.";
 test("success: Fatto with copied and updated counts and the duration", () => {
   render(StepResult, { run: run(), failure: null, ...handlers });
 
-  expect(screen.getByRole("heading").textContent).toBe("Fatto: 12 file copiati, 3 aggiornati in < 1 min");
+  expect(screen.getByRole("heading").textContent).toBe("Fatto: 12 file copiati, 1 aggiornato in 1 min");
   expect(screen.getByRole("button", { name: "Torna all’elenco" })).toBeTruthy();
 });
 
@@ -198,7 +174,7 @@ test("Apri il registro opens the log viewer of the run, which Chiudi closes", as
 
   await fireEvent.click(screen.getByRole("button", { name: "Apri il registro" }));
 
-  expect(await screen.findByRole("dialog", { name: "Registro – Copia di Foto (03/11/2026 12:00)" })).toBeTruthy();
+  expect(await screen.findByRole("dialog", { name: "Registro – Copia di Foto (02/11/2026 21:30)" })).toBeTruthy();
   expect(invokeMock).toHaveBeenCalledWith("read_run_log", { path: String.raw`C:\L\logs\x.log` });
   await fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
   expect(screen.queryByRole("dialog")).toBeNull();

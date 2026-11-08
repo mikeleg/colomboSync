@@ -1,7 +1,6 @@
 <script lang="ts">
   import Icon from "../shared/Icon.svelte";
   import LogViewer from "../shared/LogViewer.svelte";
-  import { formatDuration, formatNumber, partialText } from "../shared/format";
   import type { Explanation, RunReport } from "../shared/types";
 
   let {
@@ -22,25 +21,10 @@
   let viewingLog = $state(false);
 
   const ok = $derived(run?.outcome === "Ok");
-  const deletedText = $derived(
-    run && run.mode === "Mirror" && run.deleted > 0
-      ? `, ${formatNumber(run.deleted)} ${run.deleted === 1 ? "cancellato" : "cancellati"} da B`
-      : "",
-  );
   const cancelled = $derived(run?.outcome === "Cancelled");
-  // Shown once: next to the error message, or as the whole body of a stopped run.
-  const partialLine = $derived(
-    run?.partial === undefined ? "" : run.partial === 0 ? "Nessun file è stato copiato." : partialText(run.partial),
-  );
-  // What Rust says about the failure, of the Run or of the command that failed before any Run existed.
-  const why = $derived(run?.explanation ?? failure ?? { title: "Non completato", advice: "" });
-  const title = $derived(
-    run && ok
-      ? `Fatto: ${formatNumber(run.new)} ${run.new === 1 ? "file copiato" : "file copiati"}, ${formatNumber(run.updated)} ${run.updated === 1 ? "aggiornato" : "aggiornati"}${deletedText} in ${formatDuration(run.durationMs)}`
-      : cancelled
-        ? "Annullato: ho fermato la copia."
-        : why.title,
-  );
+  // What Rust says about the Run, or about the command that failed before any Run existed.
+  const title = $derived(run?.title ?? failure?.title);
+  const advice = $derived(run?.explanation?.advice ?? failure?.advice);
 </script>
 
 <div class="kicker">Risultato</div>
@@ -50,12 +34,10 @@
     <h1 id="h">{title}</h1>
     {#if ok}
       <p>B ora è aggiornato.</p>
-    {:else if cancelled}
-      <p>{partialLine}{run?.partial ? ". I file già copiati restano in B." : ""}</p>
-    {:else}
-      {#if why.advice}<p>{why.advice}</p>{/if}
-      {#if partialLine}<p>{partialLine}</p>{/if}
+    {:else if !cancelled && advice}
+      <p>{advice}</p>
     {/if}
+    {#if !ok && run?.resultNote}<p>{run.resultNote}</p>{/if}
   </div>
 </div>
 <div class="btns">

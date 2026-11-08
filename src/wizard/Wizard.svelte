@@ -1,14 +1,13 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import Icon from "../shared/Icon.svelte";
-  import { checkDestination, previewSync } from "./api";
+  import { checkStep, previewSync } from "./api";
   import { defaultSyncName, saveSync } from "../syncs/api";
   import { onCloseRequested, runSync } from "../run/api";
   import { toExplanation } from "../shared/explanation";
-  import { formatNumber } from "../shared/format";
   import type { SchemaModel } from "../schema/schema";
   import type { Counts, Explanation, RunReport, Sync, SyncMode } from "../shared/types";
-  import type { Preview } from "./types";
+  import type { Preview, StepId } from "./types";
   import StepDestination from "./StepDestination.svelte";
   import StepName from "./StepName.svelte";
   import StepOptions from "./StepOptions.svelte";
@@ -35,7 +34,7 @@
   let sync = $state.raw(rerun);
 
   // Step order lives here: add a step by adding an entry and its branch in the markup.
-  const STEPS = [
+  const STEPS: { id: StepId; label: string; title: string }[] = [
     { id: "source", label: "Da dove", title: "Da dove copio?" },
     { id: "destination", label: "Dove", title: "Dove copio?" },
     { id: "name", label: "Nome", title: "Come la chiamo?" },
@@ -84,7 +83,8 @@
     if (phase === "result") {
       const ok = run?.outcome === "Ok";
       const counts = run && ok ? { new: run.new, updated: run.updated, deleted: run.deleted } : null;
-      const caption = ok ? "Fatto." : run?.outcome === "Cancelled" ? "Annullato." : "Non completato.";
+      // No Run when Rust refused to start one: there is no outcome for it to word.
+      const caption = run ? run.caption : "Non completato.";
       return { ...places, counts, caption, mirror, warnCaption: false, outcome: run?.outcome };
     }
     if (phase === "running") {
@@ -93,16 +93,15 @@
     if (stepId === "preview" && scanning) {
       return { ...places, counts: null, caption: "Sto controllando le due cartelle…", mirror, warnCaption: mirror };
     }
-    if (stepId === "preview" && preview?.blocked) {
-      return { ...places, counts: previewCounts, caption: preview.blocked, mirror, warnCaption: true };
-    }
     if (stepId === "preview" && preview && previewCounts) {
-      const { new: n, updated: u, deleted: d } = previewCounts;
-      const caption =
-        n + u + d === 0
-          ? "B è già aggiornato."
-          : `Da fare: copiare ${formatNumber(n)} file nuovi, aggiornarne ${formatNumber(u)}${mirror ? `, cancellarne ${formatNumber(d)} da B` : ""}.`;
-      return { ...places, counts: previewCounts, caption, mirror, warnCaption: mirror };
+      // Rust's caption: why it is blocked, or what is to do.
+      return {
+        ...places,
+        counts: previewCounts,
+        caption: preview.caption,
+        mirror,
+        warnCaption: !!preview.blocked || mirror,
+      };
     }
     const caption = !places.source
       ? "Scegli la cartella da copiare."
@@ -117,33 +116,28 @@
   $effect(() => onschema(schema));
 
   async function next() {
-    if (stepId === "source" && !source.trim()) {
-      error = { title: "Scegli prima la cartella da copiare.", advice: "" };
-      return;
-    }
-    if (stepId === "destination" && !destination.trim()) {
-      error = { title: "Scegli prima dove mettere la copia.", advice: "" };
-      return;
-    }
-    if (stepId === "name" && suggesting) return;
-    if (stepId === "name" && !name.trim()) {
-      error = { title: "Scrivi un nome per riconoscere questa sincronizzazione.", advice: "" };
-      return;
-    }
-    if (stepId === "destination") {
-      const here = step;
-      let checked: string[];
-      do {
-        checked = [source.trim(), destination.trim()];
+    const here = step;
+    const id = stepId;
+    if (id === "name" && suggesting) return;
+    // Opzioni has nothing to ask Rust.
+    if (id === "source" || id === "destination" || id === "name") {
+      for (;;) {
+        const checked: [string, string, string] = [source.trim(), destination.trim(), name.trim()];
+        let refusal: Explanation | null = null;
         try {
-          await checkDestination(checked[0], checked[1]);
+          await checkStep(id, ...checked);
         } catch (e) {
-          error = toExplanation(e);
+          refusal = toExplanation(e);
+        }
+        if (step !== here) return; // Indietro or a second click got there first: this answer is late
+        // The user may have edited a path or the name while Rust was answering: check what is there now.
+        if (checked[0] !== source.trim() || checked[1] !== destination.trim() || checked[2] !== name.trim()) continue;
+        if (refusal) {
+          error = refusal;
           return;
         }
-        // The user may have edited a path while Rust was answering: check what is there now.
-      } while (checked[0] !== source.trim() || checked[1] !== destination.trim());
-      if (step !== here) return; // a second click got there first
+        break;
+      }
     }
     error = null;
     step++;

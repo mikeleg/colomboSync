@@ -134,6 +134,8 @@ fn run_reports_progress_with_the_current_file() {
     let counts = wizard::preview::preview(path_str(&a), path_str(&b), SyncMode::Copy)
         .unwrap()
         .counts();
+    // The progress is measured against this total: the extra file in B is not in it.
+    assert_eq!(counts.total(), 3, "extras in B are not counted");
 
     let mut events = Vec::new();
     let run = runner::run(
@@ -147,11 +149,7 @@ fn run_reports_progress_with_the_current_file() {
 
     assert_eq!(run.outcome, Outcome::Ok);
     let last = events.last().expect("at least one progress event");
-    assert_eq!(
-        (last.done, last.total),
-        (3, 3),
-        "extras in B are not counted"
-    );
+    assert_eq!(last.done, 3, "extras in B are not counted");
     assert_eq!(last.sync_name, "Copia di A");
     assert_eq!(
         last.current_file, "è già.txt",

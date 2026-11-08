@@ -185,12 +185,14 @@ pub fn run(
     let _slot = SlotGuard(active);
     let total = counts.total();
     let mut follower = StdoutFollower::default();
-    let progress = |follower: &StdoutFollower| Progress {
-        sync_name: sync.name.clone(),
-        done: follower.done().min(total),
-        total,
-        elapsed_ms: clock.elapsed().as_millis() as u64,
-        current_file: follower.current_file(),
+    let progress = |follower: &StdoutFollower| {
+        Progress::new(
+            sync.name.clone(),
+            follower.done().min(total),
+            total,
+            clock.elapsed().as_millis() as u64,
+            follower.current_file(),
+        )
     };
     let mut last_report: Option<Instant> = None;
     let mut chunk = [0u8; 8192];

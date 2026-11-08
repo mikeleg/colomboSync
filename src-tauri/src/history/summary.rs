@@ -1,8 +1,8 @@
 //! The numbers beside the Storico: totals over `history.jsonl` and the state of each sync.
 
 use crate::history;
+use crate::shared::copy_text;
 use crate::shared::domain::{Outcome, Run, SavedSync};
-use chrono::DateTime;
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -26,8 +26,8 @@ pub struct SyncStatus {
     pub id: u64,
     /// Its current name in `syncs.json`; the name it had in its latest Run if it is gone from there.
     pub name: String,
-    /// Start time (RFC 3339, as stored) of its latest Ok run.
-    pub last_success: Option<String>,
+    /// When its latest Ok run started, or that there is none: "Ultima copia riuscita: 02/11/2026 21:30".
+    pub last_success_text: String,
     /// Set when its latest run ended in `Error`.
     pub warning: Option<String>,
 }
@@ -64,13 +64,19 @@ pub fn summarize(runs: &[Run], syncs: &[SavedSync]) -> HistorySummary {
                 .find(|s| s.id == id)
                 .map_or(&latest.sync_name, |s| &s.name)
                 .clone(),
-            last_success: last_success
-                .get(&id)
-                .map(|started_at| started_at.to_string()),
+            last_success_text: last_success.get(&id).map_or_else(
+                || "Nessuna copia riuscita finora.".to_string(),
+                |started_at| {
+                    format!(
+                        "Ultima copia riuscita: {}",
+                        copy_text::format_when(started_at)
+                    )
+                },
+            ),
             warning: (latest.outcome == Outcome::Error).then(|| {
                 format!(
                     "L’ultima copia è finita con un errore il {}.",
-                    when(&latest.started_at)
+                    copy_text::format_when(&latest.started_at)
                 )
             }),
         })
@@ -78,14 +84,6 @@ pub fn summarize(runs: &[Run], syncs: &[SavedSync]) -> HistorySummary {
     statuses.sort_by_cached_key(|s| (s.warning.is_none(), s.name.to_lowercase()));
     summary.syncs = statuses;
     summary
-}
-
-/// "2026-11-02T21:30:00+01:00" -> "02/11/2026 21:30": the local time as it was stored.
-fn when(started_at: &str) -> String {
-    DateTime::parse_from_rfc3339(started_at).map_or_else(
-        |_| started_at.to_string(),
-        |t| t.format("%d/%m/%Y %H:%M").to_string(),
-    )
 }
 
 #[cfg(test)]
@@ -174,7 +172,7 @@ mod tests {
                 SyncStatus {
                     id: 1,
                     name: "Documenti".into(),
-                    last_success: Some("2026-11-02T21:30:00+01:00".into()),
+                    last_success_text: "Ultima copia riuscita: 02/11/2026 21:30".into(),
                     warning: Some(
                         "L’ultima copia è finita con un errore il 04/11/2026 10:00.".into()
                     ),
@@ -182,7 +180,7 @@ mod tests {
                 SyncStatus {
                     id: 2,
                     name: "Foto".into(),
-                    last_success: Some("2026-11-03T08:05:00+01:00".into()),
+                    last_success_text: "Ultima copia riuscita: 03/11/2026 08:05".into(),
                     warning: None,
                 },
             ]
@@ -196,7 +194,10 @@ mod tests {
         let summary = summarize(&runs, &[]);
 
         assert_eq!(summary.syncs[0].name, "Nome nello storico");
-        assert_eq!(summary.syncs[0].last_success, None);
+        assert_eq!(
+            summary.syncs[0].last_success_text,
+            "Nessuna copia riuscita finora."
+        );
         assert!(summary.syncs[0].warning.is_some());
     }
 

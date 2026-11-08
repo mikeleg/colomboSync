@@ -1,7 +1,7 @@
 // Demo nel browser con il backend Rust simulato (mockIPC), per screenshot e controlli visivi. Avvio: npx vite --port 5199 --strictPort, poi http://localhost:5199/demo.html.
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
-import type { Counts, Explanation, Run, RunLog, RunReport, Sync, SyncMode } from "./shared/types";
+import type { Counts, Explanation, Place, Run, RunLog, RunReport, Sync, SyncMode } from "./shared/types";
 import type { FolderListing, Preview } from "./wizard/types";
 import type { RunProgress } from "./run/types";
 import type { HistorySummary, RunList, SyncStatus } from "./history/types";
@@ -28,7 +28,52 @@ const syncs: Sync[] = [
 ];
 let nextId = 4;
 
-const runs: RunReport[] = [
+// Rust words the texts of a run (shared/copy_text.rs); here a small imitation of it.
+const num = (n: number) => n.toLocaleString("it-IT");
+const whenText = (startedAt: string) =>
+  `${startedAt.slice(8, 10)}/${startedAt.slice(5, 7)}/${startedAt.slice(0, 4)} ${startedAt.slice(11, 16)}`;
+const durationText = (ms: number) => (Math.round(ms / MINUTE) < 1 ? "< 1 min" : `${Math.round(ms / MINUTE)} min`);
+const partialText = (n: number) => `${num(n)} ${n === 1 ? "file copiato" : "file copiati"} (parziale)`;
+
+/** What kind of place a path is, as `describe_place` says it. */
+function placeOf(path: string): Place {
+  if (path.startsWith("\\\\")) return { isNetwork: true, label: `Rete · ${path.slice(2).split("\\")[0]}` };
+  return { isNetwork: false, label: /^[A-Za-z]:/.test(path) ? `Disco ${path.slice(0, 2).toUpperCase()}` : "Cartella" };
+}
+
+/** A run as `run_sync` and `list_runs` send it: the stored fields, the explanation and the finished texts. */
+function toReport(run: Run & { explanation: Explanation | null }): RunReport {
+  const noneCopied = "Nessun file è stato copiato.";
+  const resultNote =
+    run.partial === undefined
+      ? null
+      : run.partial === 0
+        ? noneCopied
+        : run.outcome === "Cancelled"
+          ? `${partialText(run.partial)}. I file già copiati restano in B.`
+          : partialText(run.partial);
+  const deleted =
+    run.mode === "Mirror" && run.deleted > 0
+      ? `, ${num(run.deleted)} ${run.deleted === 1 ? "cancellato" : "cancellati"} da B`
+      : "";
+  const title =
+    run.outcome === "Ok"
+      ? `Fatto: ${num(run.new)} ${run.new === 1 ? "file copiato" : "file copiati"}, ${num(run.updated)} ${run.updated === 1 ? "aggiornato" : "aggiornati"}${deleted} in ${durationText(run.durationMs)}`
+      : run.outcome === "Cancelled"
+        ? "Annullato: ho fermato la copia."
+        : (run.explanation?.title ?? "Non completato");
+  return {
+    ...run,
+    title,
+    caption: run.outcome === "Ok" ? "Fatto." : run.outcome === "Cancelled" ? "Annullato." : "Non completato.",
+    resultNote,
+    partialText: run.partial === undefined ? null : partialText(run.partial),
+    when: whenText(run.startedAt),
+    durationText: durationText(run.durationMs),
+  };
+}
+
+const seeds: (Run & { explanation: Explanation | null })[] = [
   {
     syncName: "Foto di famiglia",
     source: FOTO_FROM,
@@ -148,6 +193,7 @@ const runs: RunReport[] = [
     explanation: null,
   },
 ];
+const runs = seeds.map(toReport);
 
 /** Runs sorted by startedAt, newest first (ISO timestamps compare as strings). */
 const newestFirst = <T extends Run>(list: T[]): T[] => [...list].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
@@ -162,7 +208,12 @@ function listSyncs(): ListedSyncs {
     syncs: syncs.map((sync) => {
       const last = sorted.find((run) => run.syncName === sync.name);
       const note = last?.outcome === "Error" ? NAS_NOTE : last?.outcome === "Cancelled" ? "Annullata da te." : null;
-      return { ...sync, lastRun: last ? { startedAt: last.startedAt, outcome: last.outcome, note } : null };
+      return {
+        ...sync,
+        sourcePlace: placeOf(sync.source),
+        destinationPlace: placeOf(sync.destination),
+        lastRun: last ? { when: last.when, outcome: last.outcome, note } : null,
+      };
     }),
   };
 }
@@ -174,14 +225,13 @@ function historySummary(): HistorySummary {
     const own = sorted.filter((r) => r.syncName === sync.name);
     if (!own.length) return [];
     const failed = own[0].outcome === "Error";
+    const lastOk = own.find((r) => r.outcome === "Ok");
     return [
       {
         id: sync.id,
         name: sync.name,
-        lastSuccess: own.find((r) => r.outcome === "Ok")?.startedAt ?? null,
-        warning: failed
-          ? `L’ultima copia è finita con un errore il ${own[0].startedAt.slice(8, 10)}/${own[0].startedAt.slice(5, 7)}/${own[0].startedAt.slice(0, 4)} ${own[0].startedAt.slice(11, 16)}.`
-          : null,
+        lastSuccessText: lastOk ? `Ultima copia riuscita: ${lastOk.when}` : "Nessuna copia riuscita finora.",
+        warning: failed ? `L’ultima copia è finita con un errore il ${own[0].when}.` : null,
       },
     ];
   });
@@ -306,6 +356,8 @@ async function previewSync(source: string, destination: string, mode: SyncMode):
       bytes: 0,
       blocked: SOURCE_EMPTY,
       previewToken: null, // a blocked preview confirms nothing
+      caption: SOURCE_EMPTY,
+      summary: [],
     };
   }
   const previewToken = `demo-${++previews}`;
@@ -316,6 +368,25 @@ async function previewSync(source: string, destination: string, mode: SyncMode):
     bytes: Math.round(1.8 * 1024 ** 3),
     blocked: null,
     previewToken,
+    caption: `Da fare: copiare ${num(120)} file nuovi, aggiornarne ${num(40)}${mode === "Mirror" ? `, cancellarne ${num(25)} da B` : ""}.`,
+    summary:
+      mode === "Mirror"
+        ? [
+            { text: "Ecco cosa succederà in B: ", bold: false },
+            { text: num(120), bold: true },
+            { text: " file nuovi, ", bold: false },
+            { text: num(40), bold: true },
+            { text: " da aggiornare, ", bold: false },
+            { text: num(25), bold: true },
+            { text: " da cancellare.", bold: false },
+          ]
+        : [
+            { text: "Ecco cosa verrà fatto: ", bold: false },
+            { text: num(120), bold: true },
+            { text: " file nuovi, ", bold: false },
+            { text: num(40), bold: true },
+            { text: " da aggiornare.", bold: false },
+          ],
   };
   lastPreview = {
     token: previewToken,
@@ -365,16 +436,24 @@ async function runSync(sync: Sync, previewToken: string | null, consent: boolean
   const names = sampleFor(sync.source).new;
   for (let tick = 1; tick <= RUN_STEPS; tick++) {
     await wait(RUN_MS / RUN_STEPS);
+    const done = Math.round((total * tick) / RUN_STEPS);
+    const elapsedMs = Date.now() - started;
+    // The words and rules of `eta_text` in Rust (shared/copy_text.rs).
+    const left = Math.ceil((total - done) / (done / (elapsedMs / 1000)));
     const progress: RunProgress = {
       syncName: sync.name,
-      done: Math.round((total * tick) / RUN_STEPS),
-      total,
-      elapsedMs: Date.now() - started,
+      done,
       currentFile: names[tick % names.length],
+      eta:
+        elapsedMs < 1000 || done === 0
+          ? "Calcolo il tempo che manca…"
+          : left <= 1
+            ? "Quasi finito."
+            : `Mancano circa ${num(left)} secondi.`,
     };
     await emit("run-progress", progress);
   }
-  return {
+  return toReport({
     syncName: sync.name,
     source: sync.source,
     destination: sync.destination,
@@ -387,7 +466,7 @@ async function runSync(sync: Sync, previewToken: string | null, consent: boolean
     startedAt: new Date(started).toISOString(),
     logPath: logPath("demo-" + started),
     explanation: null,
-  };
+  });
 }
 
 const DRIVES = ["C:\\", "D:\\", "E:\\"];
@@ -480,8 +559,19 @@ mockIPC(
         return createFolder(text("parent"), text("name"));
       case "default_sync_name":
         return lastSegment(text("source"));
-      case "check_destination":
-        return undefined;
+      case "describe_place":
+        return placeOf(text("path"));
+      case "check_step": {
+        const missing: Record<string, [string, string]> = {
+          source: [text("source"), "Scegli prima la cartella da copiare."],
+          destination: [text("destination"), "Scegli prima dove mettere la copia."],
+          name: [text("name"), "Scrivi un nome per riconoscere questa sincronizzazione."],
+        };
+        const [value, title] = missing[text("step")] ?? ["x", ""];
+        if (value.trim()) return undefined;
+        const refused: Explanation = { title, advice: "" };
+        throw refused;
+      }
       case "save_sync": {
         const sync: Sync = {
           id: nextId++,

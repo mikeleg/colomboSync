@@ -6,8 +6,8 @@ import type { RunReport } from "../shared/types";
 export interface SyncStatus {
   id: number;
   name: string;
-  /** Start time of its latest successful run. */
-  lastSuccess: string | null;
+  /** Italian sentence from Rust: when its latest successful run started, or that there is none. */
+  lastSuccessText: string;
   /** Italian sentence from Rust, set when its latest run ended in Errore. */
   warning: string | null;
 }

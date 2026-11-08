@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from "../shared/Icon.svelte";
-  import { formatNumber, formatWhen, modeChip, outcomeChip } from "../shared/format";
+  import { formatNumber, modeChip, outcomeChip } from "../shared/format";
   import type { HistorySummary } from "./types";
 
   /** From `list_runs`; null while it loads or when the history could not be read: then only the legend shows. */
@@ -42,11 +42,7 @@
             {#each summary.syncs as sync (sync.id)}
               <li>
                 <strong>{sync.name}</strong>
-                <span class="last">
-                  {sync.lastSuccess
-                    ? `Ultima copia riuscita: ${formatWhen(sync.lastSuccess)}`
-                    : "Nessuna copia riuscita finora."}
-                </span>
+                <span class="last">{sync.lastSuccessText}</span>
                 {#if sync.warning}
                   <span class="warn"><Icon name="warn" />{sync.warning}</span>
                 {/if}

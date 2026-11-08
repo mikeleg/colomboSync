@@ -87,5 +87,44 @@ mod tests {
             json["explanation"]["advice"],
             "Controlla la connessione e riprova."
         );
+        assert_eq!(json["title"], json["explanation"]["title"]);
+        assert_eq!(json["caption"], "Non completato.");
+        assert_eq!(json["resultNote"], "Nessun file è stato copiato.");
+        assert_eq!(json["partialText"], "0 file copiati (parziale)");
+    }
+
+    #[test]
+    fn a_run_goes_to_the_ui_with_its_texts_made_and_its_stored_fields_untouched() {
+        let json = serde_json::to_value(RunReport::from(sample_run())).unwrap();
+
+        assert_eq!(
+            json["title"],
+            "Fatto: 12 file copiati, 1 aggiornato in 1 min"
+        );
+        assert_eq!(json["caption"], "Fatto.");
+        assert_eq!(json["when"], "02/11/2026 21:30");
+        assert_eq!(json["durationText"], "1 min");
+        assert!(json["resultNote"].is_null());
+        assert!(json["partialText"].is_null());
+        assert_eq!(json["startedAt"], "2026-11-02T21:30:00+01:00");
+        assert_eq!(json["durationMs"], 61_000);
+    }
+
+    #[test]
+    fn a_stopped_run_says_what_stays_in_b() {
+        let run = Run {
+            outcome: Outcome::Cancelled,
+            partial: Some(40),
+            ..sample_run()
+        };
+        let json = serde_json::to_value(RunReport::from(run)).unwrap();
+
+        assert_eq!(json["title"], "Annullato: ho fermato la copia.");
+        assert_eq!(json["caption"], "Annullato.");
+        assert_eq!(
+            json["resultNote"],
+            "40 file copiati (parziale). I file già copiati restano in B."
+        );
+        assert_eq!(json["partialText"], "40 file copiati (parziale)");
     }
 }

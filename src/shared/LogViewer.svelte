@@ -3,7 +3,6 @@
   import { readRunLog } from "./api";
   import ErrorText from "./ErrorText.svelte";
   import { toExplanation } from "./explanation";
-  import { formatWhen } from "./format";
   import RunChips from "./RunChips.svelte";
   import RunStats from "./RunStats.svelte";
   import type { Explanation, RunLog, RunReport } from "./types";
@@ -62,7 +61,7 @@
 <div class="overlay" role="presentation" onclick={(e) => e.target === e.currentTarget && onclose()}>
   <div class="dialog" bind:this={dialog} role="dialog" aria-modal="true" aria-labelledby="log-title">
     <header>
-      <h2 id="log-title">Registro – {run.syncName} ({formatWhen(run.startedAt)})</h2>
+      <h2 id="log-title">Registro – {run.syncName} ({run.when})</h2>
       <button type="button" class="btn" bind:this={closeButton} onclick={onclose}>Chiudi</button>
     </header>
     <section class="summary" aria-label="Riepilogo">

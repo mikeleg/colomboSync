@@ -34,8 +34,34 @@ export interface Explanation {
   advice: string;
 }
 
-/** What `run_sync` returns: the stored Run, plus the explanation when it ended in Errore. */
-export type RunReport = Run & { explanation: Explanation | null };
+/**
+ * What `run_sync` and `list_runs` return: the stored Run, plus what Rust says about it (every text
+ * is finished: the UI only shows it).
+ */
+export type RunReport = Run & {
+  /** Set when it ended in Errore. */
+  explanation: Explanation | null;
+  /** Heading of the result: what was done, or why it was not. */
+  title: string;
+  /** The schema panel's one word for how it ended ("Fatto."). */
+  caption: string;
+  /** What the result says about the files copied before an Error or Cancelled run stopped. */
+  resultNote: string | null;
+  /** "40 file copiati (parziale)"; set with `partial`. */
+  partialText: string | null;
+  /** When it started, "02/11/2026 21:30". */
+  when: string;
+  /** How long it took, "3 min". */
+  durationText: string;
+};
+
+/** What kind of place a folder path is (src-tauri/src/shared/copy_text.rs, Place). */
+export interface Place {
+  /** A share on the network: it gets the network icon. */
+  isNetwork: boolean;
+  /** "Rete · NAS", "Disco D:" or "Cartella". */
+  label: string;
+}
 
 /** A saved A→B pair (src-tauri/src/shared/domain.rs, SavedSync). */
 export interface Sync {

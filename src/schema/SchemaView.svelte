@@ -1,9 +1,10 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import Icon from "../shared/Icon.svelte";
-  import { formatNumber, isNetworkPath } from "../shared/format";
+  import { formatNumber } from "../shared/format";
+  import { describePlace } from "./api";
   import type { SchemaModel } from "./schema";
-  import type { Counts } from "../shared/types";
+  import type { Counts, Place } from "../shared/types";
 
   let { model }: { model: SchemaModel } = $props();
 
@@ -47,16 +48,33 @@
     lastOutcome = outcome;
   });
 
-  const place = (path: string) =>
-    isNetworkPath(path)
-      ? "Rete · " + path.slice(2).split("\\")[0]
-      : /^[A-Za-z]:/.test(path)
-        ? "Disco " + path.slice(0, 2).toUpperCase()
-        : "Cartella";
+  // What Rust says about the paths the model has no place for, by path. A path is asked once, after it
+  // has stopped changing (typing must not make one call per key); until answered it has no label.
+  let places = $state<Record<string, Place>>({});
+  const asked = new Set<string>();
+  // Strings, so that the effect below only runs when a path itself changes, not on every new model.
+  const sourceToAsk = $derived(model.sourcePlace ? "" : model.source);
+  const destinationToAsk = $derived(model.destinationPlace ? "" : model.destination);
+  $effect(() => {
+    const paths = [sourceToAsk, destinationToAsk];
+    const timer = setTimeout(() => {
+      for (const path of paths) {
+        if (!path || asked.has(path)) continue;
+        asked.add(path);
+        describePlace(path).then(
+          (place) => (places[path] = place),
+          () => {
+            // Without an answer the path is shown with no label.
+          },
+        );
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  });
   const value = (key: keyof Counts) => (shown ? formatNumber(shown[key]) : "—");
 </script>
 
-{#snippet node(tag: string, path: string, mir = false, isB = false)}
+{#snippet node(tag: string, path: string, known: Place | undefined, mir = false, isB = false)}
   {#if path}
     <div
       class="node"
@@ -78,9 +96,9 @@
       {/if}
       <div class="tag">{tag}</div>
       <div class="nb">
-        <Icon name={isNetworkPath(path) ? "net" : "disk"} />
+        <Icon name={(known ?? places[path])?.isNetwork ? "net" : "disk"} />
         <div>
-          <div class="dl">{place(path)}</div>
+          <div class="dl">{(known ?? places[path])?.label ?? ""}</div>
           <div class="pth">{path}</div>
         </div>
       </div>
@@ -97,7 +115,7 @@
 {/snippet}
 
 <h2>Cosa succede</h2>
-{@render node("A · Da copiare", model.source)}
+{@render node("A · Da copiare", model.source, model.sourcePlace)}
 <div class="mid" class:mir={model.mirror} class:run={model.running}>
   <div class="arr">
     <svg
@@ -131,7 +149,7 @@
     {/if}
   </div>
 </div>
-{@render node("B · Copia", model.destination, model.mirror, true)}
+{@render node("B · Copia", model.destination, model.destinationPlace, model.mirror, true)}
 {#if !model.mirror && model.source && model.destination}
   <p class="safe"><Icon name="tick" />Nessun file viene cancellato in B</p>
 {/if}

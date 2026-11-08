@@ -17,11 +17,11 @@ const summary = (over: Partial<HistorySummary> = {}): HistorySummary => ({
     {
       id: 1,
       name: "Documenti di lavoro",
-      lastSuccess: "2026-11-02T21:30:00+01:00",
+      lastSuccessText: "Ultima copia riuscita: 02/11/2026 21:30",
       warning: "L’ultima copia è finita con un errore il 04/11/2026 10:00.",
     },
-    { id: 2, name: "Foto di Anna", lastSuccess: "2026-11-03T08:05:00+01:00", warning: null },
-    { id: 3, name: "Musica", lastSuccess: null, warning: null },
+    { id: 2, name: "Foto di Anna", lastSuccessText: "Ultima copia riuscita: 03/11/2026 08:05", warning: null },
+    { id: 3, name: "Musica", lastSuccessText: "Nessuna copia riuscita finora.", warning: null },
   ],
   ...over,
 });

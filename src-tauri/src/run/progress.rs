@@ -2,6 +2,7 @@
 //! copied. Which lines are file lines, and what their name is, is the engine's to say.
 
 use crate::engine;
+use crate::shared::copy_text;
 use serde::Serialize;
 
 /// What the UI shows while a Run is going; sent as the `run-progress` event.
@@ -10,9 +11,26 @@ use serde::Serialize;
 pub struct Progress {
     pub sync_name: String,
     pub done: usize,
-    pub total: usize,
-    pub elapsed_ms: u64,
     pub current_file: String,
+    /// Time left, in words ("Mancano circa 28 secondi.").
+    pub eta: String,
+}
+
+impl Progress {
+    pub fn new(
+        sync_name: String,
+        done: usize,
+        total: usize,
+        elapsed_ms: u64,
+        current_file: String,
+    ) -> Self {
+        Progress {
+            eta: copy_text::eta_text(done, total, elapsed_ms),
+            sync_name,
+            done,
+            current_file,
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -53,8 +71,24 @@ impl StdoutFollower {
     }
 }
 
-#[cfg(all(test, windows))]
+#[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn the_event_carries_the_time_left_in_words() {
+        let progress = Progress::new("Foto".into(), 40, 151, 10_000, "a.jpg".into());
+        let json = serde_json::to_value(&progress).unwrap();
+        assert_eq!(json["eta"], "Mancano circa 28 secondi.");
+
+        let json =
+            serde_json::to_value(Progress::new("Foto".into(), 0, 151, 0, String::new())).unwrap();
+        assert_eq!(json["eta"], "Calcolo il tempo che manca…");
+    }
+}
+
+#[cfg(all(test, windows))]
+mod windows_tests {
     use super::*;
 
     // Real output of a run with /TEE on a pipe: a header line, a blank line, then one tab-led

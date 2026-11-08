@@ -1,6 +1,7 @@
 //! What the home screen lists: each saved sync with the outcome of its latest Run in the history.
 
 use crate::history;
+use crate::shared::copy_text::{self, Place};
 use crate::shared::domain::{Outcome, SavedSync};
 use crate::shared::error_messages;
 use crate::shared::storage::Storage;
@@ -13,7 +14,8 @@ use std::io;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LastRun {
-    pub started_at: String,
+    /// When it started, "02/11/2026 21:30".
+    pub when: String,
     pub outcome: Outcome,
     /// What to tell under the card: why it failed, or that it was stopped by hand.
     pub note: Option<String>,
@@ -25,6 +27,8 @@ pub struct LastRun {
 pub struct SyncSummary {
     #[serde(flatten)]
     pub sync: SavedSync,
+    pub source_place: Place,
+    pub destination_place: Place,
     pub last_run: Option<LastRun>,
 }
 
@@ -46,7 +50,7 @@ pub fn list(storage: &Storage) -> io::Result<ListedSyncs> {
         .map(|(id, run)| {
             let last_run = LastRun {
                 note: error_messages::card_note(run),
-                started_at: run.started_at.clone(),
+                when: copy_text::format_when(&run.started_at),
                 outcome: run.outcome,
             };
             (id, last_run)
@@ -56,6 +60,8 @@ pub fn list(storage: &Storage) -> io::Result<ListedSyncs> {
     let syncs = saved
         .into_iter()
         .map(|sync| SyncSummary {
+            source_place: copy_text::place(&sync.source),
+            destination_place: copy_text::place(&sync.destination),
             last_run: last_runs.get(&sync.id).cloned(),
             sync,
         })
@@ -136,7 +142,7 @@ mod tests {
         assert_eq!(
             listed[1].last_run,
             Some(LastRun {
-                started_at: "2026-11-02T21:30:00+01:00".into(),
+                when: "02/11/2026 21:30".into(),
                 outcome: Outcome::Ok,
                 note: None
             })
@@ -248,17 +254,20 @@ mod tests {
 
     #[test]
     fn summary_is_flat_camel_case_json() {
+        let sync = sync(1, "Foto");
         let summary = SyncSummary {
-            sync: sync(1, "Foto"),
+            source_place: copy_text::place(&sync.source),
+            destination_place: copy_text::place(&sync.destination),
+            sync,
             last_run: Some(LastRun {
-                started_at: "2026-11-02T21:30:00+01:00".into(),
+                when: "02/11/2026 21:30".into(),
                 outcome: Outcome::Error,
                 note: None,
             }),
         };
         assert_eq!(
             serde_json::to_string(&summary).unwrap(),
-            r#"{"id":1,"name":"Foto","source":"D:\\Foto","destination":"\\\\NAS\\Backup","mode":"Copy","lastRun":{"startedAt":"2026-11-02T21:30:00+01:00","outcome":"Error","note":null}}"#
+            r#"{"id":1,"name":"Foto","source":"D:\\Foto","destination":"\\\\NAS\\Backup","mode":"Copy","sourcePlace":{"isNetwork":false,"label":"Disco D:"},"destinationPlace":{"isNetwork":true,"label":"Rete · NAS"},"lastRun":{"when":"02/11/2026 21:30","outcome":"Error","note":null}}"#
         );
     }
 }

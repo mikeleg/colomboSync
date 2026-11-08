@@ -120,6 +120,27 @@ pub fn explain_missing_parent() -> Explanation {
     }
 }
 
+/// What the folder picker says when a folder cannot be opened (or could not be listed at all: the
+/// background task died, not the disk).
+pub fn cannot_open_folder() -> Explanation {
+    "Non riesco ad aprire questa cartella. Il disco o la rete sono collegati?".into()
+}
+
+/// Avanti on the step "Da dove" with no folder chosen.
+pub fn choose_source() -> Explanation {
+    "Scegli prima la cartella da copiare.".into()
+}
+
+/// Avanti on the step "Dove" with no folder chosen.
+pub fn choose_destination() -> Explanation {
+    "Scegli prima dove mettere la copia.".into()
+}
+
+/// Avanti on the step "Nome" with no name written.
+pub fn name_missing() -> Explanation {
+    "Scrivi un nome per riconoscere questa sincronizzazione.".into()
+}
+
 fn explanation(title: &str, advice: &str) -> Explanation {
     Explanation {
         title: title.into(),
@@ -462,6 +483,11 @@ mod tests {
             run_already_in_progress().title,
             "C’è già una copia in corso."
         );
+        assert_eq!(
+            cannot_open_folder().title,
+            "Non riesco ad aprire questa cartella. Il disco o la rete sono collegati?"
+        );
+        assert_eq!(cannot_open_folder().advice, "");
         assert_eq!(
             run_without_preview().advice,
             "Prima controlla le due cartelle con l’anteprima, poi avvia."

@@ -1,9 +1,12 @@
-import type { Counts, Outcome } from "../shared/types";
+import type { Counts, Outcome, Place } from "../shared/types";
 
 /** What SchemaView draws. Whoever owns the current screen builds it and hands it to App. */
 export interface SchemaModel {
   source: string;
   destination: string;
+  /** What kind of place each path is, when the owner already knows; otherwise SchemaView asks Rust. */
+  sourcePlace?: Place;
+  destinationPlace?: Place;
   /** null shows "—" instead of numbers. */
   counts: Counts | null;
   caption: string;

@@ -8,8 +8,6 @@ use serde::Serialize;
 use std::fs::DirEntry;
 use std::path::Path;
 
-const CANNOT_OPEN: &str =
-    "Non riesco ad aprire questa cartella. Il disco o la rete sono collegati?";
 #[cfg(windows)]
 const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
 #[cfg(windows)]
@@ -52,7 +50,7 @@ pub fn browse(path: &str) -> FolderListing {
     };
     let (folders, error) = match subfolders(Path::new(path)) {
         Ok(folders) => (folders, None),
-        Err(_) => (Vec::new(), Some(CANNOT_OPEN.to_string())),
+        Err(_) => (Vec::new(), Some(error_messages::cannot_open_folder().title)),
     };
     FolderListing {
         parent,

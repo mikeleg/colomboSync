@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { act, fireEvent, render, screen, within } from "@testing-library/svelte";
 import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App.svelte";
-import type { Run, RunReport } from "./shared/types";
+import type { RunReport } from "./shared/types";
 import type { HistorySummary, RunList } from "./history/types";
 import type { Preview } from "./wizard/types";
 import type { SyncSummary } from "./syncs/types";
@@ -20,9 +20,19 @@ const preview = (n: number, u: number): Preview => ({
   bytes: 3_000_000,
   blocked: null,
   previewToken: "token-1",
+  // The sentences Rust makes for these counts in Copy mode (see shared/copy_text.rs).
+  caption: n + u === 0 ? "B è già aggiornato." : `Da fare: copiare ${n} file nuovi, aggiornarne ${u}.`,
+  summary: [
+    { text: "Ecco cosa verrà fatto: ", bold: false },
+    { text: String(n), bold: true },
+    { text: " file nuovi, ", bold: false },
+    { text: String(u), bold: true },
+    { text: " da aggiornare.", bold: false },
+  ],
 });
 
-const doneRun: Run = {
+// A run as Rust sends it, texts included: the screens show them as they are.
+const doneRun: RunReport = {
   syncName: "Copia di Foto",
   source: "D:\\Foto",
   destination: "E:\\Backup",
@@ -34,11 +44,18 @@ const doneRun: Run = {
   outcome: "Ok",
   startedAt: "2026-11-03T12:00:00+01:00",
   logPath: "C:\\L\\logs\\x.log",
+  explanation: null,
+  title: "Fatto: 2 file copiati, 1 aggiornato in < 1 min",
+  caption: "Fatto.",
+  resultNote: null,
+  partialText: null,
+  when: "03/11/2026 12:00",
+  durationText: "< 1 min",
 };
 
 /** What `list_runs` answers: the runs plus a summary (all zeros unless a test gives one). */
-const runList = (runs: Run[], summary: Partial<HistorySummary> = {}): RunList => ({
-  runs: runs.map((run) => ({ explanation: null, ...run })),
+const runList = (runs: RunReport[], summary: Partial<HistorySummary> = {}): RunList => ({
+  runs,
   summary: { runs: 0, ok: 0, failed: 0, cancelled: 0, filesCopied: 0, filesDeleted: 0, syncs: [], ...summary },
 });
 
@@ -48,7 +65,9 @@ const savedSync: SyncSummary = {
   source: "D:\\Foto",
   destination: "E:\\Backup",
   mode: "Copy",
-  lastRun: { startedAt: "2026-11-02T21:30:00+01:00", outcome: "Ok", note: null },
+  sourcePlace: { isNetwork: false, label: "Disco D:" },
+  destinationPlace: { isNetwork: false, label: "Disco E:" },
+  lastRun: { when: "02/11/2026 21:30", outcome: "Ok", note: null },
 };
 
 type Args = Record<string, unknown> | undefined;
@@ -59,7 +78,7 @@ type Handlers = Partial<
     | "list_syncs"
     | "save_sync"
     | "default_sync_name"
-    | "check_destination"
+    | "check_step"
     | "list_runs"
     | "read_run_log"
     | "is_elevated",
@@ -71,9 +90,31 @@ type Handlers = Partial<
 function backend(handlers: Handlers = {}) {
   const defaults: Record<string, (args: Args) => unknown> = {
     browse_folders: () => ({ parent: "", folders: [], error: null }),
+    // What `describe_place` says for the paths these tests use (see shared/copy_text.rs).
+    describe_place: (args) => {
+      const labels: Record<string, string> = { "D:\\Foto": "Disco D:", "E:\\Backup": "Disco E:" };
+      return { isNetwork: false, label: labels[(args as { path: string }).path] ?? "Cartella" };
+    },
     list_syncs: () => ({ syncs: [], setAside: false }),
     default_sync_name: () => "Copia di Foto",
-    check_destination: () => undefined, // B is fine
+    // The words and rules of `check_step` in Rust (wizard/commands.rs and shared/path_rules.rs).
+    check_step: (args) => {
+      const { step, source, destination, name } = args as Record<string, string>;
+      const missing: Record<string, [string, string]> = {
+        source: [source, "Scegli prima la cartella da copiare."],
+        destination: [destination, "Scegli prima dove mettere la copia."],
+        name: [name, "Scrivi un nome per riconoscere questa sincronizzazione."],
+      };
+      const [value, title] = missing[step] ?? ["x", ""];
+      if (!value.trim()) throw { title, advice: "" };
+      if (step === "destination") {
+        const plain = (path: string) => path.trim().toLowerCase().replace(/\\+$/, "");
+        if (plain(source) === plain(destination))
+          throw { title: "La destinazione è la stessa cartella da copiare. Scegline un’altra.", advice: "" };
+        if (plain(destination).startsWith(plain(source) + "\\"))
+          throw { title: "La destinazione non può stare dentro la cartella da copiare.", advice: "" };
+      }
+    },
     is_elevated: () => false,
     save_sync: (args) => ({ id: 7, ...args }),
   };
@@ -138,9 +179,24 @@ test("A and B through Opzioni: the preview and the schema show the same counts",
   const schema = screen.getByRole("complementary");
   expect(schema.textContent).toContain("D:\\Foto");
   expect(schema.textContent).toContain("E:\\Backup");
+  expect(await within(schema).findByText("Disco D:")).toBeTruthy();
+  expect(within(schema).getByText("Disco E:")).toBeTruthy();
   expect(screen.getByText("148", { selector: "aside b" })).toBeTruthy();
   expect(screen.getByText("3", { selector: "aside b" })).toBeTruthy();
   expect(screen.getByText("Nessun file viene cancellato in B")).toBeTruthy();
+});
+
+test("the schema caption on the preview is the one Rust sent, as it is", async () => {
+  backend({
+    preview_sync: () => ({ ...preview(3, 1), caption: "Da fare: copiare 3 file nuovi, aggiornarne 1." }),
+  });
+  render(App);
+
+  await goToPreview();
+
+  expect(
+    await screen.findByText("Da fare: copiare 3 file nuovi, aggiornarne 1.", { selector: "aside p" }),
+  ).toBeTruthy();
 });
 
 test("only the preview step fills the window: the other steps scroll with the page", async () => {
@@ -225,19 +281,6 @@ test("while the copy runs the UI says Sto copiando…", async () => {
   expect(screen.getByRole("heading", { name: /^Sto copiando/ })).toBeTruthy();
 });
 
-test("a failed run with no explanation still says Non completato", async () => {
-  backend({
-    preview_sync: () => preview(2, 1),
-    run_sync: () => ({ ...doneRun, outcome: "Error", explanation: null }),
-  });
-  render(App);
-  await goToPreview();
-
-  await click(await screen.findByRole("button", { name: "Sì, avvia" }));
-
-  expect(await screen.findByRole("heading", { name: "Non completato" })).toBeTruthy();
-});
-
 test("nothing to do: B è già aggiornato, an Indietro link and no Sì, avvia", async () => {
   backend({ preview_sync: () => preview(0, 0) });
   render(App);
@@ -300,7 +343,9 @@ test("Indietro, cambio qualcosa goes back to Opzioni keeping what was typed; No,
   expect((screen.getByLabelText(/Percorso/) as HTMLInputElement).value).toBe("E:\\Backup");
 
   await click("Avanti");
+  await screen.findByRole("heading", { name: "Come la chiamo?" });
   await click("Avanti");
+  await screen.findByRole("heading", { name: "Opzioni" });
   await click("Avanti");
   await click(await screen.findByRole("button", { name: "No, salva e basta" }));
 
@@ -554,6 +599,7 @@ test("while the suggested name is on its way Avanti waits, and no empty-name err
   await click("Avanti");
   await typeInto(/Percorso/, "E:\\Backup");
   await click("Avanti");
+  await screen.findByRole("heading", { name: "Come la chiamo?" });
 
   expect((screen.getByRole("button", { name: "Avanti" }) as HTMLButtonElement).disabled).toBe(true);
   await act(() => asked[0].answer("Copia di Foto"));
@@ -572,11 +618,14 @@ test("an older suggested name arriving late does not replace the newer one", asy
   await click("Avanti");
   await typeInto(/Percorso/, "E:\\Backup");
   await click("Avanti"); // asks for D:\Foto
+  await screen.findByRole("heading", { name: "Come la chiamo?" });
   await click("Indietro");
   await click("Indietro");
   await typeInto(/Percorso/, "D:\\Altro");
   await click("Avanti");
+  await screen.findByRole("heading", { name: "Dove copio?" });
   await click("Avanti"); // asks for D:\Altro
+  await screen.findByRole("heading", { name: "Come la chiamo?" });
 
   await act(() => asked[1].answer("Copia di Altro"));
   await act(() => asked[0].answer("Copia di Foto"));
@@ -609,7 +658,9 @@ test("Storico lists the runs from Rust and swaps the schema for the summary pane
           ok: 1,
           failed: 1,
           filesCopied: 3,
-          syncs: [{ id: 7, name: "Foto di Anna", lastSuccess: "2026-11-03T12:00:00+01:00", warning: null }],
+          syncs: [
+            { id: 7, name: "Foto di Anna", lastSuccessText: "Ultima copia riuscita: 03/11/2026 12:00", warning: null },
+          ],
         },
       ),
   });
@@ -724,7 +775,12 @@ test("turning on the mirror switch shows the red warning at once and the schema 
 test("mirror on: the preview runs in Mirror mode, lists what is deleted and the schema counts it", async () => {
   backend({
     preview_sync: () => ({ ...preview(20, 1), deleted: { count: 12, files: ["vecchio.txt"] } }),
-    run_sync: () => ({ ...doneRun, mode: "Mirror", deleted: 12 }),
+    run_sync: () => ({
+      ...doneRun,
+      mode: "Mirror",
+      deleted: 12,
+      title: "Fatto: 2 file copiati, 1 aggiornato, 12 cancellati da B in < 1 min",
+    }),
   });
   render(App);
   await toOpzioni();
@@ -774,7 +830,7 @@ test("consent is per run: going back and opening the preview again unchecks it",
 
 test("MirrorGuard: a blocked mirror preview shows Rust's reason, in the schema too, and offers no Sì, avvia", async () => {
   const reason = "Motivo deciso da Rust: non si parte.";
-  backend({ preview_sync: () => ({ ...preview(0, 0), blocked: reason }) });
+  backend({ preview_sync: () => ({ ...preview(0, 0), blocked: reason, caption: reason }) });
   render(App);
   await toOpzioni();
   await fireEvent.click(mirrorSwitch());
@@ -788,7 +844,7 @@ test("MirrorGuard: a blocked mirror preview shows Rust's reason, in the schema t
 
 test("a blocked preview that still counts files does not say 'Da fare' in the schema", async () => {
   const reason = "Motivo deciso da Rust: non si parte.";
-  backend({ preview_sync: () => ({ ...preview(2, 1), blocked: reason }) });
+  backend({ preview_sync: () => ({ ...preview(2, 1), blocked: reason, caption: reason }) });
   render(App);
   await toOpzioni();
   await fireEvent.click(mirrorSwitch());
@@ -799,12 +855,7 @@ test("a blocked preview that still counts files does not say 'Da fare' in the sc
 });
 
 test("Dove: Avanti is blocked with the message from Rust when B is A or inside A", async () => {
-  let message = "La destinazione è la stessa cartella da copiare. Scegline un’altra.";
-  backend({
-    check_destination: () => {
-      throw { title: message, advice: "" };
-    },
-  });
+  backend();
   render(App);
   await click("Nuova sincronizzazione");
   await typeInto(/Percorso/, String.raw`D:\Foto`);
@@ -813,28 +864,34 @@ test("Dove: Avanti is blocked with the message from Rust when B is A or inside A
 
   await click("Avanti");
 
-  expect(invokeMock).toHaveBeenCalledWith("check_destination", {
+  expect(invokeMock).toHaveBeenCalledWith("check_step", {
+    step: "destination",
     source: String.raw`D:\Foto`,
     destination: "d:\\foto\\",
+    name: "",
   });
-  expect(screen.getByRole("alert").textContent).toContain(message);
+  expect(screen.getByRole("alert").textContent).toContain(
+    "La destinazione è la stessa cartella da copiare. Scegline un’altra.",
+  );
   expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();
 
-  message = "La destinazione non può stare dentro la cartella da copiare.";
   await typeInto(/Percorso/, String.raw`D:\Foto\Backup`);
   await click("Avanti");
 
-  expect(screen.getByRole("alert").textContent).toContain(message);
+  expect(screen.getByRole("alert").textContent).toContain(
+    "La destinazione non può stare dentro la cartella da copiare.",
+  );
   expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();
 });
 
 test("Dove: if the paths change while they are being checked, the new ones are checked before moving on", async () => {
   let release: () => void = () => {};
-  let calls = 0;
+  let destinationChecks = 0;
   backend({
-    check_destination: () => {
-      calls++;
-      if (calls === 1) return new Promise<void>((resolve) => (release = resolve));
+    check_step: (args) => {
+      if ((args as { step: string }).step !== "destination") return;
+      destinationChecks++;
+      if (destinationChecks === 1) return new Promise<void>((resolve) => (release = resolve));
       throw { title: "La destinazione non può stare dentro la cartella da copiare.", advice: "" };
     },
   });
@@ -848,14 +905,85 @@ test("Dove: if the paths change while they are being checked, the new ones are c
   await typeInto(/Percorso/, String.raw`D:\Foto\Backup`); // changed while the first check is pending
   release();
   await first;
-  await vi.waitFor(() => expect(calls).toBe(2));
+  await vi.waitFor(() => expect(destinationChecks).toBe(2));
 
-  expect(invokeMock).toHaveBeenLastCalledWith("check_destination", {
+  expect(invokeMock).toHaveBeenLastCalledWith("check_step", {
+    step: "destination",
     source: String.raw`D:\Foto`,
     destination: String.raw`D:\Foto\Backup`,
+    name: "",
   });
   await vi.waitFor(() => expect(screen.getByRole("alert").textContent).toContain("non può stare dentro"));
   expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();
+});
+
+test("Nome: a refusal that arrives after Indietro is dropped, not shown on Dove", async () => {
+  let refuse: (e: unknown) => void = () => {};
+  backend({
+    check_step: (args) => {
+      if ((args as { step: string }).step !== "name") return;
+      return new Promise<void>((_, reject) => (refuse = reject));
+    },
+  });
+  render(App);
+  await click("Nuova sincronizzazione");
+  await typeInto(/Percorso/, String.raw`D:\Foto`);
+  await click("Avanti");
+  await typeInto(/Percorso/, String.raw`E:\Backup`);
+  await click("Avanti");
+  await screen.findByDisplayValue("Copia di Foto");
+  await typeInto(/Nome della sincronizzazione/, "");
+  const pending = click("Avanti");
+  await vi.waitFor(() => expect(calls("check_step").length).toBe(3));
+
+  await click("Indietro");
+  refuse({ title: "Scrivi un nome per riconoscere questa sincronizzazione.", advice: "" });
+  await pending;
+  await act();
+
+  expect(screen.getByRole("heading", { name: "Dove copio?" })).toBeTruthy();
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("Nome: a refusal for a name that was edited meanwhile is not shown, the new name is checked", async () => {
+  let refuse: (e: unknown) => void = () => {};
+  let nameChecks = 0;
+  backend({
+    check_step: (args) => {
+      if ((args as { step: string }).step !== "name") return;
+      if (++nameChecks === 1) return new Promise<void>((_, reject) => (refuse = reject));
+    },
+  });
+  render(App);
+  await click("Nuova sincronizzazione");
+  await typeInto(/Percorso/, String.raw`D:\Foto`);
+  await click("Avanti");
+  await typeInto(/Percorso/, String.raw`E:\Backup`);
+  await click("Avanti");
+  await screen.findByDisplayValue("Copia di Foto");
+  await typeInto(/Nome della sincronizzazione/, "");
+  const pending = click("Avanti");
+  await vi.waitFor(() => expect(nameChecks).toBe(1));
+
+  await typeInto(/Nome della sincronizzazione/, "Foto");
+  refuse({ title: "Scrivi un nome per riconoscere questa sincronizzazione.", advice: "" });
+  await pending;
+
+  await vi.waitFor(() => expect(screen.getByRole("heading", { name: "Opzioni" })).toBeTruthy());
+  expect(nameChecks).toBe(2);
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("Opzioni: Avanti asks Rust nothing, it goes straight to the preview", async () => {
+  backend({ preview_sync: () => preview(2, 1) });
+  render(App);
+  await goToPreview();
+
+  expect(calls("check_step").map(([, args]) => (args as { step: string }).step)).toEqual([
+    "source",
+    "destination",
+    "name",
+  ]);
 });
 
 // What Rust sends (error_messages): the sentence that says what happened, and what to do.
@@ -863,7 +991,16 @@ const unreachable = {
   title: String.raw`Non completato: la cartella di rete \\NAS non è raggiungibile.`,
   advice: "Controlla la connessione e riprova.",
 };
-const failedRun: RunReport = { ...doneRun, outcome: "Error", explanation: unreachable, partial: 0 };
+const failedRun: RunReport = {
+  ...doneRun,
+  outcome: "Error",
+  explanation: unreachable,
+  partial: 0,
+  title: unreachable.title,
+  caption: "Non completato.",
+  resultNote: "Nessun file è stato copiato.",
+  partialText: "0 file copiati (parziale)",
+};
 
 test("a run that fails says why in plain Italian, with Riprova and the log link", async () => {
   backend({ preview_sync: () => preview(2, 1), run_sync: () => failedRun });
@@ -922,7 +1059,15 @@ test("Torna all’elenco and Vai allo storico leave the result", async () => {
 test("Riprova after a stopped run shows the preview again", async () => {
   backend({
     preview_sync: () => preview(2, 1),
-    run_sync: () => ({ ...doneRun, outcome: "Cancelled", partial: 1 }),
+    run_sync: () => ({
+      ...doneRun,
+      outcome: "Cancelled",
+      partial: 1,
+      title: "Annullato: ho fermato la copia.",
+      caption: "Annullato.",
+      resultNote: "1 file copiato (parziale). I file già copiati restano in B.",
+      partialText: "1 file copiato (parziale)",
+    }),
   });
   render(App);
   await goToPreview();

@@ -1,6 +1,7 @@
 //! The domain words that more than one slice speaks: the mode of a Sync, a saved Sync, one Run
 //! and why it failed. Plain data; the slices depend on this module, never on each other for it.
 
+use super::copy_text;
 use super::error_messages::{Explanation, explain_run};
 use serde::{Deserialize, Serialize};
 
@@ -71,18 +72,38 @@ pub struct Run {
 }
 
 /// A Run as the UI gets it (result screen, Storico and its log window): what is stored, plus what
-/// to tell the user when it failed.
+/// to tell the user about it. The texts are made when the Run is sent, never stored.
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RunReport {
     #[serde(flatten)]
     run: Run,
     explanation: Option<Explanation>,
+    /// Heading of the result: what was done, or why it was not.
+    title: String,
+    /// The schema panel's one word for how it ended ("Fatto.").
+    caption: &'static str,
+    /// What the result says about the files copied before a failed or stopped Run ended.
+    result_note: Option<String>,
+    /// "40 file copiati (parziale)", for the Run's figures.
+    partial_text: Option<String>,
+    /// When it started, "02/11/2026 21:30".
+    when: String,
+    /// How long it took, "3 min".
+    duration_text: String,
 }
 
 impl From<Run> for RunReport {
     fn from(run: Run) -> Self {
+        let explanation = explain_run(&run);
         RunReport {
-            explanation: explain_run(&run),
+            title: copy_text::run_title(&run, explanation.as_ref()),
+            caption: copy_text::run_caption(run.outcome),
+            result_note: copy_text::run_result_note(&run),
+            partial_text: run.partial.map(copy_text::partial_text),
+            when: copy_text::format_when(&run.started_at),
+            duration_text: copy_text::format_duration(run.duration_ms),
+            explanation,
             run,
         }
     }

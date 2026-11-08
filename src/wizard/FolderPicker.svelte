@@ -2,6 +2,7 @@
   import { tick } from "svelte";
   import ErrorText from "../shared/ErrorText.svelte";
   import { toExplanation } from "../shared/explanation";
+  import { focus } from "../shared/focus";
   import Icon from "../shared/Icon.svelte";
   import { browseFolders, createFolder } from "./api";
   import type { Explanation } from "../shared/types";
@@ -68,12 +69,19 @@
     head?.focus();
   }
 
+  /** Set by the click on "Nuova cartella", consumed by the name box: it takes the focus only after that click. */
+  let focusNameBox = false;
+
   function startCreating() {
+    focusNameBox = true;
     creatingIn = chosen;
   }
 
-  /** The name box takes the focus when it opens. */
-  const focusOnOpen = (node: HTMLElement) => node.focus();
+  function focusAfterClick(node: HTMLElement) {
+    if (!focusNameBox) return;
+    focusNameBox = false;
+    focus(node);
+  }
 
   function stopCreating() {
     creatingIn = null;
@@ -140,7 +148,7 @@
           type="text"
           id="{id}-new"
           bind:value={newName}
-          {@attach focusOnOpen}
+          {@attach focusAfterClick}
           placeholder="Per esempio: Backup"
           autocomplete="off"
           spellcheck="false"

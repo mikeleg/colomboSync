@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import Icon from "../shared/Icon.svelte";
   import { cancelRun, onRunProgress } from "./api";
+  import { focus } from "../shared/focus";
   import { formatNumber } from "../shared/format";
   import type { RunProgress } from "./types";
 
@@ -60,8 +61,6 @@
       keepCopying();
     }
   }
-
-  const focus = (node: HTMLElement) => node.focus();
 </script>
 
 <div class="kicker">In corso</div>
@@ -93,11 +92,11 @@
     <p id="cq">Vuoi fermare la copia? I file già copiati restano in B.</p>
     <div class="btns">
       <button type="button" class="btn danger" disabled={stopping} onclick={stop}>Sì, ferma</button>
-      <button type="button" class="btn" disabled={stopping} onclick={keepCopying} use:focus>No, continua</button>
+      <button type="button" class="btn" disabled={stopping} onclick={keepCopying} {@attach focus}>No, continua</button>
     </div>
   </div>
 {:else}
-  <button type="button" class="btn" onclick={() => (confirming = true)} use:focus
+  <button type="button" class="btn" onclick={() => (confirming = true)} {@attach focus}
     ><Icon name="stop" />Ferma la copia</button
   >
 {/if}

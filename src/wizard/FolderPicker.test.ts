@@ -221,6 +221,22 @@ test("typing another path closes the name box, and coming back to the folder doe
   expect(screen.queryByLabelText("Nome della nuova cartella")).toBeNull();
 });
 
+test("the name box takes the focus when Nuova cartella opens it, and not when typing the path back brings it back", async () => {
+  render(FolderPicker, creating);
+
+  await fireEvent.click(await screen.findByRole("button", { name: /Nuova cartella/ }));
+  expect(document.activeElement).toBe(screen.getByLabelText("Nome della nuova cartella"));
+
+  const manual = screen.getByLabelText("Percorso") as HTMLInputElement;
+  manual.focus();
+  await fireEvent.input(manual, { target: { value: FOTO } });
+  expect(screen.queryByLabelText("Nome della nuova cartella")).toBeNull();
+  await fireEvent.input(manual, { target: { value: D } });
+
+  expect(screen.getByLabelText("Nome della nuova cartella")).toBeTruthy();
+  expect(document.activeElement).toBe(manual);
+});
+
 test("a step error opens the manual section and focuses the input", async () => {
   const { rerender } = render(FolderPicker, props);
   const details = screen.getByText("Preferisci scrivere il percorso a mano?").closest("details")!;

@@ -2,6 +2,7 @@
   import { untrack } from "svelte";
   import Icon from "../shared/Icon.svelte";
   import { formatNumber } from "../shared/format";
+  import { TYPING_DELAY_MS } from "../shared/typing";
   import { describePlace } from "./api";
   import type { SchemaModel } from "../shared/schema";
   import type { Counts, Place } from "../shared/types";
@@ -14,7 +15,7 @@
     globalThis.matchMedia("(prefers-reduced-motion: no-preference)").matches;
 
   // The counters shown on screen: they count up to model.counts and always end on it exactly.
-  let shown = $state<Counts | null>(untrack(() => (model.counts ? { ...model.counts } : null)));
+  let shown = $state.raw<Counts | null>(untrack(() => (model.counts ? { ...model.counts } : null)));
   // One ring pulse on B, cleared when its CSS animation ends.
   let pulse = $state<"" | "preview" | "Ok" | "Error">("");
 
@@ -50,7 +51,7 @@
 
   // What Rust says about the paths the model has no place for, by path. A path is asked once, after it
   // has stopped changing (typing must not make one call per key); until answered it has no label.
-  let places = $state<Record<string, Place>>({});
+  let places = $state.raw<Record<string, Place>>({});
   const asked = new Set<string>();
   // Strings, so that the effect below only runs when a path itself changes, not on every new model.
   const sourceToAsk = $derived(model.sourcePlace ? "" : model.source);
@@ -62,13 +63,15 @@
         if (!path || asked.has(path)) continue;
         asked.add(path);
         describePlace(path).then(
-          (place) => (places[path] = place),
+          (place) => {
+            places = { ...places, [path]: place };
+          },
           () => {
             // Without an answer the path is shown with no label.
           },
         );
       }
-    }, 150);
+    }, TYPING_DELAY_MS);
     return () => clearTimeout(timer);
   });
   const value = (key: keyof Counts) => (shown ? formatNumber(shown[key]) : "—");
@@ -77,10 +80,7 @@
 {#snippet node(tag: string, path: string, known: Place | undefined, mir = false, isB = false)}
   {#if path}
     <div
-      class="node"
-      class:mir
-      class:run={model.running}
-      class:b={isB}
+      class={["node", { mir, run: model.running, b: isB }]}
       data-pulse={isB && pulse ? pulse : undefined}
       onanimationend={(e) => {
         if (!e.pseudoElement) pulse = "";
@@ -116,7 +116,7 @@
 
 <h2 class="section-title">Cosa succede</h2>
 {@render node("A · Da copiare", model.source, model.sourcePlace)}
-<div class="mid" class:mir={model.mirror} class:run={model.running}>
+<div class={["mid", { mir: model.mirror, run: model.running }]}>
   <div class="arr">
     <svg
       viewBox="0 0 44 64"
@@ -137,9 +137,7 @@
         /></g
       >
     </svg>
-    <span class="chip" class:copy={!model.mirror} class:mirror={model.mirror}
-      >{model.mirror ? "Specchio" : "Copia"}</span
-    >
+    <span class={["chip", { copy: !model.mirror, mirror: model.mirror }]}>{model.mirror ? "Specchio" : "Copia"}</span>
   </div>
   <div class="counts">
     <div class="cnt"><b>{value("new")}</b><span>Nuovi</span></div>

@@ -16,7 +16,7 @@
   /** Shown until Rust sends the first event, which carries the real text. */
   const CALCULATING = "Calcolo il tempo che manca…";
 
-  let progress = $state<RunProgress | null>(null);
+  let progress = $state.raw<RunProgress | null>(null);
   let confirming = $state(false);
   let closingWindow = $state(false);
   let stopping = $state(false);

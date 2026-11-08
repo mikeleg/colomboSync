@@ -20,7 +20,7 @@
   // "" = no filter. Kept here, so they survive the Registro modal; not stored anywhere.
   const NO_FILTERS = { sync: "", outcome: "", mode: "", period: "" };
 
-  let viewing = $state<RunReport | null>(null);
+  let viewing = $state.raw<RunReport | null>(null);
   let filters = $state({ ...NO_FILTERS });
   // Other runs or another filter start the list again from the first page; "Mostra altre" then adds to it.
   let limit = $derived.by(() => {

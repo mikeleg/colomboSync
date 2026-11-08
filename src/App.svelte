@@ -28,7 +28,7 @@
   let screen = $state.raw<{ getSchema: () => SchemaModel }>();
   const schema = $derived(screen?.getSchema() ?? emptySchema);
   /** The saved sync the wizard re-runs from its preview; undefined when it creates a new one. */
-  let rerun = $state<Sync>();
+  let rerun = $state.raw<Sync>();
 
   function openWizard(sync?: Sync) {
     rerun = sync;
@@ -58,7 +58,7 @@
   }
 </script>
 
-<div class="app" class:mirror={view === "wizard" && schema.mirror}>
+<div class={["app", { mirror: view === "wizard" && schema.mirror }]}>
   <header class="topbar">
     <div class="brand">
       <!-- "Eclissi": A (teal) partly covered by B (the page colour, with a faint rim). -->
@@ -115,8 +115,7 @@
       {/if}
     </main>
     <aside
-      class="schema"
-      class:history={view === "history"}
+      class={["schema", { history: view === "history" }]}
       aria-label={view === "history" ? "Riepilogo dello storico" : "Schema di cosa succede"}
     >
       {#if view === "history"}

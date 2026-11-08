@@ -13,11 +13,11 @@
 
   const CAPTION = 'Premi "Controlla e avvia": prima ti mostro cosa cambierà, poi decidi tu.';
 
-  let syncs = $state<SyncSummary[]>([]);
+  let syncs = $state.raw<SyncSummary[]>([]);
   let selectedId = $state<number | null>(null);
 
   /** Set when syncs.json cannot be read nor set aside: no list, and no new sync that would have to be saved over it. */
-  let loadError = $state<Explanation | null>(null);
+  let loadError = $state.raw<Explanation | null>(null);
   /** A damaged syncs.json was renamed aside: the list is empty and the user is told. */
   let setAside = $state(false);
 

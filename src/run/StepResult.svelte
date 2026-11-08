@@ -28,7 +28,7 @@
 </script>
 
 <div class="kicker">Risultato</div>
-<div class="res" class:err={!ok && !cancelled} class:ann={cancelled} role="status">
+<div class={["res", { err: !ok && !cancelled, ann: cancelled }]} role="status">
   <Icon name={ok ? "check" : cancelled ? "stop" : "cross"} size={52} />
   <div>
     <h1 id="h">{title}</h1>
@@ -42,7 +42,7 @@
 </div>
 <div class="btns">
   {#if !ok}<button type="button" class="btn primary big" onclick={onretry}>Riprova</button>{/if}
-  <button type="button" class="btn big" class:primary={ok} onclick={onhome}>Torna all’elenco</button>
+  <button type="button" class={["btn big", { primary: ok }]} onclick={onhome}>Torna all’elenco</button>
   {#if run}<button type="button" class="link" onclick={() => (viewingLog = true)}>Apri il registro</button>{/if}
   <button type="button" class="link" onclick={onhistory}>Vai allo storico</button>
 </div>

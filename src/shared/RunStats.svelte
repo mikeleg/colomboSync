@@ -20,7 +20,7 @@
       <dd>{formatNumber(run.updated)}</dd>
     </div>
   {/if}
-  <div class:d={run.deleted > 0}>
+  <div class={{ d: run.deleted > 0 }}>
     <dt>Cancellati</dt>
     <dd>{formatNumber(run.deleted)}</dd>
   </div>

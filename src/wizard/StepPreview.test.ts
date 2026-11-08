@@ -16,7 +16,7 @@ const preview = (n: number, u: number, files = { n: ["a.jpg", "b.jpg"], u: ["c.p
   bytes: 5_000_000,
   blocked: null,
   previewToken: "token-1",
-  // What Rust says for these counts in Copy mode (see wizard/commands.rs).
+  // What Rust says for these counts in Copy mode (see shared/copy_text.rs).
   caption: "Da fare: copiare 148 file nuovi, aggiornarne 1.",
   summary: summaryOf("Ecco cosa verrà fatto: ", 148, " file nuovi, ", 1, " da aggiornare."),
 });

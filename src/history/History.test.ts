@@ -139,6 +139,10 @@ test("Tab stays inside the log modal", async () => {
 const names = () => screen.queryAllByRole("listitem").map((r) => within(r).getByRole("strong").textContent);
 const pick = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 
+/** A sync of the summary Rust sends with the runs (`summary.syncs`), under its current name. */
+const known = (id: number, name: string) => ({ id, name, lastSuccessText: "", warning: null });
+const mixedSyncs = [known(1, "Foto"), known(2, "Documenti")];
+
 const mixed = () => [
   run({ syncName: "Foto", syncId: 1, outcome: "Ok", mode: "Copy" }),
   run({ syncName: "Documenti", syncId: 2, outcome: "Error", mode: "Mirror" }),
@@ -147,7 +151,7 @@ const mixed = () => [
 ];
 
 test("the filters sit above the list, all on 'tutte', with no counter or reset link", () => {
-  render(History, { runs: mixed(), status: "ready" });
+  render(History, { runs: mixed(), syncs: mixedSyncs, status: "ready" });
 
   expect((screen.getByLabelText("Sincronizzazione") as HTMLSelectElement).selectedOptions[0].textContent).toBe("Tutte");
   expect((screen.getByLabelText("Esito") as HTMLSelectElement).selectedOptions[0].textContent).toBe("Tutti");
@@ -159,7 +163,7 @@ test("the filters sit above the list, all on 'tutte', with no counter or reset l
 });
 
 test("Sincronizzazione lists each sync once and shows only its runs", async () => {
-  render(History, { runs: mixed(), status: "ready" });
+  render(History, { runs: mixed(), syncs: mixedSyncs, status: "ready" });
   const options = within(screen.getByLabelText("Sincronizzazione")).getAllByRole("option");
   expect(options.map((o) => o.textContent)).toEqual(["Tutte", "Documenti", "Foto"]);
 
@@ -175,6 +179,7 @@ test("a renamed sync is still one entry: runs are matched by sync id", async () 
       run({ syncName: "Vecchio nome", syncId: 1 }),
       run({ syncName: "Altra", syncId: 2 }),
     ],
+    syncs: [known(1, "Nuovo nome"), known(2, "Altra")], // Rust names a sync as it is called now
     status: "ready",
   });
   const options = within(screen.getByLabelText("Sincronizzazione")).getAllByRole("option");
@@ -196,7 +201,7 @@ test("runs without a sync id are matched by name", async () => {
 });
 
 test("Esito shows only OK, Errore or Annullato runs", async () => {
-  render(History, { runs: mixed(), status: "ready" });
+  render(History, { runs: mixed(), syncs: mixedSyncs, status: "ready" });
 
   await pick("Esito", "Error");
   expect(screen.getAllByRole("listitem").map((r) => within(r).getByText("Errore").textContent)).toEqual([
@@ -212,7 +217,7 @@ test("Esito shows only OK, Errore or Annullato runs", async () => {
 });
 
 test("Modalità shows only Copia or Specchio runs", async () => {
-  render(History, { runs: mixed(), status: "ready" });
+  render(History, { runs: mixed(), syncs: mixedSyncs, status: "ready" });
 
   await pick("Modalità", "Mirror");
   expect(names()).toEqual(["Documenti", "Foto"]);
@@ -248,7 +253,7 @@ test("Periodo counts back from now, by the start time of each run", async () => 
 });
 
 test("filters combine: a run must match all of them", async () => {
-  render(History, { runs: mixed(), status: "ready" });
+  render(History, { runs: mixed(), syncs: mixedSyncs, status: "ready" });
 
   await pick("Esito", "Error");
   await pick("Modalità", "Mirror");
@@ -260,7 +265,7 @@ test("filters combine: a run must match all of them", async () => {
 });
 
 test("with a filter on, a counter and 'Togli i filtri' appear; the link puts everything back", async () => {
-  render(History, { runs: mixed(), status: "ready" });
+  render(History, { runs: mixed(), syncs: mixedSyncs, status: "ready" });
 
   await pick("Esito", "Error");
   expect(screen.getByText("2 copie su 4")).toBeTruthy();
@@ -294,7 +299,7 @@ test("when nothing matches, a message replaces the list and the filters can be r
 
 test("the filters stay on while the Registro modal opens and closes", async () => {
   invokeMock.mockResolvedValueOnce({ text: "x", errorLines: [] });
-  render(History, { runs: mixed(), status: "ready" });
+  render(History, { runs: mixed(), syncs: mixedSyncs, status: "ready" });
   await pick("Esito", "Error");
 
   await fireEvent.click(screen.getAllByRole("button", { name: "Registro" })[0]);
@@ -337,6 +342,7 @@ test("with no period chosen, a run whose start time does not parse is still list
 test("a sync that ran before and after ids existed is one entry showing all its runs", async () => {
   render(History, {
     runs: [run({ syncName: "Foto", syncId: 1 }), run({ syncName: "Foto" }), run({ syncName: "Altra" })],
+    syncs: [known(1, "Foto")], // the runs of "Altra" have no id: Rust's summary does not know it
     status: "ready",
   });
   const options = within(screen.getByLabelText("Sincronizzazione")).getAllByRole("option");
@@ -345,4 +351,48 @@ test("a sync that ran before and after ids existed is one entry showing all its 
   await pick("Sincronizzazione", options[2].getAttribute("value")!);
 
   expect(names()).toEqual(["Foto", "Foto"]);
+});
+
+const many = (count: number) =>
+  Array.from({ length: count }, (_, i) => run({ syncName: `Copia ${i}`, outcome: i % 3 === 0 ? "Error" : "Ok" }));
+const showMore = () => fireEvent.click(screen.getByRole("button", { name: "Mostra altre" }));
+
+test("the first 200 runs are listed, and Mostra altre adds 200 more until none is left", async () => {
+  render(History, { runs: many(450), status: "ready" });
+
+  expect(names()).toHaveLength(200);
+  expect(names()[0]).toBe("Copia 0");
+  expect(names()[199]).toBe("Copia 199");
+
+  await showMore();
+  expect(names()).toHaveLength(400);
+
+  await showMore();
+  expect(names()).toHaveLength(450);
+  expect(screen.queryByRole("button", { name: "Mostra altre" })).toBeNull();
+});
+
+test("with 200 runs or fewer there is no Mostra altre", () => {
+  render(History, { runs: many(200), status: "ready" });
+
+  expect(names()).toHaveLength(200);
+  expect(screen.queryByRole("button", { name: "Mostra altre" })).toBeNull();
+});
+
+test("the filters count what they match, not what is shown, and a change of filter starts again from 200", async () => {
+  render(History, { runs: many(450), status: "ready" });
+  await showMore();
+  expect(names()).toHaveLength(400);
+
+  await pick("Esito", "Ok"); // 300 of the 450
+
+  expect(screen.getByText("300 copie su 450")).toBeTruthy();
+  expect(names()).toHaveLength(200);
+  await showMore();
+  expect(names()).toHaveLength(300);
+  expect(screen.queryByRole("button", { name: "Mostra altre" })).toBeNull();
+
+  await fireEvent.click(screen.getByRole("button", { name: "Togli i filtri" }));
+  expect(names()).toHaveLength(200);
+  expect(screen.getByRole("button", { name: "Mostra altre" })).toBeTruthy();
 });

@@ -109,7 +109,7 @@
       {#if view === "home"}
         <Home bind:this={screen} onnew={() => openWizard()} onrun={openWizard} />
       {:else if view === "history"}
-        <History {runs} status={historyStatus} error={historyError} />
+        <History {runs} syncs={summary?.syncs} status={historyStatus} error={historyError} />
       {:else}
         <Wizard
           bind:this={screen}

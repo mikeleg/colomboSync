@@ -5,58 +5,63 @@
   import RunChips from "../shared/RunChips.svelte";
   import RunStats from "../shared/RunStats.svelte";
   import type { Explanation, RunReport } from "../shared/types";
+  import type { SyncStatus } from "./types";
 
-  /** Newest first, as returned by `list_runs`; `error` is why that failed. */
+  /** Runs newest first, as returned by `list_runs`; `syncs` is its summary of the saved syncs; `error` is why it failed. */
   let {
     runs,
+    syncs = [],
     status,
     error = null,
-  }: { runs: RunReport[]; status: "loading" | "ready"; error?: Explanation | null } = $props();
+  }: { runs: RunReport[]; syncs?: SyncStatus[]; status: "loading" | "ready"; error?: Explanation | null } = $props();
+
+  /** How many runs show at first, and how many more each "Mostra altre" adds. */
+  const PAGE = 200;
+  // "" = no filter. Kept here, so they survive the Registro modal; not stored anywhere.
+  const NO_FILTERS = { sync: "", outcome: "", mode: "", period: "" };
 
   let viewing = $state<RunReport | null>(null);
+  let filters = $state({ ...NO_FILTERS });
+  let limit = $state(PAGE);
 
-  // "" = no filter. Kept here, so they survive the Registro modal; not stored anywhere.
-  let syncFilter = $state("");
-  let outcomeFilter = $state("");
-  let modeFilter = $state("");
-  let periodDays = $state("");
+  const idByName = $derived(new Map(syncs.map((s) => [s.name, s.id])));
 
-  /** Id of each name used by a run that has one (newest wins), so old lines without an id join their sync. */
-  const idByName = $derived(
-    new Map([...runs].reverse().flatMap((r): [string, number][] => (r.syncId != null ? [[r.syncName, r.syncId]] : []))),
-  );
-
-  /** A run belongs to its saved sync by id; old lines without one, by the id of a run with the same name, else by name. */
+  /** A run belongs to its saved sync by id; a line written before syncs had ids joins the sync of that name, else stands by its name. */
   const syncKey = (run: RunReport) => {
     const id = run.syncId ?? idByName.get(run.syncName);
     return id != null ? `id:${id}` : `name:${run.syncName}`;
   };
 
-  const syncOptions = $derived(
-    // runs are newest first: a renamed sync shows under its latest name.
-    [...new Map([...runs].reverse().map((r): [string, string] => [syncKey(r), r.syncName]))].sort((a, b) =>
-      a[1].localeCompare(b[1], "it"),
-    ),
-  );
+  const syncOptions = $derived.by(() => {
+    const options = new Map(syncs.map((s): [string, string] => [`id:${s.id}`, s.name]));
+    for (const run of runs) {
+      const key = syncKey(run);
+      if (key.startsWith("name:")) options.set(key, run.syncName);
+    }
+    return [...options].sort((a, b) => a[1].localeCompare(b[1], "it"));
+  });
   const filtered = $derived.by(() => {
-    const since = Date.now() - Number(periodDays) * 86_400_000;
+    const { sync, outcome, mode, period } = filters;
+    const since = period ? Date.now() - Number(period) * 86_400_000 : 0;
     return (
       runs
         // The history only grows at the front: counting from the oldest run keeps a run's key when new ones arrive.
         .map((run, i) => ({ run, key: runs.length - i }))
         .filter(
           ({ run: r }) =>
-            (!syncFilter || syncKey(r) === syncFilter) &&
-            (!outcomeFilter || r.outcome === outcomeFilter) &&
-            (!modeFilter || r.mode === modeFilter) &&
-            (!periodDays || Date.parse(r.startedAt) >= since),
+            (!sync || syncKey(r) === sync) &&
+            (!outcome || r.outcome === outcome) &&
+            (!mode || r.mode === mode) &&
+            (!period || Date.parse(r.startedAt) >= since),
         )
     );
   });
-  const isFiltered = $derived(!!(syncFilter || outcomeFilter || modeFilter || periodDays));
+  const shown = $derived(filtered.slice(0, limit));
+  const isFiltered = $derived(Object.values(filters).some(Boolean));
 
   function clearFilters() {
-    syncFilter = outcomeFilter = modeFilter = periodDays = "";
+    filters = { ...NO_FILTERS };
+    limit = PAGE;
   }
 </script>
 
@@ -68,10 +73,11 @@
   <p class="err-msg" role="alert"><ErrorText explanation={error} /></p>
 {/if}
 {#if runs.length > 0}
-  <div class="filters">
+  <!-- Another filter starts the list again from the first page. -->
+  <div class="filters" onchange={() => (limit = PAGE)}>
     <label>
       Sincronizzazione
-      <select bind:value={syncFilter}>
+      <select bind:value={filters.sync}>
         <option value="">Tutte</option>
         {#each syncOptions as [key, name] (key)}
           <option value={key}>{name}</option>
@@ -80,24 +86,25 @@
     </label>
     <label>
       Esito
-      <select bind:value={outcomeFilter}>
+      <select bind:value={filters.outcome}>
         <option value="">Tutti</option>
-        <option value="Ok">{outcomeChip.Ok.label}</option>
-        <option value="Error">{outcomeChip.Error.label}</option>
-        <option value="Cancelled">{outcomeChip.Cancelled.label}</option>
+        {#each Object.entries(outcomeChip) as [outcome, chip] (outcome)}
+          <option value={outcome}>{chip.label}</option>
+        {/each}
       </select>
     </label>
     <label>
       Modalità
-      <select bind:value={modeFilter}>
+      <select bind:value={filters.mode}>
         <option value="">Tutte</option>
-        <option value="Copy">{modeChip.Copy.label}</option>
-        <option value="Mirror">{modeChip.Mirror.label}</option>
+        {#each Object.entries(modeChip) as [mode, chip] (mode)}
+          <option value={mode}>{chip.label}</option>
+        {/each}
       </select>
     </label>
     <label>
       Periodo
-      <select bind:value={periodDays}>
+      <select bind:value={filters.period}>
         <option value="">Sempre</option>
         <option value="7">Ultimi 7 giorni</option>
         <option value="30">Ultimi 30 giorni</option>
@@ -115,7 +122,7 @@
   {/if}
 {/if}
 <ul class="runs">
-  {#each filtered as { run, key } (key)}
+  {#each shown as { run, key } (key)}
     <li class="run">
       <div class="top">
         <strong>{run.syncName}</strong>
@@ -132,6 +139,11 @@
     </li>
   {/each}
 </ul>
+{#if filtered.length > limit}
+  <div class="btns more">
+    <button type="button" class="btn" onclick={() => (limit += PAGE)}>Mostra altre</button>
+  </div>
+{/if}
 {#if viewing}
   <LogViewer run={viewing} onclose={() => (viewing = null)} />
 {/if}
@@ -164,6 +176,9 @@
     padding: 0;
     display: grid;
     gap: 14px;
+  }
+  .more {
+    margin-top: 18px;
   }
   .run {
     background: var(--card);

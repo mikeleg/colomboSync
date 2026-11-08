@@ -236,7 +236,7 @@
     {#each STEPS as s, i (s.id)}
       <li class:done={i < step} class:cur={i === step} aria-current={i === step ? "step" : undefined}>
         <span class="n"
-          >{#if i < step}<Icon name="tick" />{:else}{i + 1}{/if}</span
+          >{#if i < step}<Icon name="tick" size={14} />{:else}{i + 1}{/if}</span
         >
         <span>{s.label}</span>
       </li>
@@ -307,8 +307,6 @@
     font-weight: 700;
   }
   .n :global(svg) {
-    width: 14px;
-    height: 14px;
     stroke-width: 3;
   }
   .steps li.done .n {

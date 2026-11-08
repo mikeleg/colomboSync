@@ -100,7 +100,7 @@
   </header>
   {#if elevated}
     <p class="elevated" role="alert">
-      <Icon name="warn" />Le unità di rete potrebbero non essere visibili: apri ColomboSync senza 'Esegui come
+      <Icon name="warn" size={24} />Le unità di rete potrebbero non essere visibili: apri ColomboSync senza 'Esegui come
       amministratore'.
     </p>
   {/if}
@@ -195,11 +195,6 @@
     background: var(--warn-soft);
     color: var(--on-warn-soft);
     font-weight: 700;
-  }
-  .elevated :global(svg) {
-    width: 24px;
-    height: 24px;
-    flex: none;
   }
   .layout {
     display: grid;

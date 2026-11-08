@@ -112,7 +112,7 @@
   </p>{/if}
 {#if loadError}<div class="err-msg" role="alert"><ErrorText explanation={loadError} /></div>{/if}
 <button type="button" class="newcard" disabled={!!loadError} onclick={onnew}
-  ><Icon name="plus" />Nuova sincronizzazione</button
+  ><Icon name="plus" size={22} />Nuova sincronizzazione</button
 >
 
 <style>
@@ -175,10 +175,7 @@
     font-weight: 600;
   }
   .route :global(svg) {
-    width: 18px;
-    height: 18px;
     color: var(--accent);
-    flex: none;
   }
   .route .ar {
     color: var(--fg-2);
@@ -238,9 +235,5 @@
   .newcard:hover:not(:disabled) {
     background: color-mix(in srgb, var(--accent) 8%, transparent);
     border-style: solid;
-  }
-  .newcard :global(svg) {
-    width: 22px;
-    height: 22px;
   }
 </style>

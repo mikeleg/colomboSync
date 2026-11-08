@@ -96,7 +96,7 @@
       {/if}
       <div class="tag">{tag}</div>
       <div class="nb">
-        <Icon name={(known ?? places[path])?.isNetwork ? "net" : "disk"} />
+        <Icon name={(known ?? places[path])?.isNetwork ? "net" : "disk"} size={44} />
         <div>
           <div class="dl">{(known ?? places[path])?.label ?? ""}</div>
           <div class="pth">{path}</div>
@@ -107,7 +107,7 @@
     <div class="node empty-n">
       <div class="tag">{tag}</div>
       <div class="nb">
-        <Icon name="folder" />
+        <Icon name="folder" size={44} />
         <div><div class="pth">Scegli la cartella</div></div>
       </div>
     </div>
@@ -151,7 +151,7 @@
 </div>
 {@render node("B · Copia", model.destination, model.destinationPlace, model.mirror, true)}
 {#if !model.mirror && model.source && model.destination}
-  <p class="safe"><Icon name="tick" />Nessun file viene cancellato in B</p>
+  <p class="safe"><Icon name="tick" size={20} />Nessun file viene cancellato in B</p>
 {/if}
 <p class={["cap", { warn: model.warnCaption }]}>{model.caption}</p>
 
@@ -180,11 +180,8 @@
     align-items: center;
   }
   .nb > :global(svg) {
-    width: 44px;
-    height: 44px;
     padding: 10px;
     border-radius: 14px;
-    flex: none;
     background: var(--accent-soft);
     color: var(--accent);
   }
@@ -463,11 +460,6 @@
     font-size: 15px;
     font-weight: 700;
     text-align: center;
-  }
-  .safe :global(svg) {
-    width: 20px;
-    height: 20px;
-    flex: none;
   }
   .cap {
     margin-top: 14px;

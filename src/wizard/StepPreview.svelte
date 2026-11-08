@@ -70,7 +70,7 @@
   </div>
 {:else if preview && total === 0 && !preview.blocked}
   <div class="empty">
-    <Icon name="check" />
+    <Icon name="check" size={60} />
     <h2>B è già aggiornato</h2>
     <p>Non c’è niente da copiare: B ha già tutto quello che c’è in A.</p>
   </div>
@@ -279,8 +279,6 @@
     margin-bottom: 12px;
   }
   .empty :global(svg) {
-    width: 60px;
-    height: 60px;
     color: var(--ok);
   }
   .empty h2 {

@@ -207,30 +207,36 @@
   .screen {
     min-width: 0;
   }
-  /* Only the preview step renders `.content.fill` (see Wizard.svelte): the other steps keep the page scrolling. */
-  .screen:has(:global(.content.fill)) {
+  /* A screen that renders an element with the class `fill` (only the wizard's preview step does) asks for the whole
+     window: the element takes the rest of the screen as a column, and its scrolling part keeps at least
+     `--scroll-min` (see StepPreview.svelte). The other steps keep the page scrolling. */
+  .screen:has(:global(.fill)) {
     display: flex;
     flex-direction: column;
   }
-  /* Wide and tall window: the wizard fills the window, so only its groups scroll and the start box stays at the bottom.
+  .screen > :global(.fill) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  /* Wide and tall window: the window is filled, so only the groups scroll and the start box stays at the bottom.
      Narrow or short window (below 760px high, where the header takes most of the height): the page scrolls and the
      start box sticks instead. */
   @media (min-width: 901px) and (min-height: 760px) {
-    .app:has(:global(.content.fill)) :global(.groups) {
-      min-height: 240px;
-    }
-    .app:has(:global(.content.fill)) {
+    .app:has(:global(.fill)) {
+      --scroll-min: 240px;
       height: 100vh;
       display: flex;
       flex-direction: column;
     }
-    .app:has(:global(.content.fill)) .layout {
+    .app:has(:global(.fill)) .layout {
       flex: 1;
       min-height: 0;
       grid-template-rows: minmax(0, 1fr);
       align-items: stretch;
     }
-    .app:has(:global(.content.fill)) .screen {
+    .app:has(:global(.fill)) .screen {
       min-height: 0;
     }
   }

@@ -244,7 +244,8 @@
   </ol>
   <div class="kicker">Passo {step + 1} di {STEPS.length}</div>
   <h1 id="h">{sync && stepId === "preview" ? `Anteprima: ${sync.name}` : STEPS[step].title}</h1>
-  <div class="content" class:fill={stepId === "preview"}>
+  <!-- `fill` asks the app to give the preview the whole window (see App.svelte). -->
+  <div class={["content", { fill: stepId === "preview" }]}>
     {#if stepId === "source"}
       <StepSource bind:path={source} {error} onenter={next} />
     {:else if stepId === "destination"}
@@ -318,13 +319,6 @@
   }
   .content {
     margin-top: 18px;
-  }
-  /* On the preview the content takes the rest of the screen, so its groups can scroll (see App.svelte). */
-  .content.fill {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
   }
   .nav {
     display: flex;

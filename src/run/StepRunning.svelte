@@ -19,19 +19,13 @@
   let confirming = $state(false);
   let closingWindow = $state(false);
   let stopping = $state(false);
-  let announcement = $state("");
-  let announcedPercent = 0;
 
   const done = $derived(progress?.done ?? 0);
   const percent = $derived(total > 0 ? Math.min(100, Math.floor((done / total) * 100)) : 0);
 
-  // Screen readers hear the progress every 10%, not every file.
-  $effect(() => {
-    if (percent >= announcedPercent + 10) {
-      announcedPercent = percent - (percent % 10);
-      announcement = `Copia al ${announcedPercent}%`;
-    }
-  });
+  // Screen readers hear the progress every 10%, not every file: the text only changes when a new tenth is reached,
+  // and a live region speaks only when its text changes (the count never goes down, so no memory is needed).
+  const announcement = $derived(percent >= 10 ? `Copia al ${percent - (percent % 10)}%` : "");
 
   $effect(() => {
     if (closeRequests > 0) {

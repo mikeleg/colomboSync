@@ -1,9 +1,16 @@
 import type { Outcome, SyncMode } from "./types";
 
-export const formatNumber = (n: number) => n.toLocaleString("it-IT");
+const numbers = new Intl.NumberFormat("it-IT");
+const gigabytes = new Intl.NumberFormat("it-IT", {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+  useGrouping: false,
+});
+
+export const formatNumber = (n: number) => numbers.format(n);
 
 export function formatSize(bytes: number): string {
-  if (bytes >= 1e9) return (bytes / 1e9).toFixed(1).replace(".", ",") + " GB";
+  if (bytes >= 1e9) return `${gigabytes.format(bytes / 1e9)} GB`;
   return Math.max(1, Math.round(bytes / 1e6)) + " MB";
 }
 

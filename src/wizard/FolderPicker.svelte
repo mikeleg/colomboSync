@@ -40,7 +40,6 @@
   let creatingIn = $state<string | null>(null);
   let newName = $state("");
   let createError = $state<Explanation | null>(null);
-  let nameInput = $state<HTMLInputElement>();
   let createBusy = false;
 
   const chosen = $derived(value.trim());
@@ -69,11 +68,12 @@
     head?.focus();
   }
 
-  async function startCreating() {
+  function startCreating() {
     creatingIn = chosen;
-    await tick();
-    nameInput?.focus();
   }
+
+  /** The name box takes the focus when it opens. */
+  const focusOnOpen = (node: HTMLElement) => node.focus();
 
   function stopCreating() {
     creatingIn = null;
@@ -140,7 +140,7 @@
           type="text"
           id="{id}-new"
           bind:value={newName}
-          bind:this={nameInput}
+          {@attach focusOnOpen}
           placeholder="Per esempio: Backup"
           autocomplete="off"
           spellcheck="false"

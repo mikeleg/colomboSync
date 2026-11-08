@@ -35,29 +35,25 @@
     view = "wizard";
   }
 
-  let runs = $state<RunReport[]>([]);
-  let summary = $state<HistorySummary | null>(null);
-  let historyStatus = $state<"loading" | "ready">("ready");
-  let historyError = $state<Explanation | null>(null);
+  type HistoryState =
+    | { status: "loading" }
+    | { status: "failed"; error: Explanation }
+    | { status: "ready"; runs: RunReport[]; summary: HistorySummary };
+  let history = $state.raw<HistoryState>({ status: "loading" });
+  const loaded = $derived(history.status === "ready" ? history : null);
   let historyLoads = 0;
 
   async function openHistory() {
     const load = ++historyLoads;
     view = "history";
-    runs = [];
-    summary = null;
-    historyError = null;
-    historyStatus = "loading";
+    history = { status: "loading" };
     try {
-      const result = await listRuns();
+      const { runs, summary } = await listRuns();
       if (load !== historyLoads) return; // a newer request owns the screen
-      runs = result.runs;
-      summary = result.summary;
-      historyStatus = "ready";
+      history = { status: "ready", runs, summary };
     } catch (e) {
       if (load !== historyLoads) return;
-      historyError = toExplanation(e);
-      historyStatus = "ready";
+      history = { status: "failed", error: toExplanation(e) };
     }
   }
 
@@ -109,7 +105,12 @@
       {#if view === "home"}
         <Home bind:this={screen} onnew={() => openWizard()} onrun={openWizard} />
       {:else if view === "history"}
-        <History {runs} syncs={summary?.syncs} status={historyStatus} error={historyError} />
+        <History
+          runs={loaded?.runs ?? []}
+          syncs={loaded?.summary.syncs}
+          status={history.status === "loading" ? "loading" : "ready"}
+          error={history.status === "failed" ? history.error : null}
+        />
       {:else}
         <Wizard
           bind:this={screen}
@@ -124,7 +125,7 @@
     </main>
     <aside class="schema" aria-label={view === "history" ? "Riepilogo dello storico" : "Schema di cosa succede"}>
       {#if view === "history"}
-        <HistoryPanel {summary} />
+        <HistoryPanel summary={loaded?.summary ?? null} />
       {:else}
         <SchemaView model={schema} />
       {/if}

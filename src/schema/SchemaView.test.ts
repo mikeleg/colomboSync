@@ -95,12 +95,15 @@ describe("places", () => {
 
   test("storing Rust's answer raises no Svelte warning", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    render(SchemaView, { model: { ...picked, source: String.raw`D:\Foto`, destination: "" } });
-    await vi.advanceTimersByTimeAsync(200);
+    try {
+      render(SchemaView, { model: { ...picked, source: String.raw`D:\Foto`, destination: "" } });
+      await vi.advanceTimersByTimeAsync(200);
 
-    expect(screen.getByText("Disco D:")).toBeTruthy();
-    expect(warn).not.toHaveBeenCalled();
-    warn.mockRestore();
+      expect(screen.getByText("Disco D:")).toBeTruthy();
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   test("a path whose answer is still on its way is not asked about again", async () => {

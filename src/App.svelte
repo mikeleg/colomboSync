@@ -28,7 +28,7 @@
   let screen = $state.raw<{ getSchema: () => SchemaModel }>();
   const schema = $derived(screen?.getSchema() ?? emptySchema);
   /** The saved sync the wizard re-runs from its preview; undefined when it creates a new one. */
-  let rerun = $state<Sync>();
+  let rerun = $state.raw<Sync>();
 
   function openWizard(sync?: Sync) {
     rerun = sync;

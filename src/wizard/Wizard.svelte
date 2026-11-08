@@ -51,7 +51,7 @@
   /** Set by "Sì, avvia": from then on `RunFlow` replaces the steps; it reports the end of the run in `run` or `failure`. */
   let started = $state.raw<{ previewToken: string | null; consent: boolean } | null>(null);
   let run = $state.raw<RunReport | null>(null);
-  let failure = $state<Explanation | null>(null);
+  let failure = $state.raw<Explanation | null>(null);
   const phase = $derived(!started ? "steps" : run || failure ? "result" : "running");
   let scanId = 0;
   let suggestionId = 0;

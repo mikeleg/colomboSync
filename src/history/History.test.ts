@@ -451,11 +451,7 @@ test("a run from before sync ids joins the sync that bore its name in runs with 
 
 test("two syncs with the same name: a run from before ids joins the one whose run with that name is the newest", async () => {
   show({
-    runs: [
-      run({ syncName: "Foto", syncId: 2 }),
-      run({ syncName: "Foto" }),
-      run({ syncName: "Foto", syncId: 1 }),
-    ],
+    runs: [run({ syncName: "Foto", syncId: 2 }), run({ syncName: "Foto" }), run({ syncName: "Foto", syncId: 1 })],
     syncs: [known(1, "Foto"), known(2, "Foto")],
   });
   const options = within(screen.getByLabelText("Sincronizzazione")).getAllByRole("option");

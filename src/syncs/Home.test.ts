@@ -160,7 +160,7 @@ test("the first card is shown in the schema; selecting another shows its A and B
     warnCaption: false,
   });
 
-  await fireEvent.click(card("Documenti ufficio")); // a mirror sync: the schema is in mirror mode
+  await fireEvent.click(within(card("Documenti ufficio")).getByRole("button", { name: "Documenti ufficio" })); // a mirror sync: the schema is in mirror mode
 
   expect(component.getSchema()).toEqual({
     source: documenti.source,

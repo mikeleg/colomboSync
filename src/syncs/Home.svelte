@@ -65,16 +65,13 @@
     {#each syncs as sync (sync.id)}
       {@const retry = sync.lastRun?.outcome === "Error"}
       {@const outcome = sync.lastRun && outcomeChip[sync.lastRun.outcome]}
-      <!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_click_events_have_key_events -->
-      <li
-        class="card"
-        class:sel={sync === selected}
-        class:bad={retry}
-        onclick={() => (selectedId = sync.id)}
-        onfocusin={() => (selectedId = sync.id)}
-      >
+      <!-- Focusing anything in the card (its button included) selects it; the name is the button that also selects it
+           with a click anywhere on the card (see `.pick::after`). -->
+      <li class={["card", { sel: sync === selected, bad: retry }]} onfocusin={() => (selectedId = sync.id)}>
         <div class="head">
-          <h2>{sync.name}</h2>
+          <h2>
+            <button type="button" class="pick" onclick={() => (selectedId = sync.id)}>{sync.name}</button>
+          </h2>
           <span class="chip {modeChip[sync.mode].cls}">{modeChip[sync.mode].label}</span>
         </div>
         <p class="route">
@@ -83,7 +80,7 @@
             sync.destinationPlace,
           )}
         </p>
-        {#if sync.lastRun?.note}<p class="note" class:err={retry}>{sync.lastRun.note}</p>{/if}
+        {#if sync.lastRun?.note}<p class={["note", { err: retry }]}>{sync.lastRun.note}</p>{/if}
         <div class="foot">
           <div class="last">
             {#if sync.lastRun && outcome}
@@ -95,8 +92,7 @@
           </div>
           <button
             type="button"
-            class="btn"
-            class:primary={!retry}
+            class={["btn", { primary: !retry }]}
             aria-label="{retry ? 'Riprova' : 'Controlla e avvia'} {sync.name}"
             onclick={() => onrun(sync)}
           >
@@ -129,8 +125,30 @@
     background: var(--card);
     box-shadow: var(--shadow);
     color: var(--fg);
-    cursor: pointer;
     min-width: 0;
+    position: relative;
+  }
+  /* A click anywhere on the card is a click on this button (its ::after covers the card); the card's own
+     button stays above it. */
+  .pick {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    text-align: left;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+  .pick::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: var(--r);
+  }
+  .foot .btn {
+    position: relative;
   }
   .card:hover {
     background: color-mix(in srgb, var(--fg) 3%, var(--card));

@@ -14,7 +14,7 @@
     globalThis.matchMedia("(prefers-reduced-motion: no-preference)").matches;
 
   // The counters shown on screen: they count up to model.counts and always end on it exactly.
-  let shown = $state<Counts | null>(untrack(() => (model.counts ? { ...model.counts } : null)));
+  let shown = $state.raw<Counts | null>(untrack(() => (model.counts ? { ...model.counts } : null)));
   // One ring pulse on B, cleared when its CSS animation ends.
   let pulse = $state<"" | "preview" | "Ok" | "Error">("");
 
@@ -50,7 +50,7 @@
 
   // What Rust says about the paths the model has no place for, by path. A path is asked once, after it
   // has stopped changing (typing must not make one call per key); until answered it has no label.
-  let places = $state<Record<string, Place>>({});
+  let places = $state.raw<Record<string, Place>>({});
   const asked = new Set<string>();
   // Strings, so that the effect below only runs when a path itself changes, not on every new model.
   const sourceToAsk = $derived(model.sourcePlace ? "" : model.source);
@@ -62,7 +62,9 @@
         if (!path || asked.has(path)) continue;
         asked.add(path);
         describePlace(path).then(
-          (place) => (places[path] = place),
+          (place) => {
+            places = { ...places, [path]: place };
+          },
           () => {
             // Without an answer the path is shown with no label.
           },

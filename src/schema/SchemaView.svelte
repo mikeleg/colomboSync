@@ -79,10 +79,7 @@
 {#snippet node(tag: string, path: string, known: Place | undefined, mir = false, isB = false)}
   {#if path}
     <div
-      class="node"
-      class:mir
-      class:run={model.running}
-      class:b={isB}
+      class={["node", { mir, run: model.running, b: isB }]}
       data-pulse={isB && pulse ? pulse : undefined}
       onanimationend={(e) => {
         if (!e.pseudoElement) pulse = "";
@@ -118,7 +115,7 @@
 
 <h2 class="section-title">Cosa succede</h2>
 {@render node("A · Da copiare", model.source, model.sourcePlace)}
-<div class="mid" class:mir={model.mirror} class:run={model.running}>
+<div class={["mid", { mir: model.mirror, run: model.running }]}>
   <div class="arr">
     <svg
       viewBox="0 0 44 64"
@@ -139,9 +136,7 @@
         /></g
       >
     </svg>
-    <span class="chip" class:copy={!model.mirror} class:mirror={model.mirror}
-      >{model.mirror ? "Specchio" : "Copia"}</span
-    >
+    <span class={["chip", { copy: !model.mirror, mirror: model.mirror }]}>{model.mirror ? "Specchio" : "Copia"}</span>
   </div>
   <div class="counts">
     <div class="cnt"><b>{value("new")}</b><span>Nuovi</span></div>

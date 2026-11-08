@@ -39,7 +39,7 @@
 
 {#snippet group(title: string, why: string, g: FileGroup, del = false)}
   {#if g.count > 0}
-    <details class="grp" class:del open>
+    <details class={["grp", { del }]} open>
       <summary><span>{title}</span><b>{formatNumber(g.count)}</b></summary>
       <p class="why">{why}</p>
       <ul class="files">

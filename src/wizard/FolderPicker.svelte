@@ -30,9 +30,9 @@
     source?: string;
   } = $props();
 
-  let listing = $state<FolderListing>({ parent: "", folders: [], error: null });
+  let listing = $state.raw<FolderListing>({ parent: "", folders: [], error: null });
   /** Why the folder could not be listed: Rust's own message, or the refusal of the call. */
-  let listingError = $state<Explanation | null>(null);
+  let listingError = $state.raw<Explanation | null>(null);
   let manualOpen = $state(false);
   let head: HTMLElement;
   let input: HTMLInputElement;
@@ -40,7 +40,7 @@
   /** The folder the name box was opened in: the box belongs to it and goes away with any other choice. */
   let creatingIn = $state<string | null>(null);
   let newName = $state("");
-  let createError = $state<Explanation | null>(null);
+  let createError = $state.raw<Explanation | null>(null);
   let createBusy = false;
 
   const chosen = $derived(value.trim());
@@ -117,7 +117,7 @@
 <p class="f">{label}</p>
 <p class="help intro">Ogni clic entra nella cartella e la sceglie. Quando sei in quella giusta, premi Avanti.</p>
 <div class="pick">
-  <div class="pickhead" class:chosen={chosen && !listingError} bind:this={head} tabindex="-1">
+  <div class={["pickhead", { chosen: chosen && !listingError }]} bind:this={head} tabindex="-1">
     <span>
       {#if !chosen}
         Dischi del computer: scegline uno

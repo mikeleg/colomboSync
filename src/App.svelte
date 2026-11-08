@@ -58,7 +58,7 @@
   }
 </script>
 
-<div class="app" class:mirror={view === "wizard" && schema.mirror}>
+<div class={["app", { mirror: view === "wizard" && schema.mirror }]}>
   <header class="topbar">
     <div class="brand">
       <!-- "Eclissi": A (teal) partly covered by B (the page colour, with a faint rim). -->
@@ -115,8 +115,7 @@
       {/if}
     </main>
     <aside
-      class="schema"
-      class:history={view === "history"}
+      class={["schema", { history: view === "history" }]}
       aria-label={view === "history" ? "Riepilogo dello storico" : "Schema di cosa succede"}
     >
       {#if view === "history"}

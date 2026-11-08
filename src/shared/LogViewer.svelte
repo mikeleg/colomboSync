@@ -9,9 +9,9 @@
 
   let { run, onclose }: { run: RunReport; onclose: () => void } = $props();
 
-  let log = $state<RunLog>({ text: "", errorLines: [] });
+  let log = $state.raw<RunLog>({ text: "", errorLines: [] });
   /** Why the log cannot be shown, in Rust's words. */
-  let unavailable = $state<Explanation | null>(null);
+  let unavailable = $state.raw<Explanation | null>(null);
   let closeButton: HTMLButtonElement;
   let dialog: HTMLElement;
 
@@ -82,9 +82,9 @@
       {#if log.errorLines.length > 0}
         <button type="button" class="link jump" onclick={goToFirstError}>Vai al primo errore</button>
       {/if}
-      <!-- svelte-ignore a11y_no_noninteractive_tabindex
-        The <pre> is focusable so keyboard users can scroll the log; the error spans get tabindex="-1"
-        only to receive focus from "Vai al primo errore". -->
+      <!-- The <pre> is focusable so keyboard users can scroll the log; the error spans get tabindex="-1"
+           only to receive focus from "Vai al primo errore". -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <pre tabindex="0">{#each segments as { text, error }, i (i)}{#if error}<span class="error-line" tabindex="-1"
               >{text}</span
             >{:else}{text}{/if}{/each}</pre>

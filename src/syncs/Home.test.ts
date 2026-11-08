@@ -32,7 +32,7 @@ const documenti: SyncSummary = {
 const unreachable = String.raw`La cartella di rete \\NAS non era raggiungibile. Controlla che sia collegato e riprova.`;
 const stopped = "La copia era stata fermata a mano: puoi riprenderla quando vuoi.";
 
-const props = { onnew: () => {}, onrun: () => {}, onschema: () => {} };
+const props = { onnew: () => {}, onrun: () => {} };
 
 const card = (name: string) => screen.getByRole("heading", { name }).closest("li") as HTMLElement;
 
@@ -145,12 +145,11 @@ test("a store that could not even be set aside: a message, no list, and a new sy
 
 test("the first card is shown in the schema; selecting another shows its A and B with the caption", async () => {
   invokeMock.mockResolvedValue({ syncs: [foto, documenti], setAside: false });
-  const onschema = vi.fn();
-  render(Home, { ...props, onschema });
+  const { component } = render(Home, props);
   await screen.findByRole("heading", { name: "Copia di Foto" });
 
   const caption = 'Premi "Controlla e avvia": prima ti mostro cosa cambierà, poi decidi tu.';
-  expect(onschema).toHaveBeenLastCalledWith({
+  expect(component.getSchema()).toEqual({
     source: foto.source,
     destination: foto.destination,
     sourcePlace: foto.sourcePlace,
@@ -163,7 +162,7 @@ test("the first card is shown in the schema; selecting another shows its A and B
 
   await fireEvent.click(card("Documenti ufficio")); // a mirror sync: the schema is in mirror mode
 
-  expect(onschema).toHaveBeenLastCalledWith({
+  expect(component.getSchema()).toEqual({
     source: documenti.source,
     destination: documenti.destination,
     sourcePlace: documenti.sourcePlace,

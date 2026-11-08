@@ -24,7 +24,9 @@
   });
 
   let view = $state<"home" | "history" | "wizard">("home");
-  let schema = $state<SchemaModel>(emptySchema);
+  /** The screen on show (home or wizard): it knows what the schema panel draws. */
+  let screen = $state.raw<{ getSchema: () => SchemaModel }>();
+  const schema = $derived(screen?.getSchema() ?? emptySchema);
   /** The saved sync the wizard re-runs from its preview; undefined when it creates a new one. */
   let rerun = $state<Sync>();
 
@@ -61,7 +63,6 @@
 
   function leaveWizard() {
     view = "home";
-    schema = emptySchema;
   }
 </script>
 
@@ -106,13 +107,13 @@
   <div class="layout">
     <main class="screen">
       {#if view === "home"}
-        <Home onnew={() => openWizard()} onrun={openWizard} onschema={(model) => (schema = model)} />
+        <Home bind:this={screen} onnew={() => openWizard()} onrun={openWizard} />
       {:else if view === "history"}
         <History {runs} status={historyStatus} error={historyError} />
       {:else}
         <Wizard
+          bind:this={screen}
           sync={rerun}
-          onschema={(model) => (schema = model)}
           onexit={leaveWizard}
           onhistory={() => {
             leaveWizard();

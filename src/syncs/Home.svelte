@@ -9,11 +9,7 @@
   import type { Explanation, Place, Sync } from "../shared/types";
   import type { SyncSummary } from "./types";
 
-  let {
-    onnew,
-    onrun,
-    onschema,
-  }: { onnew: () => void; onrun: (sync: Sync) => void; onschema: (model: SchemaModel) => void } = $props();
+  let { onnew, onrun }: { onnew: () => void; onrun: (sync: Sync) => void } = $props();
 
   const CAPTION = 'Premi "Controlla e avvia": prima ti mostro cosa cambierà, poi decidi tu.';
 
@@ -37,22 +33,22 @@
 
   const selected = $derived(syncs.find((s) => s.id === selectedId) ?? syncs[0]);
 
-  $effect(() => {
-    onschema(
-      selected
-        ? {
-            source: selected.source,
-            destination: selected.destination,
-            sourcePlace: selected.sourcePlace,
-            destinationPlace: selected.destinationPlace,
-            counts: null,
-            caption: CAPTION,
-            mirror: selected.mode === "Mirror",
-            warnCaption: false,
-          }
-        : emptySchema,
-    );
-  });
+  const schema = $derived<SchemaModel>(
+    selected
+      ? {
+          source: selected.source,
+          destination: selected.destination,
+          sourcePlace: selected.sourcePlace,
+          destinationPlace: selected.destinationPlace,
+          counts: null,
+          caption: CAPTION,
+          mirror: selected.mode === "Mirror",
+          warnCaption: false,
+        }
+      : emptySchema,
+  );
+  /** What the schema panel beside this screen draws; the app reads it (`bind:this`), so nothing is sent up. */
+  export const getSchema = () => schema;
 </script>
 
 {#snippet place(path: string, where: Place)}

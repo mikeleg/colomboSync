@@ -17,12 +17,10 @@
   import StepSource from "./StepSource.svelte";
 
   let {
-    onschema,
     onexit,
     onhistory,
     sync: syncToRerun,
   }: {
-    onschema: (model: SchemaModel) => void;
     onexit: () => void;
     /** "Vai allo storico" on the result. */
     onhistory: () => void;
@@ -113,7 +111,8 @@
     return { ...places, counts: null, caption, mirror, warnCaption: mirror };
   });
 
-  $effect(() => onschema(schema));
+  /** What the schema panel beside this screen draws; the app reads it (`bind:this`), so nothing is sent up. */
+  export const getSchema = () => schema;
 
   async function next() {
     const here = step;

@@ -330,7 +330,7 @@ h2 {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--fg-2);
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 .cnt {
   text-align: center;
@@ -353,7 +353,7 @@ h2 {
   line-height: 1.2;
   color: var(--fg-2);
 }
-.warn {
+.danger-note {
   display: flex;
   gap: 8px;
   align-items: flex-start;
@@ -363,7 +363,6 @@ h2 {
   color: var(--on-danger-soft);
   font-size: 15px;
   font-weight: 700;
-  line-height: 1.35;
   text-align: left;
 }
 

@@ -153,7 +153,7 @@
 {#if !model.mirror && model.source && model.destination}
   <p class="safe"><Icon name="tick" size={20} />Nessun file viene cancellato in B</p>
 {/if}
-<p class={["cap", { warn: model.warnCaption }]}>{model.caption}</p>
+<p class={["cap", { "danger-note": model.warnCaption }]}>{model.caption}</p>
 
 <style>
   .node {
@@ -464,7 +464,7 @@
   .cap {
     margin-top: 14px;
   }
-  .cap:not(.warn) {
+  .cap:not(.danger-note) {
     font-size: 15px;
     text-align: center;
     color: var(--fg-2);

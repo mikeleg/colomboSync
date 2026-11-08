@@ -39,7 +39,7 @@
                 <strong>{sync.name}</strong>
                 <span class="last">{sync.lastSuccessText}</span>
                 {#if sync.warning}
-                  <span class="warn"><Icon name="warn" />{sync.warning}</span>
+                  <span class="danger-note"><Icon name="warn" />{sync.warning}</span>
                 {/if}
               </li>
             {/each}
@@ -100,7 +100,7 @@
     font-size: 14px;
     color: var(--fg-2);
   }
-  .syncs .warn {
+  .syncs .danger-note {
     margin-top: 6px;
   }
   .legend {

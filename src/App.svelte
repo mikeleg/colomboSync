@@ -114,7 +114,11 @@
         />
       {/if}
     </main>
-    <aside class="schema" aria-label={view === "history" ? "Riepilogo dello storico" : "Schema di cosa succede"}>
+    <aside
+      class="schema"
+      class:history={view === "history"}
+      aria-label={view === "history" ? "Riepilogo dello storico" : "Schema di cosa succede"}
+    >
       {#if view === "history"}
         <HistoryPanel summary={loaded?.summary ?? null} />
       {:else}
@@ -198,14 +202,14 @@
   .screen {
     min-width: 0;
   }
-  /* A screen that renders an element with the class `fill` (only the wizard's preview step does) asks for the whole
-     window: the element takes the rest of the screen as a column, and its scrolling part keeps at least
-     `--scroll-min` (see StepPreview.svelte). The other steps keep the page scrolling. */
-  .screen:has(:global(.fill)) {
+  /* Only the preview step renders `.content.fill` (see Wizard.svelte): it asks for the whole window, so the element
+     takes the rest of the screen as a column, and its scrolling part keeps at least `--scroll-min` (see
+     StepPreview.svelte). The other steps keep the page scrolling. */
+  .screen:has(:global(.content.fill)) {
     display: flex;
     flex-direction: column;
   }
-  .screen > :global(.fill) {
+  .screen > :global(.content.fill) {
     flex: 1;
     min-height: 0;
     display: flex;
@@ -215,19 +219,19 @@
      Narrow or short window (below 760px high, where the header takes most of the height): the page scrolls and the
      start box sticks instead. */
   @media (min-width: 901px) and (min-height: 760px) {
-    .app:has(:global(.fill)) {
+    .app:has(:global(.content.fill)) {
       --scroll-min: 240px;
       height: 100vh;
       display: flex;
       flex-direction: column;
     }
-    .app:has(:global(.fill)) .layout {
+    .app:has(:global(.content.fill)) .layout {
       flex: 1;
       min-height: 0;
       grid-template-rows: minmax(0, 1fr);
       align-items: stretch;
     }
-    .app:has(:global(.fill)) .screen {
+    .app:has(:global(.content.fill)) .screen {
       min-height: 0;
     }
   }
@@ -240,9 +244,14 @@
     align-self: start;
     position: sticky;
     top: 16px;
-    /* A tall panel (many syncs in the Storico) scrolls inside itself instead of running off the window. */
-    max-height: calc(100vh - 32px);
-    overflow-y: auto;
+  }
+  /* A tall summary (many syncs in the Storico) scrolls inside itself instead of running off the window. It must end
+     inside the window even at the bottom of the page: sticky `top` (16px) plus the layout's bottom padding (48px). */
+  @media (min-width: 901px) {
+    .schema.history {
+      max-height: calc(100vh - 64px);
+      overflow-y: auto;
+    }
   }
   .tabs {
     display: inline-flex;
@@ -280,7 +289,6 @@
     .schema {
       order: -1;
       position: static;
-      max-height: none;
     }
   }
 </style>

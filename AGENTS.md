@@ -21,6 +21,7 @@ Step-by-step checklists in `.claude/skills/*/SKILL.md`. They are plain markdown:
 - `xp-slice` – implement one backlog slice test-first, up to CI and review.
 - `parallel-slices` – several slices in parallel with git worktrees, then merge one at a time.
 - `build-portable` – build the Windows exe, fetch the macOS/Linux bundles from CI.
+- `svelte-core-bestpractices`, `svelte-code-writer` – the official Svelte 5 skills (from `sveltejs/ai-tools`, pinned in `skills-lock.json`, update with `npx skills update`): Svelte 5 rules, docs lookup and the autofixer.
 
 ## Commands
 ```
@@ -48,6 +49,7 @@ The dev machine is Windows: Unix-only code can't compile here. Push a `slice/**`
 - fmt + clippy + Prettier clean (Prettier formats `src/` and the HTML/TS/JSON files; `*.md` is ignored). English identifiers, Italian UI strings from the prototype; new copy not in the prototype goes in the slice report and scope.md "Decisions during implementation".
 - Look: colors only as tokens from `src/theme.css`, no inline colors. Mirror/deletion stays red and loud; Specchio (the mode) is violet (`--mirror`).
 - Svelte 5 best practices: `$derived` (not `$effect`) for computed state; `$effect` never forwards data to a parent or writes derivable state; every `{#each}` keyed; `svelte-ignore` only with a comment saying why.
+- Before committing a changed `.svelte` file run the official autofixer on it: `npx @sveltejs/mcp svelte-autofixer <file.svelte> --svelte-version <version from package.json>`. Fix every `issues` entry; apply `suggestions` that keep behaviour and wording, otherwise say why in the report.
 - Shell heredocs, `sed` and Python halve backslashes here: write files with your file-editing tool. TS tests: `String.raw` for Windows paths.
 - Minimum code for the criteria; no traits/abstractions with a single implementation.
 - Browser demo (`demo.html` + `src/demo.ts`, backend mocked with `mockIPC`) for screenshots and visual checks: `npx vite --port 5199 --strictPort`, then http://localhost:5199/demo.html. When a command's API changes, update its mock in `src/demo.ts` (`npm run check` type-checks it).

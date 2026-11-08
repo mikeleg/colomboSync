@@ -150,17 +150,6 @@
     font-size: 14px;
     color: var(--fg-2);
   }
-  select {
-    min-height: 44px;
-    max-width: 100%;
-    padding: 6px 14px;
-    border: 0;
-    border-radius: 999px;
-    background: var(--card);
-    box-shadow: var(--shadow);
-    font-size: 16px;
-    color: var(--fg);
-  }
   .found {
     display: flex;
     flex-wrap: wrap;

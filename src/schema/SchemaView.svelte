@@ -114,7 +114,7 @@
   {/if}
 {/snippet}
 
-<h2>Cosa succede</h2>
+<h2 class="section-title">Cosa succede</h2>
 {@render node("A · Da copiare", model.source, model.sourcePlace)}
 <div class="mid" class:mir={model.mirror} class:run={model.running}>
   <div class="arr">
@@ -153,17 +153,9 @@
 {#if !model.mirror && model.source && model.destination}
   <p class="safe"><Icon name="tick" />Nessun file viene cancellato in B</p>
 {/if}
-<p class="cap" class:mir={model.warnCaption}>{model.caption}</p>
+<p class={["cap", { warn: model.warnCaption }]}>{model.caption}</p>
 
 <style>
-  h2 {
-    font-size: 13px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--fg-2);
-    margin-bottom: 14px;
-  }
   .node {
     background: var(--card-2);
     color: var(--fg);
@@ -451,27 +443,6 @@
     width: 100%;
     margin-top: 10px;
   }
-  .cnt {
-    text-align: center;
-    padding: 12px 6px;
-    border-radius: 16px;
-    background: var(--card-2);
-    color: var(--fg);
-    min-width: 0;
-  }
-  .cnt b {
-    display: block;
-    font-size: 30px;
-    line-height: 1.1;
-    font-weight: 700;
-    letter-spacing: -0.03em;
-  }
-  .cnt span {
-    font-size: 13px;
-    color: var(--fg-2);
-    display: block;
-    line-height: 1.2;
-  }
   .cnt.d {
     background: color-mix(in srgb, var(--danger) 20%, transparent);
   }
@@ -500,16 +471,10 @@
   }
   .cap {
     margin-top: 14px;
+  }
+  .cap:not(.warn) {
     font-size: 15px;
     text-align: center;
     color: var(--fg-2);
-  }
-  .cap.mir {
-    background: var(--danger-soft);
-    color: var(--on-danger-soft);
-    font-weight: 700;
-    text-align: left;
-    padding: 12px 16px;
-    border-radius: var(--r-s);
   }
 </style>

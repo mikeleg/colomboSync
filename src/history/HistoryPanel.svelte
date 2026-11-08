@@ -5,22 +5,14 @@
 
   /** From `list_runs`; null while it loads or when the history could not be read: then only the legend shows. */
   let { summary }: { summary: HistorySummary | null } = $props();
-
-  const numbers = $derived(
-    summary &&
-      ([
-        ["Copie fatte", summary.runs],
-        ["Riuscite", summary.ok],
-        ["Con errore", summary.failed],
-        ["Annullate", summary.cancelled],
-        ["File copiati", summary.filesCopied],
-        ["File cancellati in B", summary.filesDeleted],
-      ] as const),
-  );
 </script>
 
+{#snippet count(label: string, value: number)}
+  <div class="cnt"><b>{formatNumber(value)}</b><span>{label}</span></div>
+{/snippet}
+
 <div class="panel">
-  {#if summary && numbers}
+  {#if summary}
     {#if summary.runs === 0}
       <p class="empty">
         Non hai ancora fatto nessuna copia. Quando ne farai una, qui vedrai i numeri e lo stato di ogni
@@ -28,16 +20,19 @@
       </p>
     {:else}
       <section>
-        <h2>Riepilogo</h2>
+        <h2 class="section-title">Riepilogo</h2>
         <div class="counts">
-          {#each numbers as [label, value] (label)}
-            <div class="cnt"><b>{formatNumber(value)}</b><span>{label}</span></div>
-          {/each}
+          {@render count("Copie fatte", summary.runs)}
+          {@render count("Riuscite", summary.ok)}
+          {@render count("Con errore", summary.failed)}
+          {@render count("Annullate", summary.cancelled)}
+          {@render count("File copiati", summary.filesCopied)}
+          {@render count("File cancellati in B", summary.filesDeleted)}
         </div>
       </section>
       {#if summary.syncs.length > 0}
         <section>
-          <h2>Per sincronizzazione</h2>
+          <h2 class="section-title">Per sincronizzazione</h2>
           <ul class="syncs">
             {#each summary.syncs as sync (sync.id)}
               <li>
@@ -54,7 +49,7 @@
     {/if}
   {/if}
   <section class="legend">
-    <h2>Cosa vogliono dire le etichette</h2>
+    <h2 class="section-title">Cosa vogliono dire le etichette</h2>
     <p><span class="chip {outcomeChip.Ok.cls}">{outcomeChip.Ok.label}</span> La copia è andata a buon fine.</p>
     <p>
       <span class="chip {outcomeChip.Error.cls}">{outcomeChip.Error.label}</span> Interrotta per un problema (di solito un
@@ -69,20 +64,9 @@
 </div>
 
 <style>
-  /* A long list of syncs scrolls inside the panel instead of pushing it off the window. */
   .panel {
     display: grid;
     gap: 24px;
-    max-height: calc(100vh - 120px);
-    overflow-y: auto;
-  }
-  h2 {
-    font-size: 13px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--fg-2);
-    margin-bottom: 12px;
   }
   .empty {
     font-size: 15px;
@@ -93,26 +77,6 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
-  }
-  .cnt {
-    text-align: center;
-    padding: 10px 6px;
-    border-radius: 16px;
-    background: var(--card-2);
-    min-width: 0;
-  }
-  .cnt b {
-    display: block;
-    font-size: 26px;
-    line-height: 1.1;
-    font-weight: 700;
-    letter-spacing: -0.03em;
-  }
-  .cnt span {
-    display: block;
-    font-size: 13px;
-    color: var(--fg-2);
-    margin-top: 2px;
   }
   .syncs {
     list-style: none;
@@ -136,23 +100,8 @@
     font-size: 14px;
     color: var(--fg-2);
   }
-  .warn {
-    display: flex;
-    gap: 8px;
-    align-items: flex-start;
+  .syncs .warn {
     margin-top: 6px;
-    padding: 8px 10px;
-    border-radius: 12px;
-    background: var(--danger-soft);
-    color: var(--on-danger-soft);
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 1.35;
-  }
-  .warn :global(svg) {
-    width: 18px;
-    height: 18px;
-    flex: none;
   }
   .legend {
     display: grid;
@@ -162,7 +111,7 @@
     font-size: 13px;
     color: var(--fg-2);
   }
-  .legend h2 {
+  .legend .section-title {
     margin-bottom: 4px;
   }
   .legend p {

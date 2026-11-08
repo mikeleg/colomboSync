@@ -192,13 +192,6 @@
     font-weight: 700;
     margin-bottom: 14px;
   }
-  .btn.danger {
-    background: var(--danger);
-    color: var(--on-danger);
-  }
-  .btn.danger:not(:disabled):hover {
-    background: color-mix(in srgb, var(--on-danger) 12%, var(--danger));
-  }
   @media (prefers-reduced-motion: reduce) {
     .bar i {
       transition: none;

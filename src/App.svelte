@@ -247,6 +247,9 @@
     align-self: start;
     position: sticky;
     top: 16px;
+    /* A tall panel (many syncs in the Storico) scrolls inside itself instead of running off the window. */
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
   }
   .tabs {
     display: inline-flex;
@@ -284,6 +287,7 @@
     .schema {
       order: -1;
       position: static;
+      max-height: none;
     }
   }
 </style>

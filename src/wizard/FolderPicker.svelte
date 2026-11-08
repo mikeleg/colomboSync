@@ -37,6 +37,10 @@
   let head: HTMLElement;
   let input: HTMLInputElement;
   let lastLoad = 0;
+  /** The folder the rows belong to. */
+  let listed = "";
+  /** Set by a key in the path box, consumed by the effect that loads: any other change of the path loads at once. */
+  let typing = false;
   /** The folder the name box was opened in: the box belongs to it and goes away with any other choice. */
   let creatingIn = $state<string | null>(null);
   let newName = $state("");
@@ -60,10 +64,18 @@
     if (seq === lastLoad) {
       listing = result;
       listingError = failure;
+      listed = path;
     }
   }
 
+  /** "Livello superiore": the parent of the chosen folder, even if typing has not been browsed yet. */
+  async function up() {
+    if (listed !== chosen) await load(chosen);
+    pick(listing.parent);
+  }
+
   function pick(path: string) {
+    typing = false;
     stopCreating();
     value = path;
     head?.focus();
@@ -102,8 +114,16 @@
   }
 
   // The rows and the parent always follow the chosen path, however it got there (click or typing).
+  // Typing waits until the path has stopped changing (one Rust call per key would be wasted); a click does not wait.
   $effect(() => {
-    load(chosen);
+    const path = chosen;
+    if (!typing) {
+      load(path);
+      return;
+    }
+    typing = false;
+    const timer = setTimeout(() => load(path), 150);
+    return () => clearTimeout(timer);
   });
 
   $effect(() => {
@@ -134,9 +154,7 @@
             ><Icon name="plus" size={20} /> Nuova cartella</button
           >
         {/if}
-        <button type="button" class="btn small" onclick={() => pick(listing.parent)}
-          ><Icon name="up" size={20} /> Livello superiore</button
-        >
+        <button type="button" class="btn small" onclick={up}><Icon name="up" size={20} /> Livello superiore</button>
       </div>
     {/if}
   </div>
@@ -188,6 +206,7 @@
       {id}
       bind:value
       bind:this={input}
+      oninput={() => (typing = true)}
       {placeholder}
       autocomplete="off"
       spellcheck="false"

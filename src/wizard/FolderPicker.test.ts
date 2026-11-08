@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { fireEvent, render, screen } from "@testing-library/svelte";
-import { beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import FolderPicker from "./FolderPicker.svelte";
 import type { FolderListing } from "./types";
 
@@ -89,6 +89,52 @@ test("a path typed by hand drives the rows and the parent too", async () => {
 
   await fireEvent.click(screen.getByRole("button", { name: /Livello superiore/ }));
   expect((screen.getByLabelText("Percorso") as HTMLInputElement).value).toBe(E);
+});
+
+describe("browsing while typing", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const browsed = () => invokeMock.mock.calls.filter(([cmd]) => cmd === "browse_folders");
+
+  test("a path typed key by key is browsed once, when it stops changing", async () => {
+    render(FolderPicker, props);
+    await vi.advanceTimersByTimeAsync(0);
+    invokeMock.mockClear();
+
+    const input = screen.getByLabelText("Percorso");
+    for (const typed of ["D", "D:", String.raw`D:\F`, String.raw`D:\Fo`, FOTO]) {
+      await fireEvent.input(input, { target: { value: typed } });
+      await vi.advanceTimersByTimeAsync(50);
+    }
+    expect(browsed()).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(browsed()).toEqual([["browse_folders", { path: FOTO }]]);
+  });
+
+  test("a click on a folder browses it at once", async () => {
+    render(FolderPicker, props);
+    await vi.advanceTimersByTimeAsync(0);
+    invokeMock.mockClear();
+
+    await fireEvent.click(screen.getByRole("button", { name: "Disco D:" }));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(browsed()).toEqual([["browse_folders", { path: D }]]);
+  });
+
+  test("Livello superiore right after typing goes up from the typed folder, not from the one listed before", async () => {
+    render(FolderPicker, { ...props, value: D });
+    await vi.advanceTimersByTimeAsync(0);
+
+    await fireEvent.input(screen.getByLabelText("Percorso"), { target: { value: FOTO } });
+    await fireEvent.click(screen.getByRole("button", { name: /Livello superiore/ }));
+    await vi.advanceTimersByTimeAsync(300);
+
+    expect((screen.getByLabelText("Percorso") as HTMLInputElement).value).toBe(D);
+  });
 });
 
 test("a folder that cannot be opened says so, instead of looking empty and chosen", async () => {

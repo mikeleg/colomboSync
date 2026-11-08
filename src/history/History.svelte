@@ -4,16 +4,16 @@
   import LogViewer from "../shared/LogViewer.svelte";
   import RunChips from "../shared/RunChips.svelte";
   import RunStats from "../shared/RunStats.svelte";
-  import type { Explanation, RunReport } from "../shared/types";
-  import type { SyncStatus } from "./types";
+  import type { RunReport } from "../shared/types";
+  import type { HistoryState } from "./types";
 
-  /** Runs newest first, as returned by `list_runs`; `syncs` is its summary of the saved syncs; `error` is why it failed. */
-  let {
-    runs,
-    syncs = [],
-    status,
-    error = null,
-  }: { runs: RunReport[]; syncs?: SyncStatus[]; status: "loading" | "ready"; error?: Explanation | null } = $props();
+  /** `list_runs` as the app holds it: runs newest first, `summary.syncs` the saved syncs; `failed` says why it failed. */
+  let { history }: { history: HistoryState } = $props();
+
+  const status = $derived(history.status === "loading" ? "loading" : "ready");
+  const error = $derived(history.status === "failed" ? history.error : null);
+  const runs = $derived(history.status === "ready" ? history.runs : []);
+  const syncs = $derived(history.status === "ready" ? history.summary.syncs : []);
 
   /** How many runs show at first, and how many more each "Mostra altre" adds. */
   const PAGE = 200;
@@ -22,11 +22,18 @@
 
   let viewing = $state<RunReport | null>(null);
   let filters = $state({ ...NO_FILTERS });
-  let limit = $state(PAGE);
+  // Other runs or another filter start the list again from the first page; "Mostra altre" then adds to it.
+  let limit = $derived.by(() => {
+    void [runs, ...Object.values(filters)];
+    return PAGE;
+  });
 
-  const idByName = $derived(new Map(syncs.map((s) => [s.name, s.id])));
+  /** Id of each name used by a run that has one (newest wins), so old lines without an id join their sync. */
+  const idByName = $derived(
+    new Map([...runs].reverse().flatMap((r): [string, number][] => (r.syncId != null ? [[r.syncName, r.syncId]] : []))),
+  );
 
-  /** A run belongs to its saved sync by id; a line written before syncs had ids joins the sync of that name, else stands by its name. */
+  /** A run belongs to its saved sync by id; old lines without one, by the id of a run with the same name, else by name. */
   const syncKey = (run: RunReport) => {
     const id = run.syncId ?? idByName.get(run.syncName);
     return id != null ? `id:${id}` : `name:${run.syncName}`;
@@ -61,7 +68,6 @@
 
   function clearFilters() {
     filters = { ...NO_FILTERS };
-    limit = PAGE;
   }
 </script>
 
@@ -73,8 +79,7 @@
   <p class="err-msg" role="alert"><ErrorText explanation={error} /></p>
 {/if}
 {#if runs.length > 0}
-  <!-- Another filter starts the list again from the first page. -->
-  <div class="filters" onchange={() => (limit = PAGE)}>
+  <div class="filters">
     <label>
       Sincronizzazione
       <select bind:value={filters.sync}>

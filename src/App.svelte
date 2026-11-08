@@ -10,8 +10,8 @@
   import { emptySchema, type SchemaModel } from "./shared/schema";
   import SchemaView from "./schema/SchemaView.svelte";
   import ThemeSwitch from "./shared/ThemeSwitch.svelte";
-  import type { Explanation, RunReport, Sync } from "./shared/types";
-  import type { HistorySummary } from "./history/types";
+  import type { Sync } from "./shared/types";
+  import type { HistoryState } from "./history/types";
   import Wizard from "./wizard/Wizard.svelte";
 
   /** Started as administrator: mapped network drives are not visible then. */
@@ -35,10 +35,6 @@
     view = "wizard";
   }
 
-  type HistoryState =
-    | { status: "loading" }
-    | { status: "failed"; error: Explanation }
-    | { status: "ready"; runs: RunReport[]; summary: HistorySummary };
   let history = $state.raw<HistoryState>({ status: "loading" });
   const loaded = $derived(history.status === "ready" ? history : null);
   let historyLoads = 0;
@@ -105,12 +101,7 @@
       {#if view === "home"}
         <Home bind:this={screen} onnew={() => openWizard()} onrun={openWizard} />
       {:else if view === "history"}
-        <History
-          runs={loaded?.runs ?? []}
-          syncs={loaded?.summary.syncs}
-          status={history.status === "loading" ? "loading" : "ready"}
-          error={history.status === "failed" ? history.error : null}
-        />
+        <History {history} />
       {:else}
         <Wizard
           bind:this={screen}

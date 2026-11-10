@@ -1,5 +1,6 @@
-//! Robocopy engine: argument builder, exit-code rules, `/UNILOG` decoding and, on Windows, the
-//! hidden process calls. The text rules are plain functions, tested on every platform.
+//! Robocopy engine: argument builder, exit-code rules, `/UNILOG` decoding, the `/L` output turned
+//! into a `Preview` and, on Windows, the hidden process calls. The text rules are plain functions,
+//! tested on every platform.
 
 use crate::shared::domain::{Cause, Folder, Preview, SyncMode};
 use crate::shared::error_messages::MAPPED_CODES;

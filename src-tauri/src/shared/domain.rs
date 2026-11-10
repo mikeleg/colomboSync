@@ -1,5 +1,6 @@
 //! The domain words that more than one slice speaks: the mode of a Sync, a saved Sync, one Run
-//! and why it failed, what a Preview finds. Plain data; the slices depend on this module, never on each other for it.
+//! and why it failed, what a Preview finds. Plain data; the slices depend on this module, never on
+//! each other for it.
 
 use super::copy_text;
 use super::error_messages::{Explanation, explain_run};

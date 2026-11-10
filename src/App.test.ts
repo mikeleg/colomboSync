@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { expect, test } from "vitest";
 import App from "./App.svelte";
 import { backend, calls, doneRun, failedRun, invokeMock, preview, savedSync } from "./testing/backend";
+import { click, goToPreview } from "./testing/screen";
 import type { RunReport } from "./shared/types";
 import type { HistorySummary, RunList } from "./history/types";
 import type { SyncSummary } from "./syncs/types";
@@ -11,23 +12,6 @@ const runList = (runs: RunReport[], summary: Partial<HistorySummary> = {}): RunL
   runs,
   summary: { runs: 0, ok: 0, failed: 0, cancelled: 0, filesCopied: 0, filesDeleted: 0, syncs: [], ...summary },
 });
-
-const click = (target: string | RegExp | HTMLElement) =>
-  fireEvent.click(
-    typeof target === "object" && "tagName" in target ? target : screen.getByRole("button", { name: target }),
-  );
-const typeInto = (label: RegExp, value: string) => fireEvent.input(screen.getByLabelText(label), { target: { value } });
-
-async function goToPreview() {
-  await click("Nuova sincronizzazione");
-  await typeInto(/Percorso/, "D:\\Foto");
-  await click("Avanti");
-  await typeInto(/Percorso/, "E:\\Backup");
-  await click("Avanti");
-  await screen.findByDisplayValue("Copia di Foto");
-  await click("Avanti"); // Come la chiamo?
-  await click("Avanti"); // Opzioni
-}
 
 test("shell: brand, theme switch, sections, a way to start, and the schema docked on the side", () => {
   backend({});
@@ -47,6 +31,7 @@ test("A and B through Opzioni: the preview and the schema show the same counts",
   backend({ preview_sync: () => preview(148, 3) });
   render(App);
 
+  await click("Nuova sincronizzazione");
   await goToPreview();
 
   expect(invokeMock).toHaveBeenCalledWith("preview_sync", {
@@ -237,6 +222,7 @@ test("while the history loads there are no old rows, and a late older answer is 
 test("Torna all’elenco and Vai allo storico leave the result", async () => {
   backend({ preview_sync: () => preview(2, 1), run_sync: () => failedRun, list_runs: () => runList([failedRun]) });
   render(App);
+  await click("Nuova sincronizzazione");
   await goToPreview();
   await click(await screen.findByRole("button", { name: "Sì, avvia" }));
 

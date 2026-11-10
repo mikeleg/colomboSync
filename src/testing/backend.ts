@@ -73,7 +73,6 @@ type Handlers = Partial<
     | "default_sync_name"
     | "check_step"
     | "list_runs"
-    | "read_run_log"
     | "is_elevated",
     (args: Args) => unknown
   >
@@ -90,18 +89,8 @@ export function backend(handlers: Handlers = {}) {
     },
     list_syncs: () => ({ syncs: [], setAside: false }),
     default_sync_name: () => "Copia di Foto",
-    // Only the empty-value answers of `check_step` (wizard/commands.rs). The path rules are Rust's:
-    // a test that needs a refusal for a path throws it itself.
-    check_step: (args) => {
-      const { step, source, destination, name } = args as Record<string, string>;
-      const missing: Record<string, [string, string]> = {
-        source: [source, "Scegli prima la cartella da copiare."],
-        destination: [destination, "Scegli prima dove mettere la copia."],
-        name: [name, "Scrivi un nome per riconoscere questa sincronizzazione."],
-      };
-      const [value, title] = missing[step] ?? ["x", ""];
-      if (!value.trim()) throw { title, advice: "" };
-    },
+    // Rust decides what `check_step` refuses (wizard/commands.rs): a test that needs a refusal throws it itself.
+    check_step: () => {},
     is_elevated: () => false,
     save_sync: (args) => ({ id: 7, ...args }),
   };

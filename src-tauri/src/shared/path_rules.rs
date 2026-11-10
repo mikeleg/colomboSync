@@ -4,6 +4,7 @@
 //! the folders: `/Volumes/Macintosh HD` is the root itself, whatever it is called.
 
 use super::error_messages::Explanation;
+use std::borrow::Cow;
 
 pub const NOT_ABSOLUTE: &str = "Scrivi il percorso completo, che inizia con /.";
 pub const SAME_FOLDER: &str = "La destinazione è la stessa cartella da copiare. Scegline un’altra.";
@@ -102,12 +103,8 @@ fn normalize_unix(path: &str, ignore_case: bool) -> String {
 /// Lower-case, `\` separators, no trailing `\`, `.`/`..` resolved without touching the disk.
 /// A drive (`d:`) or a UNC `\\server\share` is the root that `..` cannot climb above.
 pub(crate) fn normalize_windows(path: &str) -> String {
-    let mut path = path.trim().replace('/', "\\").to_lowercase();
-    if let Some(rest) = path.strip_prefix(VERBATIM_UNC) {
-        path = format!(r"\\{rest}");
-    } else if let Some(rest) = path.strip_prefix(VERBATIM) {
-        path = rest.to_string();
-    }
+    let path = path.trim().replace('/', "\\");
+    let path = strip_verbatim(&path).to_lowercase();
     let unc = is_unc(&path);
     let root_parts = if unc { 2 } else { 1 };
     let mut parts: Vec<&str> = Vec::new();
@@ -130,6 +127,22 @@ pub(crate) fn normalize_windows(path: &str) -> String {
 /// `\\?\D:\x` is `D:\x`.
 pub(crate) const VERBATIM_UNC: &str = r"\\?\unc\";
 pub(crate) const VERBATIM: &str = r"\\?\";
+
+/// The path without its verbatim prefix, typed in any case: `\\?\UNC\NAS\x` is `\\NAS\x` and
+/// `\\?\D:\x` is `D:\x`. Only at the start; the case of the rest is kept.
+pub(crate) fn strip_verbatim(path: &str) -> Cow<'_, str> {
+    let starts = |prefix: &str| {
+        path.get(..prefix.len())
+            .is_some_and(|start| start.eq_ignore_ascii_case(prefix))
+    };
+    if starts(VERBATIM_UNC) {
+        Cow::Owned(format!(r"\\{}", &path[VERBATIM_UNC.len()..]))
+    } else if starts(VERBATIM) {
+        Cow::Borrowed(&path[VERBATIM.len()..])
+    } else {
+        Cow::Borrowed(path)
+    }
+}
 
 /// A network share: `\\server\share`.
 pub(crate) fn is_unc(path: &str) -> bool {
@@ -234,6 +247,14 @@ mod tests {
         assert_eq!(normalize_windows(r"\\?\UNC\NAS\Backup"), r"\\nas\backup");
         // In the middle it is no prefix: the empty part goes, the rest stays (as before).
         assert_eq!(normalize_windows(r"D:\a\\?\b"), r"d:\a\?\b");
+    }
+
+    #[test]
+    fn strip_verbatim_removes_the_prefix_only_at_the_start() {
+        assert_eq!(strip_verbatim(r"\\?\UNC\NAS\x"), r"\\NAS\x");
+        assert_eq!(strip_verbatim(r"\\?\D:\Foto"), r"D:\Foto");
+        assert_eq!(strip_verbatim(r"D:\a\\?\b"), r"D:\a\\?\b");
+        assert_eq!(strip_verbatim(r"\\?\unc\NAS"), r"\\NAS");
     }
 
     #[test]

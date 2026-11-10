@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from "@testing-library/svelte";
 import { expect, test, vi } from "vitest";
 import Wizard from "./Wizard.svelte";
 import { backend, calls, doneRun, failedRun, invokeMock, preview, savedSync, unreachable } from "../testing/backend";
+import { click, goToPreview, typeInto } from "../testing/screen";
 import type { Sync } from "../shared/types";
 
 /** The Wizard as App renders it: a new sync, or the saved one `sync` to run again. */
@@ -10,22 +11,6 @@ function renderWizard(sync?: Sync) {
   const onexit = vi.fn();
   const { component } = render(Wizard, { onexit, onhistory: vi.fn(), sync });
   return { component, onexit };
-}
-
-const click = (target: string | RegExp | HTMLElement) =>
-  fireEvent.click(
-    typeof target === "object" && "tagName" in target ? target : screen.getByRole("button", { name: target }),
-  );
-const typeInto = (label: RegExp, value: string) => fireEvent.input(screen.getByLabelText(label), { target: { value } });
-
-async function goToPreview() {
-  await typeInto(/Percorso/, "D:\\Foto");
-  await click("Avanti");
-  await typeInto(/Percorso/, "E:\\Backup");
-  await click("Avanti");
-  await screen.findByDisplayValue("Copia di Foto");
-  await click("Avanti"); // Come la chiamo?
-  await click("Avanti"); // Opzioni
 }
 
 test("the schema caption on the preview is the one Rust sent, as it is", async () => {
@@ -148,7 +133,12 @@ test("a failed preview shows the error, a way back and no Sì, avvia", async () 
 });
 
 test("an empty folder blocks Avanti with a message and opens the manual input", async () => {
-  backend({});
+  backend({
+    // What Rust answers for an empty A.
+    check_step: () => {
+      throw { title: "Scegli prima la cartella da copiare.", advice: "" };
+    },
+  });
   renderWizard();
 
   await click("Avanti");
@@ -190,7 +180,15 @@ test("Indietro, cambio qualcosa goes back to Opzioni keeping what was typed; No,
 });
 
 test("Come la chiamo? sits before Opzioni, is prefilled from A and an empty name blocks Avanti", async () => {
-  backend();
+  backend({
+    // What Rust answers for an empty name.
+    check_step: (args) => {
+      const { step, name } = args as { step: string; name: string };
+      if (step === "name" && !name.trim()) {
+        throw { title: "Scrivi un nome per riconoscere questa sincronizzazione.", advice: "" };
+      }
+    },
+  });
   renderWizard();
   await typeInto(/Percorso/, "D:\\Foto");
   await click("Avanti");

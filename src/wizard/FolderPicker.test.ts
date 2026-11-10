@@ -190,6 +190,25 @@ describe("browsing while typing", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(screen.getByRole("button", { name: /Nuova cartella/ })).toBeTruthy();
   });
+
+  test("an older folder listing that answers late is ignored: the newer path keeps its rows and its path", async () => {
+    render(FolderPicker, props);
+    await vi.advanceTimersByTimeAsync(0);
+    const answerD = holdBrowseOf(D);
+
+    await fireEvent.click(screen.getByRole("button", { name: "Disco D:" }));
+    await fireEvent.input(screen.getByLabelText("Percorso"), { target: { value: FOTO } });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(screen.getByText("Qui dentro non ci sono altre cartelle.")).toBeTruthy();
+
+    answerD(listings[D]);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect((screen.getByLabelText("Percorso") as HTMLInputElement).value).toBe(FOTO);
+    expect(screen.getByText(FOTO, { selector: "b" })).toBeTruthy();
+    expect(screen.getByText("Qui dentro non ci sono altre cartelle.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Musica" })).toBeNull();
+  });
 });
 
 test("a folder that cannot be opened says so, instead of looking empty and chosen", async () => {

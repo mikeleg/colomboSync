@@ -1,9 +1,9 @@
 //! What the home screen lists: each saved sync with the outcome of its latest Run in the history.
 
-use crate::history;
 use crate::shared::copy_text::{self, Place};
 use crate::shared::domain::{Outcome, SavedSync, SyncMode};
 use crate::shared::error_messages;
+use crate::shared::history_store;
 use crate::shared::storage::Storage;
 use crate::shared::sync_store;
 use serde::Serialize;
@@ -44,8 +44,8 @@ pub struct ListedSyncs {
 /// Every saved sync with the outcome of its latest Run in the history (an unreadable history
 /// just means no last run).
 pub fn list(storage: &Storage) -> io::Result<ListedSyncs> {
-    let runs = history::read(&storage.history_file()).unwrap_or_default();
-    let last_runs: HashMap<u64, LastRun> = history::latest_per_sync(&runs)
+    let runs = history_store::read(&storage.history_file()).unwrap_or_default();
+    let last_runs: HashMap<u64, LastRun> = history_store::latest_per_sync(&runs)
         .into_iter()
         .map(|(id, run)| {
             let last_run = LastRun {
@@ -79,7 +79,7 @@ pub fn save_new_sync(
     destination: &str,
     mode: SyncMode,
 ) -> io::Result<SavedSync> {
-    let highest_id_in_history = history::highest_sync_id(&storage.history_file())?;
+    let highest_id_in_history = history_store::highest_sync_id(&storage.history_file())?;
     sync_store::add(
         &storage.syncs_file(),
         highest_id_in_history,
@@ -144,12 +144,12 @@ mod tests {
         let storage = Storage::at(dir.path());
         let (foto, doc) = (sync(1, "Foto"), sync(2, "Documenti"));
         sync_store::save(&storage.syncs_file(), &[doc.clone(), foto.clone()]).unwrap();
-        history::append(
+        history_store::append(
             &storage.history_file(),
             &run(&foto, Outcome::Error, "2026-11-01T10:00:00+01:00"),
         )
         .unwrap();
-        history::append(
+        history_store::append(
             &storage.history_file(),
             &run(&foto, Outcome::Ok, "2026-11-02T21:30:00+01:00"),
         )
@@ -198,7 +198,7 @@ mod tests {
             run(&plain, Outcome::Error, at), // written before S6: no note stored
             run(&done, Outcome::Ok, at),
         ] {
-            history::append(&storage.history_file(), &r).unwrap();
+            history_store::append(&storage.history_file(), &r).unwrap();
         }
 
         let notes: Vec<Option<String>> = list(&storage)
@@ -229,8 +229,8 @@ mod tests {
             sync_id: None,
             ..run(&first, Outcome::Ok, "2026-10-01T10:00:00+01:00")
         };
-        history::append(&storage.history_file(), &from_before_ids).unwrap();
-        history::append(
+        history_store::append(&storage.history_file(), &from_before_ids).unwrap();
+        history_store::append(
             &storage.history_file(),
             &run(&first, Outcome::Error, "2026-11-02T21:30:00+01:00"),
         )
@@ -249,7 +249,7 @@ mod tests {
         let storage = Storage::at(dir.path());
         let old = save_new_sync(&storage, "Foto", r"D:\Foto", r"E:\B", SyncMode::Copy).unwrap();
         assert_eq!(old.id, 1);
-        history::append(
+        history_store::append(
             &storage.history_file(),
             &run(&old, Outcome::Error, "2026-11-02T21:30:00+01:00"),
         )
@@ -269,7 +269,7 @@ mod tests {
     fn a_new_sync_takes_an_id_above_a_history_line_that_is_not_a_whole_run() {
         let dir = tempfile::tempdir().unwrap();
         let storage = Storage::at(dir.path());
-        // An outcome from a newer version: `history::read` skips the line, its sync id still counts.
+        // An outcome from a newer version: `history_store::read` skips the line, its sync id still counts.
         fs::write(
             storage.history_file(),
             "{\"syncId\":7,\"outcome\":\"SomethingNew\"}\n",

@@ -3,9 +3,9 @@
 use super::progress::{Progress, StdoutFollower};
 use crate::engine::preview_parser::Counts;
 use crate::engine::{self, Verdict};
-use crate::history;
 use crate::shared::domain::{Outcome, Run, SavedSync, SyncMode};
 use crate::shared::error_messages::{self, Explanation};
+use crate::shared::history_store;
 use crate::shared::mirror_guard;
 use crate::shared::path_rules;
 use crate::shared::storage::Storage;
@@ -167,7 +167,7 @@ pub fn run(
             partial,
             cause,
         };
-        history::append(&storage.history_file(), &run)
+        history_store::append(&storage.history_file(), &run)
             .map_err(|_| error_messages::cannot_write_history())?;
         Ok(run)
     };

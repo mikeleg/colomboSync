@@ -1,8 +1,8 @@
 //! The numbers beside the Storico: totals over `history.jsonl` and the state of each sync.
 
-use crate::history;
 use crate::shared::copy_text;
 use crate::shared::domain::{Outcome, Run, SavedSync};
+use crate::shared::history_store;
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -32,7 +32,7 @@ pub struct SyncStatus {
     pub warning: Option<String>,
 }
 
-/// `runs` newest first, as `history::read` returns them. Runs without a sync id (written before
+/// `runs` newest first, as `history_store::read` returns them. Runs without a sync id (written before
 /// syncs had ids) count in the totals but belong to no sync.
 pub fn summarize(runs: &[Run], syncs: &[SavedSync]) -> HistorySummary {
     let mut summary = HistorySummary {
@@ -55,7 +55,7 @@ pub fn summarize(runs: &[Run], syncs: &[SavedSync]) -> HistorySummary {
         summary.files_copied += run.partial.unwrap_or(run.new + run.updated);
         summary.files_deleted += run.deleted;
     }
-    let mut statuses: Vec<SyncStatus> = history::latest_per_sync(runs)
+    let mut statuses: Vec<SyncStatus> = history_store::latest_per_sync(runs)
         .into_iter()
         .map(|(id, latest)| SyncStatus {
             id,

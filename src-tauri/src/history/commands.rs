@@ -1,10 +1,11 @@
 //! Thin `#[tauri::command]` wrappers for the Storico screen.
 
 use super::summary::{self, HistorySummary};
-use super::{LogError, Run, RunLog, read, read_log};
+use super::{LogError, RunLog, read_log};
 use crate::shared::blocking::blocking;
-use crate::shared::domain::{RunReport, SavedSync};
+use crate::shared::domain::{Run, RunReport, SavedSync};
 use crate::shared::error_messages::{self, Explanation};
+use crate::shared::history_store::read;
 use crate::shared::storage::Storage;
 use crate::shared::sync_store;
 use serde::Serialize;

@@ -17,23 +17,18 @@
   const CALCULATING = "Calcolo il tempo che manca…";
 
   let progress = $state.raw<RunProgress | null>(null);
-  let confirming = $state(false);
-  let closingWindow = $state(false);
+  let handled = $state(0); // close requests the user already answered ("No, continua")
+  let stopAsked = $state(false); // "Ferma la copia" clicked
   let stopping = $state(false);
 
+  const closingWindow = $derived(closeRequests > handled);
+  const confirming = $derived(closingWindow || stopAsked);
   const done = $derived(progress?.done ?? 0);
   const percent = $derived(total > 0 ? Math.min(100, Math.floor((done / total) * 100)) : 0);
 
   // Screen readers hear the progress every 10%, not every file: the text only changes when a new tenth is reached,
   // and a live region speaks only when its text changes (the count never goes down, so no memory is needed).
   const announcement = $derived(percent >= 10 ? `Copia al ${percent - (percent % 10)}%` : "");
-
-  $effect(() => {
-    if (closeRequests > 0) {
-      confirming = true;
-      closingWindow = true;
-    }
-  });
 
   onMount(() => {
     const unlisten = onRunProgress((p) => (progress = p));
@@ -43,8 +38,8 @@
   });
 
   function keepCopying() {
-    confirming = false;
-    closingWindow = false;
+    handled = closeRequests;
+    stopAsked = false;
   }
 
   async function stop() {
@@ -96,7 +91,7 @@
     </div>
   </div>
 {:else}
-  <button type="button" class="btn" onclick={() => (confirming = true)} {@attach focus}
+  <button type="button" class="btn" onclick={() => (stopAsked = true)} {@attach focus}
     ><Icon name="stop" />Ferma la copia</button
   >
 {/if}

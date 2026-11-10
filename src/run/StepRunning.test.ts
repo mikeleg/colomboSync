@@ -123,6 +123,18 @@ test("closing the window then No, continua keeps the copy running", async () => 
   expect(cancelRun).toHaveBeenCalledWith(false);
 });
 
+test("a second X click after No, continua asks again", async () => {
+  const { rerender } = render(StepRunning, { total: 151, closeRequests: 1 });
+  await fireEvent.click(await screen.findByRole("button", { name: "No, continua" }));
+  expect(screen.queryByRole("alertdialog")).toBeNull();
+
+  await rerender({ total: 151, closeRequests: 2 });
+
+  expect(await screen.findByRole("alertdialog")).toBeTruthy();
+  await fireEvent.click(screen.getByRole("button", { name: "Sì, ferma" }));
+  expect(cancelRun).toHaveBeenCalledWith(true);
+});
+
 test("if there is nothing left to stop the buttons come back", async () => {
   vi.mocked(cancelRun).mockResolvedValueOnce(false);
   render(StepRunning, { total: 151 });

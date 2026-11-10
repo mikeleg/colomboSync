@@ -1,9 +1,8 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import Icon from "../shared/Icon.svelte";
-  import { checkStep, previewSync } from "./api";
+  import { checkStep, onCloseRequested, previewSync } from "./api";
   import { defaultSyncName, saveSync } from "../syncs/api";
-  import { onCloseRequested } from "../run/api";
   import { toExplanation } from "../shared/explanation";
   import type { SchemaModel } from "../shared/schema";
   import type { Counts, Explanation, RunReport, Sync, SyncMode } from "../shared/types";
@@ -12,7 +11,7 @@
   import StepName from "./StepName.svelte";
   import StepOptions from "./StepOptions.svelte";
   import StepPreview from "./StepPreview.svelte";
-  import RunFlow from "../run/RunFlow.svelte";
+  import RunFlow from "./RunFlow.svelte";
   import StepSource from "./StepSource.svelte";
 
   let {

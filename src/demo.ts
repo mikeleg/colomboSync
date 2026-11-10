@@ -2,8 +2,7 @@
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { Counts, Explanation, Place, Run, RunLog, RunReport, Sync, SyncMode } from "./shared/types";
-import type { FolderListing, Preview } from "./wizard/types";
-import type { RunProgress } from "./run/types";
+import type { FolderListing, Preview, RunProgress } from "./wizard/types";
 import type { HistorySummary, RunList, SyncStatus } from "./history/types";
 import type { ListedSyncs } from "./syncs/types";
 

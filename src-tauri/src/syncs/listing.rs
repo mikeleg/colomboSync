@@ -79,8 +79,7 @@ pub fn save_new_sync(
     destination: &str,
     mode: SyncMode,
 ) -> io::Result<SavedSync> {
-    let runs = history::read(&storage.history_file())?;
-    let highest_id_in_history = runs.iter().filter_map(|run| run.sync_id).max().unwrap_or(0);
+    let highest_id_in_history = history::highest_sync_id(&storage.history_file())?;
     sync_store::add(
         &storage.syncs_file(),
         highest_id_in_history,
@@ -264,6 +263,22 @@ mod tests {
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].sync, new);
         assert_eq!(listed[0].last_run, None);
+    }
+
+    #[test]
+    fn a_new_sync_takes_an_id_above_a_history_line_that_is_not_a_whole_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::at(dir.path());
+        // An outcome from a newer version: `history::read` skips the line, its sync id still counts.
+        fs::write(
+            storage.history_file(),
+            "{\"syncId\":7,\"outcome\":\"SomethingNew\"}\n",
+        )
+        .unwrap();
+
+        let new = save_new_sync(&storage, "Doc", r"D:\Doc", r"E:\B", SyncMode::Copy).unwrap();
+
+        assert_eq!(new.id, 8);
     }
 
     #[test]

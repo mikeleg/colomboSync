@@ -6,7 +6,7 @@ pub mod summary;
 use crate::engine;
 use crate::shared::domain::Run;
 use crate::shared::storage::read_if_present;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -37,6 +37,26 @@ pub fn read(file: &Path) -> io::Result<Vec<Run>> {
         .collect();
     runs.reverse();
     Ok(runs)
+}
+
+/// The highest sync id on any line of the history, 0 if there is none. Unlike `read` it looks
+/// only at the id, so a line that is not a whole `Run` (an outcome from a newer version, say)
+/// still counts; a line that is not even JSON is skipped. A missing file is an empty history,
+/// any other read error is reported.
+pub fn highest_sync_id(file: &Path) -> io::Result<u64> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct OnlySyncId {
+        sync_id: Option<u64>,
+    }
+    let Some(bytes) = read_if_present(file)? else {
+        return Ok(0);
+    };
+    Ok(bytes
+        .split(|&b| b == b'\n')
+        .filter_map(|line| serde_json::from_slice::<OnlySyncId>(line).ok()?.sync_id)
+        .max()
+        .unwrap_or(0))
 }
 
 /// The latest run of each sync, in the order of `runs` (newest first, as `read` returns them): the
@@ -266,6 +286,39 @@ mod tests {
             .collect();
 
         assert_eq!(latest, [(2, "due, nuova"), (1, "uno, nuova")]);
+    }
+
+    #[test]
+    fn the_highest_sync_id_counts_lines_that_read_skips() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("history.jsonl");
+        let of_sync_2 = Run {
+            sync_id: Some(2),
+            ..run("due", Outcome::Ok)
+        };
+        append(&file, &of_sync_2).unwrap();
+        let mut text = fs::read_to_string(&file).unwrap();
+        // An outcome from a newer version, a line with no sync id, a line that is not JSON.
+        text.push_str("{\"syncId\":7,\"outcome\":\"SomethingNew\"}\n");
+        text.push_str("{\"outcome\":\"Ok\"}\nnon è json\n");
+        fs::write(&file, text).unwrap();
+
+        assert_eq!(
+            read(&file).unwrap(),
+            [of_sync_2],
+            "read skips what is not a Run"
+        );
+        assert_eq!(highest_sync_id(&file).unwrap(), 7);
+    }
+
+    #[test]
+    fn the_highest_sync_id_of_a_missing_history_is_0_and_of_an_unreadable_one_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("history.jsonl");
+
+        assert_eq!(highest_sync_id(&file).unwrap(), 0);
+        fs::create_dir(&file).unwrap();
+        assert!(highest_sync_id(&file).is_err());
     }
 
     #[test]

@@ -188,6 +188,18 @@ pub struct Place {
 }
 
 pub fn place(path: &str) -> Place {
+    // `\\?\UNC\NAS\x` is `\\NAS\x` and `\\?\D:\x` is `D:\x`, typed in any case.
+    let starts = |prefix: &str| {
+        path.get(..prefix.len())
+            .is_some_and(|start| start.eq_ignore_ascii_case(prefix))
+    };
+    let path = &if starts(path_rules::VERBATIM_UNC) {
+        format!(r"\\{}", &path[path_rules::VERBATIM_UNC.len()..])
+    } else if starts(path_rules::VERBATIM) {
+        path[path_rules::VERBATIM.len()..].to_string()
+    } else {
+        path.to_string()
+    };
     if path_rules::is_unc(path) {
         let server = path[2..].split('\\').next().unwrap_or_default();
         return Place {
@@ -471,5 +483,16 @@ mod tests {
         assert_eq!(place("/home/anna/Foto"), (false, "Cartella".into()));
         assert_eq!(place(""), (false, "Cartella".into()));
         assert_eq!(place(r"\Foto"), (false, "Cartella".into()));
+    }
+
+    #[test]
+    fn a_verbatim_path_is_shown_as_its_disk_or_share() {
+        let place = |path| {
+            let p = place(path);
+            (p.is_network, p.label)
+        };
+        assert_eq!(place(r"\\?\D:\Foto"), (false, "Disco D:".into()));
+        assert_eq!(place(r"\\?\UNC\NAS\Backup"), (true, "Rete · NAS".into()));
+        assert_eq!(place(r"\\?\unc\NAS\Backup"), (true, "Rete · NAS".into()));
     }
 }

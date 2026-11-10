@@ -484,4 +484,9 @@ mod tests {
         assert_eq!(place(r"\\?\UNC\NAS\Backup"), (true, "Rete · NAS".into()));
         assert_eq!(place(r"\\?\unc\NAS\Backup"), (true, "Rete · NAS".into()));
     }
+
+    #[test]
+    fn a_volume_verbatim_path_is_a_network_place_as_before() {
+        assert!(place(r"\\?\Volume{1234-abcd}\Backup").is_network);
+    }
 }

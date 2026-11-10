@@ -130,7 +130,8 @@ pub(crate) const VERBATIM_UNC: &str = r"\\?\unc\";
 pub(crate) const VERBATIM: &str = r"\\?\";
 
 /// The path without its verbatim prefix, typed in any case: `\\?\UNC\NAS\x` is `\\NAS\x` and
-/// `\\?\D:\x` is `D:\x`. Only at the start; the case of the rest is kept.
+/// `\\?\D:\x` is `D:\x`. Only at the start; the case of the rest is kept. Any other verbatim path
+/// (`\\?\Volume{…}\x`, `\\?\GLOBALROOT\…`) stays as written: it is no drive and no share we can name.
 pub(crate) fn strip_verbatim(path: &str) -> Cow<'_, str> {
     let starts = |prefix: &str| {
         path.get(..prefix.len())
@@ -138,7 +139,12 @@ pub(crate) fn strip_verbatim(path: &str) -> Cow<'_, str> {
     };
     if starts(VERBATIM_UNC) {
         Cow::Owned(format!(r"\\{}", &path[VERBATIM_UNC.len()..]))
-    } else if starts(VERBATIM) {
+    } else if starts(VERBATIM)
+        && matches!(
+            path.as_bytes()[VERBATIM.len()..],
+            [letter, b':', ..] if letter.is_ascii_alphabetic()
+        )
+    {
         Cow::Borrowed(&path[VERBATIM.len()..])
     } else {
         Cow::Borrowed(path)
@@ -263,6 +269,37 @@ mod tests {
         assert!(!is_unc(r"\\?\D:\Foto"));
         assert!(is_unc(r"\\?\UNC\NAS\x"));
         assert!(is_unc(r"\\NAS\x"));
+    }
+
+    #[test]
+    fn a_volume_or_device_verbatim_path_stays_as_written_and_counts_as_a_share_as_before() {
+        for path in [
+            r"\\?\Volume{1234-abcd}\Backup",
+            r"\\?\GLOBALROOT\Device\X\y",
+            r"\\?\Dx:\y",
+        ] {
+            assert_eq!(strip_verbatim(path), path);
+            assert!(is_unc(path), "{path}");
+        }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn a_volume_path_written_the_same_way_on_both_sides_is_still_compared() {
+        let a = r"\\?\Volume{1234-abcd}\Foto";
+        assert_eq!(check_destination(a, a), Err(SAME_FOLDER));
+        assert_eq!(
+            check_destination(a, r"\\?\Volume{1234-abcd}\Foto\x"),
+            Err(INSIDE_SOURCE)
+        );
+        assert_eq!(
+            check_destination(r"\\?\Volume{1234-abcd}\Foto\x", a),
+            Err(SOURCE_INSIDE_DESTINATION)
+        );
+        assert_eq!(
+            check_destination(a, r"\\?\Volume{1234-abcd}\Foto\..\..\Altro"),
+            Ok(())
+        );
     }
 
     #[test]

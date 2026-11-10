@@ -168,9 +168,9 @@ Wizard (Da dove → Dove → Opzioni → Anteprima), `SchemaView`, robocopy runn
 - Given the last run of a saved sync failed, then its home card shows the note "La cartella di rete \\NAS non era raggiungibile. Controlla che sia collegato e riprova."; given it was stopped, the note is "La copia era stata fermata a mano: puoi riprenderla quando vuoi."
 
 ### Implementation notes
-- Module `error_messages`: map Windows error codes found in the log (`ERROR 53`, `67`, `2`, `3`, `5`) to messages **by code, never by label**; anything else → generic "Non completato" + log link. Disk vs network wording follows the path (UNC → "cartella di rete", drive letter → "disco"), as in the prototype.
+- The engine reads the `Cause` (`engine/robocopy.rs` finds the Windows error code in the log – `ERROR 53`, `67`, `2`, `3`, `5` – **by code, never by label**; `engine/rsync.rs` derives it from the exit code and from what the two folders are like right now – missing, unreachable, refused –, see `docs/agents/rsync.md`). Module `error_messages` maps a `Cause` to its message; anything else → generic "Non completato" + log link. Disk vs network wording follows the path (UNC → "cartella di rete", drive letter → "disco"), as in the prototype.
 - Path rules are not here any more: they moved to S2.
-- Tests: `#[test]` one case per mapped code in `error_messages`; vitest for the card notes and the elevated banner.
+- Tests: `#[test]` one case per mapped code in `engine/robocopy.rs` (log parsing) and in `error_messages` (messages); vitest for the card notes and the elevated banner.
 
 ---
 

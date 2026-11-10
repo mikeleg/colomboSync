@@ -2,8 +2,7 @@
 //! types.
 
 use crate::engine;
-use crate::engine::preview_parser::Preview;
-use crate::shared::domain::SyncMode;
+use crate::shared::domain::{Preview, SyncMode};
 use crate::shared::error_messages::{self, Explanation, Moment};
 use crate::shared::{mirror_guard, path_rules};
 use std::fs;

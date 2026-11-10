@@ -3,10 +3,9 @@
 
 mod common;
 
-use colombo_sync_lib::engine::preview_parser::Counts;
 use colombo_sync_lib::history;
 use colombo_sync_lib::run::runner::{self, ActiveRun};
-use colombo_sync_lib::shared::domain::{Cause, Folder, Outcome, Run, SyncMode};
+use colombo_sync_lib::shared::domain::{Cause, Counts, Folder, Outcome, Run, SyncMode};
 use colombo_sync_lib::shared::error_messages;
 use colombo_sync_lib::shared::mirror_guard;
 use colombo_sync_lib::wizard;

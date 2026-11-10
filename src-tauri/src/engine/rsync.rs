@@ -2,8 +2,7 @@
 //! the process calls. The text rules are plain functions, so they are tested on every platform;
 //! only the process calls are Unix-only. Facts and per-platform quirks: `docs/agents/rsync.md`.
 
-use super::preview_parser::Preview;
-use crate::shared::domain::{Cause, Folder, SyncMode};
+use crate::shared::domain::{Cause, Folder, Preview, SyncMode};
 use std::path::Path;
 
 /// `-rt`: recurse and keep modification times (so the next run finds nothing to do); no

@@ -1,8 +1,7 @@
 //! The last Preview, remembered for the Run that confirms it. Written by the wizard's preview
 //! command, read by the run command.
 
-use crate::engine::preview_parser::{Counts, Preview};
-use crate::shared::domain::{SavedSync, SyncMode};
+use crate::shared::domain::{Counts, Preview, SavedSync, SyncMode};
 use crate::shared::error_messages::{self, Explanation};
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};
@@ -112,8 +111,7 @@ impl PreviewMemo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::preview_parser::{FileGroup, counts};
-    use crate::shared::domain::sample_sync;
+    use crate::shared::domain::{FileGroup, counts, sample_sync};
 
     const A: &str = r"D:\Foto";
     const B: &str = r"E:\Backup";

@@ -1,5 +1,5 @@
 //! The domain words that more than one slice speaks: the mode of a Sync, a saved Sync, one Run
-//! and why it failed. Plain data; the slices depend on this module, never on each other for it.
+//! and why it failed, what a Preview finds. Plain data; the slices depend on this module, never on each other for it.
 
 use super::copy_text;
 use super::error_messages::{Explanation, explain_run};
@@ -105,6 +105,71 @@ impl From<Run> for RunReport {
             duration_text: copy_text::format_duration(run.duration_ms),
             explanation,
             run,
+        }
+    }
+}
+
+/// Most files listed per group; the rest is only counted (trees can have 100k+ files).
+pub const MAX_LISTED: usize = 200;
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileGroup {
+    pub count: usize,
+    /// First `MAX_LISTED` paths, relative to A (new, updated) or to B (deleted).
+    pub files: Vec<String>,
+}
+
+impl FileGroup {
+    pub(crate) fn add(&mut self, relative: &str) {
+        self.count += 1;
+        if self.files.len() < MAX_LISTED {
+            self.files.push(relative.to_string());
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Preview {
+    pub new: FileGroup,
+    pub updated: FileGroup,
+    pub deleted: FileGroup,
+    /// Size in bytes of what would be copied (new + updated).
+    pub bytes: u64,
+    /// Why this mirror run must not start (MirrorGuard), in Italian; `None` when it may.
+    pub blocked: Option<String>,
+}
+
+/// How many files a run changes: those of the preview it confirms (`PreviewMemo` keeps them).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Counts {
+    pub new: usize,
+    pub updated: usize,
+    pub deleted: usize,
+}
+
+impl Counts {
+    /// Every file a run touches.
+    pub fn total(&self) -> usize {
+        self.new + self.updated + self.deleted
+    }
+}
+
+/// `Counts` for the tests, in the order new, updated, deleted.
+#[cfg(test)]
+pub(crate) fn counts(new: usize, updated: usize, deleted: usize) -> Counts {
+    Counts {
+        new,
+        updated,
+        deleted,
+    }
+}
+
+impl Preview {
+    pub fn counts(&self) -> Counts {
+        Counts {
+            new: self.new.count,
+            updated: self.updated.count,
+            deleted: self.deleted.count,
         }
     }
 }

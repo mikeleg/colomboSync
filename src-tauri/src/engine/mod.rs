@@ -2,7 +2,6 @@
 //! history, MirrorGuard, UI) talks to this module only and never learns which one is underneath.
 //! Each engine module exposes the same functions; `cfg(target_os)` picks one at compile time.
 
-pub mod preview_parser;
 pub mod robocopy;
 pub mod rsync;
 

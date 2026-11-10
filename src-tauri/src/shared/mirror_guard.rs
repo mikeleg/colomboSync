@@ -2,7 +2,7 @@
 //! Cheap on purpose: one `read_dir`, no walk of the tree. Each check answers with the Italian
 //! reason to show, or `None` when the mirror may go on.
 
-use crate::engine::preview_parser::Counts;
+use crate::shared::domain::Counts;
 use std::fs;
 use std::path::Path;
 
@@ -71,7 +71,7 @@ pub fn problem(source: &Path, counts: Counts) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::preview_parser::counts;
+    use crate::shared::domain::counts;
 
     #[test]
     fn blocks_when_source_missing_or_empty() {

@@ -3,10 +3,9 @@
 
 use super::folder_browser::{self, FolderListing};
 use super::preview;
-use crate::engine::preview_parser::Preview;
 use crate::shared::blocking::blocking;
 use crate::shared::copy_text::{self, Place, Segment};
-use crate::shared::domain::SyncMode;
+use crate::shared::domain::{Preview, SyncMode};
 use crate::shared::error_messages::{self, Explanation};
 use crate::shared::path_rules;
 use crate::shared::preview_memo::PreviewMemo;
@@ -124,7 +123,7 @@ pub async fn create_folder(
 mod tests {
     use super::*;
 
-    use crate::engine::preview_parser::FileGroup;
+    use crate::shared::domain::FileGroup;
 
     fn report(preview: Preview, preview_token: Option<&str>, mode: SyncMode) -> serde_json::Value {
         let preview_token = preview_token.map(str::to_string);

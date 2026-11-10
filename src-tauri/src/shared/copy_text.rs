@@ -2,10 +2,9 @@
 //! `error_messages`): numbers, durations, dates, the words of a Run's result, of its progress and
 //! of a preview. The UI shows them as they are; none of it is composed in Svelte.
 
-use super::domain::{Outcome, Run, SyncMode};
+use super::domain::{Counts, Outcome, Run, SyncMode};
 use super::error_messages::Explanation;
 use super::path_rules;
-use crate::engine::preview_parser::Counts;
 use chrono::DateTime;
 use serde::Serialize;
 
@@ -211,7 +210,7 @@ pub fn place(path: &str) -> Place {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::preview_parser::counts;
+    use crate::shared::domain::counts;
     use crate::shared::domain::sample_run;
 
     // The same inputs and outputs as the helpers of src/shared/format.ts had in Svelte.

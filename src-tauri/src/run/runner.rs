@@ -1,9 +1,8 @@
 //! A Run end to end: copy engine + progress + storage + history. No Tauri types.
 
 use super::progress::{Progress, StdoutFollower};
-use crate::engine::preview_parser::Counts;
 use crate::engine::{self, Verdict};
-use crate::shared::domain::{Outcome, Run, SavedSync, SyncMode};
+use crate::shared::domain::{Counts, Outcome, Run, SavedSync, SyncMode};
 use crate::shared::error_messages::{self, Explanation};
 use crate::shared::history_store;
 use crate::shared::mirror_guard;

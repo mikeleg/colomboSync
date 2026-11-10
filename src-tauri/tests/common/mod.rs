@@ -1,8 +1,7 @@
 //! What the integration tests of both engines have in common.
 
-use colombo_sync_lib::engine::preview_parser::Counts;
 use colombo_sync_lib::run::runner::{self, ActiveRun};
-use colombo_sync_lib::shared::domain::{Run, SavedSync, SyncMode};
+use colombo_sync_lib::shared::domain::{Counts, Run, SavedSync, SyncMode};
 use colombo_sync_lib::shared::error_messages::Explanation;
 use colombo_sync_lib::shared::storage::Storage;
 use std::fs;

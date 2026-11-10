@@ -70,8 +70,8 @@ pub fn list(storage: &Storage) -> io::Result<ListedSyncs> {
 }
 
 /// Saves a new sync with an id no Run in the history already carries: if `syncs.json` was set
-/// aside, the new sync must not show the last run of an older one (an unreadable history just
-/// means no runs).
+/// aside, the new sync must not show the last run of an older one. A history that exists but
+/// cannot be read fails the save: its ids are unknown.
 pub fn save_new_sync(
     storage: &Storage,
     name: &str,
@@ -79,7 +79,7 @@ pub fn save_new_sync(
     destination: &str,
     mode: SyncMode,
 ) -> io::Result<SavedSync> {
-    let runs = history::read(&storage.history_file()).unwrap_or_default();
+    let runs = history::read(&storage.history_file())?;
     let highest_id_in_history = runs.iter().filter_map(|run| run.sync_id).max().unwrap_or(0);
     sync_store::add(
         &storage.syncs_file(),
@@ -264,6 +264,18 @@ mod tests {
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].sync, new);
         assert_eq!(listed[0].last_run, None);
+    }
+
+    #[test]
+    fn a_new_sync_is_not_saved_when_the_history_cannot_be_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::at(dir.path());
+        fs::create_dir(storage.history_file()).unwrap(); // exists, cannot be read as a file
+
+        let saved = save_new_sync(&storage, "Foto", r"D:\Foto", r"E:\B", SyncMode::Copy);
+
+        assert!(saved.is_err());
+        assert!(!storage.syncs_file().exists(), "nothing was written");
     }
 
     #[test]

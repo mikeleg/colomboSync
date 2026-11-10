@@ -59,7 +59,7 @@ pub fn read_for_listing(file: &Path) -> io::Result<(Vec<SavedSync>, bool)> {
 /// Saves a new sync at the top of the list. A damaged file is set aside first (see
 /// `load_or_set_aside`); fails, writing nothing, when that is not possible. The id is above every
 /// saved one and above `highest_id_in_history` (0 for none): a set-aside list must not hand out
-/// again the id of Runs already in the history.
+/// again the id of Runs already in the history. Fails, writing nothing, when no id is left.
 pub fn add(
     file: &Path,
     highest_id_in_history: u64,
@@ -75,7 +75,9 @@ pub fn add(
         .map(|s| s.id)
         .fold(highest_id_in_history, u64::max);
     let sync = SavedSync {
-        id: highest_taken + 1,
+        id: highest_taken
+            .checked_add(1)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no sync id left"))?,
         name: name.trim().to_string(),
         source: source.trim().to_string(),
         destination: destination.trim().to_string(),
@@ -216,6 +218,17 @@ mod tests {
 
         assert_eq!(after_history.id, 6);
         assert_eq!(after_saved.id, 7);
+    }
+
+    #[test]
+    fn add_fails_writing_nothing_when_no_id_is_left_above_the_taken_ones() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("syncs.json");
+
+        let added = add(&file, u64::MAX, "Foto", r"D:\Foto", r"E:\B", SyncMode::Copy);
+
+        assert!(added.is_err());
+        assert!(!file.exists(), "nothing was written");
     }
 
     #[test]

@@ -119,7 +119,7 @@
     height: 24px;
     border-radius: 50%;
     background: var(--knob);
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+    box-shadow: var(--knob-shadow);
   }
   .sw input:checked {
     background: var(--danger);

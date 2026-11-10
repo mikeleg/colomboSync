@@ -4,6 +4,7 @@
 //! the folders: `/Volumes/Macintosh HD` is the root itself, whatever it is called.
 
 use super::error_messages::Explanation;
+use std::borrow::Cow;
 
 pub const NOT_ABSOLUTE: &str = "Scrivi il percorso completo, che inizia con /.";
 pub const SAME_FOLDER: &str = "La destinazione è la stessa cartella da copiare. Scegline un’altra.";
@@ -102,12 +103,8 @@ fn normalize_unix(path: &str, ignore_case: bool) -> String {
 /// Lower-case, `\` separators, no trailing `\`, `.`/`..` resolved without touching the disk.
 /// A drive (`d:`) or a UNC `\\server\share` is the root that `..` cannot climb above.
 pub(crate) fn normalize_windows(path: &str) -> String {
-    let mut path = path.trim().replace('/', "\\").to_lowercase();
-    if let Some(rest) = path.strip_prefix(VERBATIM_UNC) {
-        path = format!(r"\\{rest}");
-    } else if let Some(rest) = path.strip_prefix(VERBATIM) {
-        path = rest.to_string();
-    }
+    let path = path.trim().replace('/', "\\");
+    let path = strip_verbatim(&path).to_lowercase();
     let unc = is_unc(&path);
     let root_parts = if unc { 2 } else { 1 };
     let mut parts: Vec<&str> = Vec::new();
@@ -126,14 +123,37 @@ pub(crate) fn normalize_windows(path: &str) -> String {
     if unc { format!(r"\\{joined}") } else { joined }
 }
 
-/// The verbatim prefixes of a path (lower case, `\` separators): `\\?\UNC\x` is `\\x` and
-/// `\\?\D:\x` is `D:\x`.
+/// The verbatim prefixes of a path, in their lower-case spelling: `\\?\UNC\x` is `\\x` and
+/// `\\?\D:\x` is `D:\x`. `strip_verbatim` matches them in any case; `robocopy.rs` compares them
+/// after lower-casing a log line.
 pub(crate) const VERBATIM_UNC: &str = r"\\?\unc\";
 pub(crate) const VERBATIM: &str = r"\\?\";
 
+/// The path without its verbatim prefix, typed in any case: `\\?\UNC\NAS\x` is `\\NAS\x` and
+/// `\\?\D:\x` is `D:\x`. Only at the start; the case of the rest is kept. Any other verbatim path
+/// (`\\?\Volume{…}\x`, `\\?\GLOBALROOT\…`) stays as written: it is no drive and no share we can name.
+pub(crate) fn strip_verbatim(path: &str) -> Cow<'_, str> {
+    let starts = |prefix: &str| {
+        path.get(..prefix.len())
+            .is_some_and(|start| start.eq_ignore_ascii_case(prefix))
+    };
+    if starts(VERBATIM_UNC) {
+        Cow::Owned(format!(r"\\{}", &path[VERBATIM_UNC.len()..]))
+    } else if starts(VERBATIM)
+        && matches!(
+            path.as_bytes()[VERBATIM.len()..],
+            [letter, b':', ..] if letter.is_ascii_alphabetic()
+        )
+    {
+        Cow::Borrowed(&path[VERBATIM.len()..])
+    } else {
+        Cow::Borrowed(path)
+    }
+}
+
 /// A network share: `\\server\share`.
 pub(crate) fn is_unc(path: &str) -> bool {
-    path.starts_with(r"\\")
+    strip_verbatim(path).starts_with(r"\\")
 }
 
 /// Characters Windows does not allow in a file or folder name (also controls), whatever the OS.
@@ -234,6 +254,52 @@ mod tests {
         assert_eq!(normalize_windows(r"\\?\UNC\NAS\Backup"), r"\\nas\backup");
         // In the middle it is no prefix: the empty part goes, the rest stays (as before).
         assert_eq!(normalize_windows(r"D:\a\\?\b"), r"d:\a\?\b");
+    }
+
+    #[test]
+    fn strip_verbatim_removes_the_prefix_only_at_the_start() {
+        assert_eq!(strip_verbatim(r"\\?\UNC\NAS\x"), r"\\NAS\x");
+        assert_eq!(strip_verbatim(r"\\?\D:\Foto"), r"D:\Foto");
+        assert_eq!(strip_verbatim(r"D:\a\\?\b"), r"D:\a\\?\b");
+        assert_eq!(strip_verbatim(r"\\?\unc\NAS"), r"\\NAS");
+    }
+
+    #[test]
+    fn a_verbatim_local_path_is_not_a_share_and_a_verbatim_unc_one_is() {
+        assert!(!is_unc(r"\\?\D:\Foto"));
+        assert!(is_unc(r"\\?\UNC\NAS\x"));
+        assert!(is_unc(r"\\NAS\x"));
+    }
+
+    #[test]
+    fn a_volume_or_device_verbatim_path_stays_as_written_and_counts_as_a_share_as_before() {
+        for path in [
+            r"\\?\Volume{1234-abcd}\Backup",
+            r"\\?\GLOBALROOT\Device\X\y",
+            r"\\?\Dx:\y",
+        ] {
+            assert_eq!(strip_verbatim(path), path);
+            assert!(is_unc(path), "{path}");
+        }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn a_volume_path_written_the_same_way_on_both_sides_is_still_compared() {
+        let a = r"\\?\Volume{1234-abcd}\Foto";
+        assert_eq!(check_destination(a, a), Err(SAME_FOLDER));
+        assert_eq!(
+            check_destination(a, r"\\?\Volume{1234-abcd}\Foto\x"),
+            Err(INSIDE_SOURCE)
+        );
+        assert_eq!(
+            check_destination(r"\\?\Volume{1234-abcd}\Foto\x", a),
+            Err(SOURCE_INSIDE_DESTINATION)
+        );
+        assert_eq!(
+            check_destination(a, r"\\?\Volume{1234-abcd}\Foto\..\..\Altro"),
+            Ok(())
+        );
     }
 
     #[test]

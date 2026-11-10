@@ -1,4 +1,4 @@
-// Shapes returned by the wizard's Rust commands (src-tauri/src/wizard/preview.rs, wizard/folder_browser.rs).
+// Shapes returned by the wizard's Rust commands (src-tauri/src/engine/preview_parser.rs, wizard/commands.rs, wizard/folder_browser.rs).
 
 /** The wizard's steps (`STEPS` in Wizard.svelte). */
 export type StepId = "source" | "destination" | "name" | "options" | "preview";

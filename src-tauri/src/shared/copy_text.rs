@@ -188,7 +188,8 @@ pub struct Place {
 }
 
 pub fn place(path: &str) -> Place {
-    if path_rules::is_unc(path) {
+    let path = path_rules::strip_verbatim(path);
+    if path_rules::is_unc(&path) {
         let server = path[2..].split('\\').next().unwrap_or_default();
         return Place {
             is_network: true,
@@ -471,5 +472,21 @@ mod tests {
         assert_eq!(place("/home/anna/Foto"), (false, "Cartella".into()));
         assert_eq!(place(""), (false, "Cartella".into()));
         assert_eq!(place(r"\Foto"), (false, "Cartella".into()));
+    }
+
+    #[test]
+    fn a_verbatim_path_is_shown_as_its_disk_or_share() {
+        let place = |path| {
+            let p = place(path);
+            (p.is_network, p.label)
+        };
+        assert_eq!(place(r"\\?\D:\Foto"), (false, "Disco D:".into()));
+        assert_eq!(place(r"\\?\UNC\NAS\Backup"), (true, "Rete · NAS".into()));
+        assert_eq!(place(r"\\?\unc\NAS\Backup"), (true, "Rete · NAS".into()));
+    }
+
+    #[test]
+    fn a_volume_verbatim_path_is_a_network_place_as_before() {
+        assert!(place(r"\\?\Volume{1234-abcd}\Backup").is_network);
     }
 }

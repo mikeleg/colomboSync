@@ -35,6 +35,11 @@
   --on-warn-soft: #3a2600;
   --focus: #0a6cc4;
   --knob: #ffffff;
+  --knob-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  /* brand: same in every theme */
+  --logo-1: #6ff0d6;
+  --logo-2: #1fc7a8;
+  --logo-3: #0a7d6e;
   --scrim: rgb(0 0 0 / 0.4);
   --shadow: 0 0 0 1px rgb(0 0 0 / 0.06), 0 10px 30px -18px rgb(0 0 0 / 0.25);
   --shadow-sel: 0 0 0 1.5px #0a7d6e, 0 24px 44px -30px rgb(10 125 110 / 0.7);

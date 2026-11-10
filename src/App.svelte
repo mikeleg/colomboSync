@@ -65,9 +65,9 @@
       <svg class="logo" viewBox="0 0 100 100" aria-hidden="true">
         <defs>
           <linearGradient id="colombo-eclissi" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#6ff0d6" />
-            <stop offset="0.55" stop-color="#1fc7a8" />
-            <stop offset="1" stop-color="#0a7d6e" />
+            <stop offset="0" style="stop-color: var(--logo-1)" />
+            <stop offset="0.55" style="stop-color: var(--logo-2)" />
+            <stop offset="1" style="stop-color: var(--logo-3)" />
           </linearGradient>
         </defs>
         <circle cx="58" cy="50" r="30" fill="url(#colombo-eclissi)" />

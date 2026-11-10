@@ -5,8 +5,8 @@ use super::runner::{self, ActiveRun};
 use crate::shared::blocking::blocking;
 use crate::shared::domain::{RunReport, SavedSync};
 use crate::shared::error_messages::Explanation;
+use crate::shared::preview_memo::PreviewMemo;
 use crate::shared::storage::Storage;
-use crate::wizard::preview::PreviewMemo;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Runs `sync` as the preview whose `preview_token` `preview_sync` gave confirms it. What the UI

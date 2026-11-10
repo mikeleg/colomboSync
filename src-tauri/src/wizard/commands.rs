@@ -2,13 +2,14 @@
 //! never freezes.
 
 use super::folder_browser::{self, FolderListing};
-use super::preview::{self, PreviewMemo};
+use super::preview;
 use crate::engine::preview_parser::Preview;
 use crate::shared::blocking::blocking;
 use crate::shared::copy_text::{self, Place, Segment};
 use crate::shared::domain::SyncMode;
 use crate::shared::error_messages::{self, Explanation};
 use crate::shared::path_rules;
+use crate::shared::preview_memo::PreviewMemo;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 

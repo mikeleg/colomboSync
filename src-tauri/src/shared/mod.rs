@@ -9,5 +9,6 @@ pub mod error_messages;
 pub mod history_store;
 pub mod mirror_guard;
 pub mod path_rules;
+pub mod preview_memo;
 pub mod storage;
 pub mod sync_store;

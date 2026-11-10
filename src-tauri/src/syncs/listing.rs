@@ -2,7 +2,7 @@
 
 use crate::history;
 use crate::shared::copy_text::{self, Place};
-use crate::shared::domain::{Outcome, SavedSync};
+use crate::shared::domain::{Outcome, SavedSync, SyncMode};
 use crate::shared::error_messages;
 use crate::shared::storage::Storage;
 use crate::shared::sync_store;
@@ -67,6 +67,27 @@ pub fn list(storage: &Storage) -> io::Result<ListedSyncs> {
         })
         .collect();
     Ok(ListedSyncs { syncs, set_aside })
+}
+
+/// Saves a new sync with an id no Run in the history already carries: if `syncs.json` was set
+/// aside, the new sync must not show the last run of an older one. A history that exists but
+/// cannot be read fails the save: its ids are unknown.
+pub fn save_new_sync(
+    storage: &Storage,
+    name: &str,
+    source: &str,
+    destination: &str,
+    mode: SyncMode,
+) -> io::Result<SavedSync> {
+    let highest_id_in_history = history::highest_sync_id(&storage.history_file())?;
+    sync_store::add(
+        &storage.syncs_file(),
+        highest_id_in_history,
+        name,
+        source,
+        destination,
+        mode,
+    )
 }
 
 #[cfg(test)]
@@ -220,6 +241,56 @@ mod tests {
         assert_eq!(listed[0].sync, twin);
         assert_eq!(listed[0].last_run, None, "the twin was never run");
         assert_eq!(listed[1].last_run.as_ref().unwrap().outcome, Outcome::Error);
+    }
+
+    #[test]
+    fn a_new_sync_never_inherits_the_runs_of_an_older_sync_after_syncs_json_was_set_aside() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::at(dir.path());
+        let old = save_new_sync(&storage, "Foto", r"D:\Foto", r"E:\B", SyncMode::Copy).unwrap();
+        assert_eq!(old.id, 1);
+        history::append(
+            &storage.history_file(),
+            &run(&old, Outcome::Error, "2026-11-02T21:30:00+01:00"),
+        )
+        .unwrap();
+        fs::write(storage.syncs_file(), "rovinato").unwrap();
+
+        let new = save_new_sync(&storage, "Doc", r"D:\Doc", r"E:\B", SyncMode::Copy).unwrap();
+
+        assert_eq!(new.id, 2, "id 1 belongs to the runs of the old sync");
+        let listed = list(&storage).unwrap().syncs;
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].sync, new);
+        assert_eq!(listed[0].last_run, None);
+    }
+
+    #[test]
+    fn a_new_sync_takes_an_id_above_a_history_line_that_is_not_a_whole_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::at(dir.path());
+        // An outcome from a newer version: `history::read` skips the line, its sync id still counts.
+        fs::write(
+            storage.history_file(),
+            "{\"syncId\":7,\"outcome\":\"SomethingNew\"}\n",
+        )
+        .unwrap();
+
+        let new = save_new_sync(&storage, "Doc", r"D:\Doc", r"E:\B", SyncMode::Copy).unwrap();
+
+        assert_eq!(new.id, 8);
+    }
+
+    #[test]
+    fn a_new_sync_is_not_saved_when_the_history_cannot_be_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::at(dir.path());
+        fs::create_dir(storage.history_file()).unwrap(); // exists, cannot be read as a file
+
+        let saved = save_new_sync(&storage, "Foto", r"D:\Foto", r"E:\B", SyncMode::Copy);
+
+        assert!(saved.is_err());
+        assert!(!storage.syncs_file().exists(), "nothing was written");
     }
 
     #[test]

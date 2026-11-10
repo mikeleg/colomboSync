@@ -57,9 +57,12 @@ pub fn read_for_listing(file: &Path) -> io::Result<(Vec<SavedSync>, bool)> {
 }
 
 /// Saves a new sync at the top of the list. A damaged file is set aside first (see
-/// `load_or_set_aside`); fails, writing nothing, when that is not possible.
+/// `load_or_set_aside`); fails, writing nothing, when that is not possible. The id is above every
+/// saved one and above `highest_id_in_history` (0 for none): a set-aside list must not hand out
+/// again the id of Runs already in the history. Fails, writing nothing, when no id is left.
 pub fn add(
     file: &Path,
+    highest_id_in_history: u64,
     name: &str,
     source: &str,
     destination: &str,
@@ -67,8 +70,14 @@ pub fn add(
 ) -> io::Result<SavedSync> {
     let _one_writer = WRITE_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
     let (mut syncs, _) = load_or_set_aside(file)?;
+    let highest_taken = syncs
+        .iter()
+        .map(|s| s.id)
+        .fold(highest_id_in_history, u64::max);
     let sync = SavedSync {
-        id: syncs.iter().map(|s| s.id).max().map_or(1, |id| id + 1),
+        id: highest_taken
+            .checked_add(1)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no sync id left"))?,
         name: name.trim().to_string(),
         source: source.trim().to_string(),
         destination: destination.trim().to_string(),
@@ -177,7 +186,7 @@ mod tests {
         let file = dir.path().join("syncs.json");
         fs::write(&file, "[ { \"id\": 1, rovinato").unwrap();
 
-        let added = add(&file, "Foto", r"D:\Foto", r"E:\B", SyncMode::Copy).unwrap();
+        let added = add(&file, 0, "Foto", r"D:\Foto", r"E:\B", SyncMode::Copy).unwrap();
 
         assert_eq!(load(&file).unwrap(), vec![added]);
         let copies = damaged_copies(dir.path());
@@ -190,13 +199,36 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("syncs.json");
 
-        let first = add(&file, " Foto ", r"D:\Foto ", r"E:\B", SyncMode::Copy).unwrap();
-        let second = add(&file, "Doc", r"D:\Doc", r"E:\B", SyncMode::Mirror).unwrap();
+        let first = add(&file, 0, " Foto ", r"D:\Foto ", r"E:\B", SyncMode::Copy).unwrap();
+        let second = add(&file, 0, "Doc", r"D:\Doc", r"E:\B", SyncMode::Mirror).unwrap();
 
         assert_eq!(first.name, "Foto");
         assert_eq!(first.source, r"D:\Foto");
         assert_ne!(first.id, second.id);
         assert_eq!(load(&file).unwrap(), vec![second, first]);
+    }
+
+    #[test]
+    fn add_takes_an_id_above_the_saved_ones_and_above_the_ids_in_the_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("syncs.json");
+
+        let after_history = add(&file, 5, "Foto", r"D:\Foto", r"E:\B", SyncMode::Copy).unwrap();
+        let after_saved = add(&file, 2, "Doc", r"D:\Doc", r"E:\B", SyncMode::Copy).unwrap();
+
+        assert_eq!(after_history.id, 6);
+        assert_eq!(after_saved.id, 7);
+    }
+
+    #[test]
+    fn add_fails_writing_nothing_when_no_id_is_left_above_the_taken_ones() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("syncs.json");
+
+        let added = add(&file, u64::MAX, "Foto", r"D:\Foto", r"E:\B", SyncMode::Copy);
+
+        assert!(added.is_err());
+        assert!(!file.exists(), "nothing was written");
     }
 
     #[test]
@@ -210,6 +242,7 @@ mod tests {
                 std::thread::spawn(move || {
                     add(
                         &file,
+                        0,
                         &format!("Sync {i}"),
                         r"D:\Foto",
                         r"E:\B",

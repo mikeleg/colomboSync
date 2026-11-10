@@ -201,13 +201,15 @@ describe("browsing while typing", () => {
     await vi.advanceTimersByTimeAsync(300);
     expect(screen.getByText("Qui dentro non ci sono altre cartelle.")).toBeTruthy();
 
-    answerD(listings[D]);
+    answerD({ ...listings[D], error: CANNOT_OPEN });
     await vi.advanceTimersByTimeAsync(0);
 
     expect((screen.getByLabelText("Percorso") as HTMLInputElement).value).toBe(FOTO);
     expect(screen.getByText(FOTO, { selector: "b" })).toBeTruthy();
     expect(screen.getByText("Qui dentro non ci sono altre cartelle.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Musica" })).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByText(CANNOT_OPEN)).toBeNull();
   });
 });
 

@@ -89,8 +89,8 @@ pub fn is_error_line(line: &str) -> bool {
     error_code(line).is_some()
 }
 
-/// The `n` of the first `<n> (0x<hex>)` in an error line: robocopy's own code, not one in a file
-/// name later in the line. A file line (it starts with a tab) is a file whatever its name says.
+/// The `n` of the first `<n> (0x<hex>)` in an error line whose hex is `n` (`5 (0x00000005)`):
+/// robocopy's own code, not a lookalike in a file name. A file line (it starts with a tab) is a file whatever its name says.
 fn error_code(line: &str) -> Option<u32> {
     if line.starts_with('\t') {
         return None;
@@ -101,8 +101,8 @@ fn error_code(line: &str) -> Option<u32> {
         .zip(tokens.skip(1))
         .find_map(|(number, hex)| {
             let hex = hex.strip_prefix("(0x")?.strip_suffix(')')?;
-            let is_hex = !hex.is_empty() && hex.chars().all(|c| c.is_ascii_hexdigit());
-            is_hex.then(|| number.parse().ok()).flatten()
+            let number: u32 = number.parse().ok()?;
+            (u32::from_str_radix(hex, 16).ok()? == number).then_some(number)
         })
 }
 
@@ -111,17 +111,12 @@ fn error_code(line: &str) -> Option<u32> {
 /// the network: A if it is a share and B is not, else B.
 fn folder_of(line: &str, source: &str, destination: &str) -> Folder {
     // The log holds the path as typed: drop the verbatim prefixes like `normalize_windows` does.
-    let line = line
-        .replace('/', "\\")
-        .to_lowercase()
-        .replace(r"\\?\unc\", r"\\")
-        .replace(r"\\?\", "");
+    let line = path_rules::strip_verbatim_prefix(&line.replace('/', "\\").to_lowercase());
+    let is_share = |path: &str| path_rules::is_unc(&path_rules::normalize_windows(path));
     match (mentions(&line, source), mentions(&line, destination)) {
         (true, false) => Folder::A,
         (false, true) => Folder::B,
-        _ if path_rules::is_unc(source.trim()) && !path_rules::is_unc(destination.trim()) => {
-            Folder::A
-        }
+        _ if is_share(source) && !is_share(destination) => Folder::A,
         _ => Folder::B,
     }
 }
@@ -136,7 +131,8 @@ fn mentions(line: &str, path: &str) -> bool {
         && line.match_indices(&path).any(|(at, _)| {
             let before = line[..at].chars().next_back();
             let after = line[at + path.len()..].chars().next();
-            before.is_none_or(|c| c.is_whitespace() || c == '"') && after.is_none_or(|c| c == '\\')
+            before.is_none_or(|c| c.is_whitespace() || c == '"')
+                && after.is_none_or(|c| c == '\\' || c == '"')
         })
 }
 
@@ -662,16 +658,46 @@ mod tests {
             find_cause(8, &line, r"\\?\D:\Foto", r"E:\Backup"),
             at(5, Folder::A)
         );
-        // Both verbatim: no fallback (it takes `\\?\D:` for a share) can name A, only the path can.
+        // Both verbatim: the fallback blames B, only the path can name A.
         let both = (r"\\?\D:\Foto", r"\\?\E:\Backup");
         assert_eq!(find_cause(8, &line, both.0, both.1), at(5, Folder::A));
         let line = english(5, r"\\?\E:\Backup\a.jpg");
         assert_eq!(find_cause(8, &line, both.0, both.1), at(5, Folder::B));
         let line = english(53, r"\\?\UNC\NAS\Backup\a.jpg");
         assert_eq!(
-            find_cause(8, &line, r"\\?\UNC\NAS\Backup", both.1),
+            find_cause(8, &line, r"\\?\UNC\NAS\Backup", r"\\?\UNC\NAS\Altro"),
             at(53, Folder::A)
         );
+    }
+
+    #[test]
+    fn a_verbatim_drive_is_not_a_share_but_a_verbatim_unc_is() {
+        let line = english(3, "x"); // no known path: the fallback decides
+        assert_eq!(
+            find_cause(8, &line, r"\\?\D:\Foto", r"E:\Backup"),
+            at(3, Folder::B)
+        );
+        assert_eq!(
+            find_cause(8, &line, r"\\?\UNC\NAS\Backup", r"E:\Backup"),
+            at(3, Folder::A)
+        );
+    }
+
+    #[test]
+    fn a_pair_whose_hex_is_not_its_number_is_not_robocopys_code() {
+        // `12 (0x1)` is in a file name; the first valid pair is robocopy's own.
+        let line = r"Copying D:\x 12 (0x1) ERROR 5 (0x00000005) Accessing";
+        assert_eq!(find_cause(8, line, A, r"E:\Backup"), at(5, Folder::B));
+        assert!(!is_error_line(r"Copying D:\x 12 (0x1) Accessing"));
+    }
+
+    #[test]
+    fn a_folder_in_quotes_is_found_by_its_whole_path() {
+        let line = r#"ERROR 5 (0x00000005) Accessing Source Directory "D:\Foto""#;
+        assert_eq!(find_cause(8, line, A, r"E:\Backup"), at(5, Folder::A));
+        // `D:\Foto 2` in quotes is another folder.
+        let line = r#"ERROR 5 (0x00000005) Accessing Source Directory "D:\Foto 2""#;
+        assert_eq!(find_cause(8, line, A, r"E:\Backup"), at(5, Folder::B));
     }
 
     #[test]

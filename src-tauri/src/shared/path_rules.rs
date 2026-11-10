@@ -102,12 +102,7 @@ fn normalize_unix(path: &str, ignore_case: bool) -> String {
 /// Lower-case, `\` separators, no trailing `\`, `.`/`..` resolved without touching the disk.
 /// A drive (`d:`) or a UNC `\\server\share` is the root that `..` cannot climb above.
 pub(crate) fn normalize_windows(path: &str) -> String {
-    let mut path = path.trim().replace('/', "\\").to_lowercase();
-    if let Some(rest) = path.strip_prefix(r"\\?\unc\") {
-        path = format!(r"\\{rest}");
-    } else if let Some(rest) = path.strip_prefix(r"\\?\") {
-        path = rest.to_string();
-    }
+    let path = strip_verbatim_prefix(&path.trim().replace('/', "\\").to_lowercase());
     let unc = is_unc(&path);
     let root_parts = if unc { 2 } else { 1 };
     let mut parts: Vec<&str> = Vec::new();
@@ -124,6 +119,13 @@ pub(crate) fn normalize_windows(path: &str) -> String {
     }
     let joined = parts.join("\\");
     if unc { format!(r"\\{joined}") } else { joined }
+}
+
+/// `\\?\UNC\x` is `\\x` and `\\?\D:\x` is `D:\x`: the verbatim prefix only changes how a path is
+/// typed. `text` is lower case with `\` separators; it can be a whole log line, so every prefix in
+/// it goes.
+pub(crate) fn strip_verbatim_prefix(text: &str) -> String {
+    text.replace(r"\\?\unc\", r"\\").replace(r"\\?\", "")
 }
 
 /// A network share: `\\server\share`.

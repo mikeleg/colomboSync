@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from "../shared/Icon.svelte";
-  import Warnbox from "../shared/Warnbox.svelte";
+  import Warnbox from "./Warnbox.svelte";
   import { formatNumber, formatSize } from "../shared/format";
   import type { Explanation } from "../shared/types";
   import type { FileGroup, Preview, Segment } from "./types";

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import Icon from "./Icon.svelte";
+  import Icon from "../shared/Icon.svelte";
 
   let { children }: { children: Snippet } = $props();
 </script>

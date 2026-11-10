@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Warnbox from "../shared/Warnbox.svelte";
+  import Warnbox from "./Warnbox.svelte";
 
   let { mirror = $bindable() }: { mirror: boolean } = $props();
 </script>

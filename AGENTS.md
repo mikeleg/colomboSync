@@ -22,6 +22,7 @@ Step-by-step checklists in `.claude/skills/*/SKILL.md`. They are plain markdown:
 - `parallel-slices` – several slices in parallel with git worktrees, then merge one at a time.
 - `build-portable` – build the Windows exe, fetch the macOS/Linux bundles from CI.
 - `svelte-core-bestpractices`, `svelte-code-writer` – the official Svelte 5 skills (from `sveltejs/ai-tools`, pinned in `skills-lock.json`, update with `npx skills update`): Svelte 5 rules, docs lookup and the autofixer.
+- `improve-codebase-architecture`, `codebase-design`, `domain-modeling`, `grilling` – architecture review and design (from `mattpocock/skills`, pinned in `skills-lock.json`; don't edit them, `npx skills update` overwrites them). In this repo their files have other names: where they say `GLOSSARY.md`, read and update `docs/agents/glossary.md` (keep its table: code name, Italian UI, meaning); where they say an ADR or `docs/adr/`, log the decision in `docs/backlog/colombo-sync/scope.md` "Decisions during implementation", and read that section before proposing changes. Never create `GLOSSARY.md` or `docs/adr/`.
 
 ## Commands
 ```

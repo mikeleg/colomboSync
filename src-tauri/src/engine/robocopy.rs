@@ -78,25 +78,28 @@ pub fn find_cause(_exit_code: i32, log: &str, source: &str, destination: &str) -
 /// the number (`ERROR`, `ERRORE`…) is ignored.
 fn first_mapped_error(log: &str) -> Option<(u32, &str)> {
     log.lines().find_map(|line| {
-        let code = error_codes(line).find(|code| MAPPED_CODES.contains(code))?;
+        let code = error_code(line).filter(|code| MAPPED_CODES.contains(code))?;
         Some((code, line))
     })
 }
 
 /// Is this log line an error of robocopy? It holds a Windows error code (`ERROR 5 (0x00000005)`);
-/// the label before it is localized and never read. A file line (it starts with a tab) is a file
-/// whatever its name says.
+/// the label before it is localized and never read.
 pub fn is_error_line(line: &str) -> bool {
-    !line.starts_with('\t') && error_codes(line).next().is_some()
+    error_code(line).is_some()
 }
 
-/// The `n` of every `<n> (0x<hex>)` in a log line.
-fn error_codes(line: &str) -> impl Iterator<Item = u32> + '_ {
+/// The `n` of the first `<n> (0x<hex>)` in an error line: robocopy's own code, not one in a file
+/// name later in the line. A file line (it starts with a tab) is a file whatever its name says.
+fn error_code(line: &str) -> Option<u32> {
+    if line.starts_with('\t') {
+        return None;
+    }
     let tokens = line.split_whitespace();
     tokens
         .clone()
         .zip(tokens.skip(1))
-        .filter_map(|(number, hex)| {
+        .find_map(|(number, hex)| {
             let hex = hex.strip_prefix("(0x")?.strip_suffix(')')?;
             let is_hex = !hex.is_empty() && hex.chars().all(|c| c.is_ascii_hexdigit());
             is_hex.then(|| number.parse().ok()).flatten()
@@ -107,7 +110,12 @@ fn error_codes(line: &str) -> impl Iterator<Item = u32> + '_ {
 /// names neither (the path is cut, or relative) falls back to the folder most likely to be on
 /// the network: A if it is a share and B is not, else B.
 fn folder_of(line: &str, source: &str, destination: &str) -> Folder {
-    let line = line.replace('/', "\\").to_lowercase();
+    // The log holds the path as typed: drop the verbatim prefixes like `normalize_windows` does.
+    let line = line
+        .replace('/', "\\")
+        .to_lowercase()
+        .replace(r"\\?\unc\", r"\\")
+        .replace(r"\\?\", "");
     match (mentions(&line, source), mentions(&line, destination)) {
         (true, false) => Folder::A,
         (false, true) => Folder::B,
@@ -627,6 +635,42 @@ mod tests {
         assert_eq!(
             find_cause(8, &english(3, "x"), A, r"E:\Backup"),
             at(3, Folder::B)
+        );
+    }
+
+    #[test]
+    fn a_file_line_is_never_the_error() {
+        // A file named like an error line is a file (it starts with a tab): the real error follows.
+        let text =
+            "\t\t 5\tD:\\Foto\\ERROR 5 (0x5)\r\n".to_string() + &english(53, r"\\NAS\Backup\");
+        assert_eq!(find_cause(8, &text, A, NAS_B), at(53, Folder::B));
+    }
+
+    #[test]
+    fn the_code_of_a_line_is_its_first_one_not_one_in_a_file_name() {
+        // 32 (not mapped) is robocopy's own code; `scan 53 (0x35)` is part of a file name.
+        let line =
+            r"2026/11/04 11:58:26 ERROR 32 (0x00000020) Copying File E:\Backup\scan 53 (0x35)";
+        assert_eq!(find_cause(8, line, A, r"E:\Backup"), None);
+    }
+
+    #[test]
+    fn a_folder_typed_with_the_verbatim_prefix_is_found_in_the_log() {
+        // path_rules accepts `\\?\D:\Foto`; robocopy writes the path as it was given.
+        let line = english(5, r"\\?\D:\Foto\a.jpg");
+        assert_eq!(
+            find_cause(8, &line, r"\\?\D:\Foto", r"E:\Backup"),
+            at(5, Folder::A)
+        );
+        // Both verbatim: no fallback (it takes `\\?\D:` for a share) can name A, only the path can.
+        let both = (r"\\?\D:\Foto", r"\\?\E:\Backup");
+        assert_eq!(find_cause(8, &line, both.0, both.1), at(5, Folder::A));
+        let line = english(5, r"\\?\E:\Backup\a.jpg");
+        assert_eq!(find_cause(8, &line, both.0, both.1), at(5, Folder::B));
+        let line = english(53, r"\\?\UNC\NAS\Backup\a.jpg");
+        assert_eq!(
+            find_cause(8, &line, r"\\?\UNC\NAS\Backup", both.1),
+            at(53, Folder::A)
         );
     }
 

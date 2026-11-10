@@ -123,8 +123,9 @@ pub(crate) fn normalize_windows(path: &str) -> String {
     if unc { format!(r"\\{joined}") } else { joined }
 }
 
-/// The verbatim prefixes of a path (lower case, `\` separators): `\\?\UNC\x` is `\\x` and
-/// `\\?\D:\x` is `D:\x`.
+/// The verbatim prefixes of a path, in their lower-case spelling: `\\?\UNC\x` is `\\x` and
+/// `\\?\D:\x` is `D:\x`. `strip_verbatim` matches them in any case; `robocopy.rs` compares them
+/// after lower-casing a log line.
 pub(crate) const VERBATIM_UNC: &str = r"\\?\unc\";
 pub(crate) const VERBATIM: &str = r"\\?\";
 
@@ -146,7 +147,7 @@ pub(crate) fn strip_verbatim(path: &str) -> Cow<'_, str> {
 
 /// A network share: `\\server\share`.
 pub(crate) fn is_unc(path: &str) -> bool {
-    path.starts_with(r"\\")
+    strip_verbatim(path).starts_with(r"\\")
 }
 
 /// Characters Windows does not allow in a file or folder name (also controls), whatever the OS.
@@ -255,6 +256,13 @@ mod tests {
         assert_eq!(strip_verbatim(r"\\?\D:\Foto"), r"D:\Foto");
         assert_eq!(strip_verbatim(r"D:\a\\?\b"), r"D:\a\\?\b");
         assert_eq!(strip_verbatim(r"\\?\unc\NAS"), r"\\NAS");
+    }
+
+    #[test]
+    fn a_verbatim_local_path_is_not_a_share_and_a_verbatim_unc_one_is() {
+        assert!(!is_unc(r"\\?\D:\Foto"));
+        assert!(is_unc(r"\\?\UNC\NAS\x"));
+        assert!(is_unc(r"\\NAS\x"));
     }
 
     #[test]

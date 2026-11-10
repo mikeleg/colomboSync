@@ -362,7 +362,8 @@ fn capitalized(text: &str) -> String {
 
 /// "la cartella di rete \\NAS" or "il disco D:", in lower case.
 fn unreachable_name(path: &str) -> String {
-    if path_rules::is_unc(path) {
+    let path = path_rules::strip_verbatim(path);
+    if path_rules::is_unc(&path) {
         let server = path
             .trim_start_matches('\\')
             .split('\\')
@@ -371,7 +372,7 @@ fn unreachable_name(path: &str) -> String {
         format!(r"la cartella di rete \\{server}")
     } else {
         let tag = if path.starts_with('/') {
-            mount_point(path)
+            mount_point(&path)
         } else {
             path.chars().take(2).collect::<String>().to_uppercase()
         };
@@ -544,6 +545,33 @@ mod tests {
             r"Non completato: non trovo la cartella B (\\NAS\Backup)."
         );
         assert_eq!(e.advice, "La cartella di rete è raggiungibile?");
+    }
+
+    #[test]
+    fn a_local_folder_typed_with_the_verbatim_prefix_is_a_disk_not_a_share() {
+        let e = run_text(53, Folder::A, r"\\?\D:\Foto", r"E:\Backup");
+        assert_eq!(e.title, "Non completato: il disco D: non è raggiungibile.");
+        assert_eq!(e.advice, "Controlla la connessione e riprova.");
+
+        let e = run_text(3, Folder::B, A, r"\\?\E:\Backup");
+        assert_eq!(
+            e.title,
+            r"Non completato: non trovo la cartella B (\\?\E:\Backup)."
+        );
+        assert_eq!(e.advice, "Il disco è collegato?");
+    }
+
+    #[test]
+    fn a_share_typed_with_the_verbatim_prefix_is_still_a_share() {
+        let e = run_text(53, Folder::B, A, r"\\?\UNC\NAS\Backup");
+        assert_eq!(
+            e.title,
+            r"Non completato: la cartella di rete \\NAS non è raggiungibile."
+        );
+        assert_eq!(
+            run_text(3, Folder::B, A, r"\\?\UNC\NAS\Backup").advice,
+            "La cartella di rete è raggiungibile?"
+        );
     }
 
     #[test]

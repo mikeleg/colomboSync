@@ -110,8 +110,12 @@ fn error_code(line: &str) -> Option<u32> {
 /// names neither (the path is cut, or relative) falls back to the folder most likely to be on
 /// the network: A if it is a share and B is not, else B.
 fn folder_of(line: &str, source: &str, destination: &str) -> Folder {
-    // The log holds the path as typed: drop the verbatim prefixes like `normalize_windows` does.
-    let line = path_rules::strip_verbatim_prefix(&line.replace('/', "\\").to_lowercase());
+    // The log holds the path as typed: drop the verbatim prefixes, wherever they are in the line.
+    let line = line
+        .replace('/', "\\")
+        .to_lowercase()
+        .replace(path_rules::VERBATIM_UNC, r"\\")
+        .replace(path_rules::VERBATIM, "");
     let is_share = |path: &str| path_rules::is_unc(&path_rules::normalize_windows(path));
     match (mentions(&line, source), mentions(&line, destination)) {
         (true, false) => Folder::A,

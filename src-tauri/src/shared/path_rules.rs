@@ -102,7 +102,12 @@ fn normalize_unix(path: &str, ignore_case: bool) -> String {
 /// Lower-case, `\` separators, no trailing `\`, `.`/`..` resolved without touching the disk.
 /// A drive (`d:`) or a UNC `\\server\share` is the root that `..` cannot climb above.
 pub(crate) fn normalize_windows(path: &str) -> String {
-    let path = strip_verbatim_prefix(&path.trim().replace('/', "\\").to_lowercase());
+    let mut path = path.trim().replace('/', "\\").to_lowercase();
+    if let Some(rest) = path.strip_prefix(VERBATIM_UNC) {
+        path = format!(r"\\{rest}");
+    } else if let Some(rest) = path.strip_prefix(VERBATIM) {
+        path = rest.to_string();
+    }
     let unc = is_unc(&path);
     let root_parts = if unc { 2 } else { 1 };
     let mut parts: Vec<&str> = Vec::new();
@@ -121,12 +126,10 @@ pub(crate) fn normalize_windows(path: &str) -> String {
     if unc { format!(r"\\{joined}") } else { joined }
 }
 
-/// `\\?\UNC\x` is `\\x` and `\\?\D:\x` is `D:\x`: the verbatim prefix only changes how a path is
-/// typed. `text` is lower case with `\` separators; it can be a whole log line, so every prefix in
-/// it goes.
-pub(crate) fn strip_verbatim_prefix(text: &str) -> String {
-    text.replace(r"\\?\unc\", r"\\").replace(r"\\?\", "")
-}
+/// The verbatim prefixes of a path (lower case, `\` separators): `\\?\UNC\x` is `\\x` and
+/// `\\?\D:\x` is `D:\x`.
+pub(crate) const VERBATIM_UNC: &str = r"\\?\unc\";
+pub(crate) const VERBATIM: &str = r"\\?\";
 
 /// A network share: `\\server\share`.
 pub(crate) fn is_unc(path: &str) -> bool {
@@ -223,6 +226,14 @@ mod tests {
 
     fn refused(name: &str) -> Explanation {
         checked_name(name).unwrap_err()
+    }
+
+    #[test]
+    fn normalize_windows_strips_a_verbatim_prefix_only_at_the_start() {
+        assert_eq!(normalize_windows(r"\\?\D:\Foto"), r"d:\foto");
+        assert_eq!(normalize_windows(r"\\?\UNC\NAS\Backup"), r"\\nas\backup");
+        // In the middle it is no prefix: the empty part goes, the rest stays (as before).
+        assert_eq!(normalize_windows(r"D:\a\\?\b"), r"d:\a\?\b");
     }
 
     #[test]

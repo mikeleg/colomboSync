@@ -135,6 +135,19 @@ test("a second X click after No, continua asks again", async () => {
   expect(cancelRun).toHaveBeenCalledWith(true);
 });
 
+test("a stop clicked by hand after an X click answered is not a window close", async () => {
+  const { rerender } = render(StepRunning, { total: 151, closeRequests: 0 });
+  await fireEvent.click(screen.getByRole("button", { name: "Ferma la copia" }));
+  await rerender({ total: 151, closeRequests: 1 });
+  await fireEvent.click(await screen.findByRole("button", { name: "No, continua" }));
+  expect(screen.queryByRole("alertdialog")).toBeNull();
+
+  await fireEvent.click(screen.getByRole("button", { name: "Ferma la copia" }));
+  await fireEvent.click(screen.getByRole("button", { name: "Sì, ferma" }));
+
+  expect(cancelRun).toHaveBeenCalledWith(false);
+});
+
 test("if there is nothing left to stop the buttons come back", async () => {
   vi.mocked(cancelRun).mockResolvedValueOnce(false);
   render(StepRunning, { total: 151 });

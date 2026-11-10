@@ -9,7 +9,8 @@
   /**
    * `total` comes from the preview, so "0 di N file" shows before the first event.
    * `closeRequests` counts the clicks on the window's X during the run; the Wizard listens from
-   * its mount on, so none is lost while this view is still starting.
+   * its mount on, so none is lost while this view is still starting. `closeRequests` only grows while this view is
+   * mounted (a new Run mounts a new view), which is what `handled` relies on.
    */
   let { total, closeRequests = 0 }: { total: number; closeRequests?: number } = $props();
 

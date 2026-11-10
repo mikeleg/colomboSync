@@ -739,6 +739,25 @@ sending incremental file list\n";
     }
 
     #[test]
+    fn every_cause_rsync_can_make_has_a_message() {
+        use Folder::{A, B};
+        use Reach::{Denied, Fine, Missing, Unreachable};
+        let reaches = [Fine, Missing, Unreachable, Denied];
+        for exit_code in 0..=255 {
+            for a in reaches {
+                for b in reaches {
+                    if let Some(cause) = cause_from(exit_code, [(A, a), (B, b)]) {
+                        assert!(
+                            crate::shared::error_messages::MAPPED_CODES.contains(&cause.code),
+                            "exit {exit_code}, A {a:?}, B {b:?}: {cause:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     #[cfg(unix)]
     fn a_folder_that_cannot_be_read_is_a_permission_cause_in_either_order() {
         use std::fs::{self, Permissions};

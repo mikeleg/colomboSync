@@ -2,8 +2,9 @@
 //! hidden process calls. The text rules are plain functions, tested on every platform.
 
 use super::preview_parser::{self, Preview};
-use crate::shared::domain::{Cause, SyncMode};
-use crate::shared::error_messages;
+use crate::shared::domain::{Cause, Folder, SyncMode};
+use crate::shared::error_messages::MAPPED_CODES;
+use crate::shared::path_rules;
 use std::path::Path;
 
 /// Arguments of the `/L` dry run. `log` receives the UTF-16LE `/UNILOG`.
@@ -66,14 +67,69 @@ pub fn partial_count(
 
 /// The mapped Windows error in the log (`ERROR 53 (0x35)`); the exit code says only "failed".
 pub fn find_cause(_exit_code: i32, log: &str, source: &str, destination: &str) -> Option<Cause> {
-    error_messages::find_cause(log, source, destination)
+    let (code, line) = first_mapped_error(log)?;
+    Some(Cause {
+        code,
+        folder: folder_of(line, source, destination),
+    })
+}
+
+/// First log line holding `<n> (0x<hex>)` with a mapped `n`, and that `n`. Any label before
+/// the number (`ERROR`, `ERRORE`…) is ignored.
+fn first_mapped_error(log: &str) -> Option<(u32, &str)> {
+    log.lines().find_map(|line| {
+        let code = error_codes(line).find(|code| MAPPED_CODES.contains(code))?;
+        Some((code, line))
+    })
 }
 
 /// Is this log line an error of robocopy? It holds a Windows error code (`ERROR 5 (0x00000005)`);
 /// the label before it is localized and never read. A file line (it starts with a tab) is a file
 /// whatever its name says.
 pub fn is_error_line(line: &str) -> bool {
-    !line.starts_with('\t') && error_messages::has_error_code(line)
+    !line.starts_with('\t') && error_codes(line).next().is_some()
+}
+
+/// The `n` of every `<n> (0x<hex>)` in a log line.
+fn error_codes(line: &str) -> impl Iterator<Item = u32> + '_ {
+    let tokens = line.split_whitespace();
+    tokens
+        .clone()
+        .zip(tokens.skip(1))
+        .filter_map(|(number, hex)| {
+            let hex = hex.strip_prefix("(0x")?.strip_suffix(')')?;
+            let is_hex = !hex.is_empty() && hex.chars().all(|c| c.is_ascii_hexdigit());
+            is_hex.then(|| number.parse().ok()).flatten()
+        })
+}
+
+/// The folder an error line talks about: the one whose path the line holds. A line that
+/// names neither (the path is cut, or relative) falls back to the folder most likely to be on
+/// the network: A if it is a share and B is not, else B.
+fn folder_of(line: &str, source: &str, destination: &str) -> Folder {
+    let line = line.replace('/', "\\").to_lowercase();
+    match (mentions(&line, source), mentions(&line, destination)) {
+        (true, false) => Folder::A,
+        (false, true) => Folder::B,
+        _ if path_rules::is_unc(source.trim()) && !path_rules::is_unc(destination.trim()) => {
+            Folder::A
+        }
+        _ => Folder::B,
+    }
+}
+
+/// `line` (lower case, `\` separators) holds `path` as a folder or something inside it: what
+/// follows is the end of the line or a `\`, never other characters (`D:\Foto 2` is not in
+/// `D:\Foto`), and what comes before is a space, as after a label.
+fn mentions(line: &str, path: &str) -> bool {
+    let path = path_rules::normalize_windows(path);
+    let line = line.trim_end();
+    !path.is_empty()
+        && line.match_indices(&path).any(|(at, _)| {
+            let before = line[..at].chars().next_back();
+            let after = line[at + path.len()..].chars().next();
+            before.is_none_or(|c| c.is_whitespace() || c == '"') && after.is_none_or(|c| c == '\\')
+        })
 }
 
 /// A run's log as text: the `/UNILOG` of a robocopy run, UTF-16LE with BOM (never UTF-8).
@@ -462,5 +518,121 @@ mod tests {
         assert_eq!(partial_count(&log, a, b, 16, false), 2);
         assert_eq!(partial_count(&line("a.txt"), a, b, 16, true), 0);
         assert_eq!(partial_count("", a, b, 16, false), 0);
+    }
+
+    const A: &str = r"D:\Foto";
+    const NAS_B: &str = r"\\NAS\Backup";
+
+    /// A real log: label wording changes with the Windows language, the code does not.
+    fn log(code: u32, label: &str, what: &str, path: &str) -> String {
+        format!(
+            "\r\n2026/11/04 11:58:26 {label} {code} (0x{code:08X}) {what} {path}\r\nIl messaggio di Windows, in qualunque lingua.\r\n"
+        )
+    }
+
+    fn english(code: u32, path: &str) -> String {
+        log(code, "ERROR", "Accessing Destination Directory", path)
+    }
+
+    fn italian(code: u32, path: &str) -> String {
+        log(
+            code,
+            "ERRORE",
+            "Accesso alla directory di destinazione",
+            path,
+        )
+    }
+
+    fn at(code: u32, folder: Folder) -> Option<Cause> {
+        Some(Cause { code, folder })
+    }
+
+    #[test]
+    fn error_53_is_found_by_code_in_any_language() {
+        for text in [english(53, r"\\NAS\Backup\"), italian(53, r"\\NAS\Backup\")] {
+            assert_eq!(find_cause(8, &text, A, NAS_B), at(53, Folder::B));
+        }
+    }
+
+    #[test]
+    fn error_67_is_an_unreachable_share_too() {
+        assert_eq!(
+            find_cause(8, &italian(67, r"\\NAS\Backup\x\"), A, NAS_B),
+            at(67, Folder::B)
+        );
+    }
+
+    #[test]
+    fn error_2_and_3_name_the_folder_that_cannot_be_found() {
+        for code in [2, 3] {
+            for text in [
+                log(code, "ERROR", "Accessing Source Directory", r"D:\Foto\"),
+                log(
+                    code,
+                    "ERRORE",
+                    "Accesso alla directory di origine",
+                    r"D:\Foto\",
+                ),
+            ] {
+                assert_eq!(find_cause(8, &text, A, r"E:\Backup"), at(code, Folder::A));
+            }
+        }
+    }
+
+    #[test]
+    fn error_5_says_access_was_denied_on_that_folder() {
+        for text in [
+            log(5, "ERROR", "Copying File", r"E:\Backup\2024\a.jpg"),
+            log(5, "ERRORE", "Copia file", r"E:\Backup\2024\a.jpg"),
+        ] {
+            assert_eq!(find_cause(8, &text, A, r"E:\Backup"), at(5, Folder::B));
+        }
+    }
+
+    #[test]
+    fn any_other_code_or_no_code_has_no_cause() {
+        for text in [
+            english(32, r"E:\Backup\a.jpg"), // sharing violation: not mapped
+            "robocopy ha detto qualcosa senza codice\r\n".to_string(),
+            String::new(),
+        ] {
+            assert_eq!(find_cause(8, &text, A, r"E:\Backup"), None);
+        }
+    }
+
+    #[test]
+    fn the_folder_is_found_by_whole_path_not_by_a_name_that_starts_the_same() {
+        // `D:\Foto 2` is a folder of its own: the error is about A, not about B (`D:\Foto`).
+        let (a, b) = (r"D:\Foto 2", r"D:\Foto");
+        let line = english(5, r"D:\Foto 2\a.jpg");
+        assert_eq!(find_cause(8, &line, a, b), at(5, Folder::A));
+        assert_eq!(
+            find_cause(8, &english(5, r"D:\Foto 2\"), a, b),
+            at(5, Folder::A)
+        );
+        assert_eq!(
+            find_cause(8, &english(5, r"d:/foto/a.jpg"), a, b),
+            at(5, Folder::B)
+        );
+        // B is `D:\Foto2`: a sibling by name, not a parent.
+        let line = english(5, r"D:\Foto2\a.jpg");
+        assert_eq!(find_cause(8, &line, A, r"D:\Foto2"), at(5, Folder::B));
+    }
+
+    #[test]
+    fn a_line_without_a_known_path_blames_the_share_then_b() {
+        let line = english(53, r"\\ALTRO\x\");
+        assert_eq!(find_cause(8, &line, A, NAS_B), at(53, Folder::B));
+        assert_eq!(find_cause(8, &line, NAS_B, r"E:\Backup"), at(53, Folder::A));
+        assert_eq!(
+            find_cause(8, &english(3, "x"), A, r"E:\Backup"),
+            at(3, Folder::B)
+        );
+    }
+
+    #[test]
+    fn the_first_mapped_error_wins() {
+        let text = english(32, r"E:\a") + &english(5, r"E:\Backup\b") + &english(53, NAS_B);
+        assert_eq!(find_cause(8, &text, A, r"E:\Backup"), at(5, Folder::B));
     }
 }

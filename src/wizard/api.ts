@@ -25,6 +25,12 @@ export const createFolder = (source: string, parent: string, name: string) =>
 export const checkStep = (step: CheckedStepId, source: string, destination: string, name: string) =>
   invoke<void>("check_step", { step, source, destination, name });
 
+export const saveSync = (name: string, source: string, destination: string, mode: SyncMode) =>
+  invoke<Sync>("save_sync", { name, source, destination, mode });
+
+/** "Copia di <last folder of A>". */
+export const defaultSyncName = (source: string) => invoke<string>("default_sync_name", { source });
+
 /**
  * Runs a saved sync as the preview whose `previewToken` Rust gave confirms it; the run is recorded in
  * the history under its id. `consent`: the user understood that a mirror deletes files from B.

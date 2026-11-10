@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import Icon from "../shared/Icon.svelte";
-  import { checkStep, onCloseRequested, previewSync } from "./api";
-  import { defaultSyncName, saveSync } from "../syncs/api";
+  import { checkStep, defaultSyncName, onCloseRequested, previewSync, saveSync } from "./api";
   import { toExplanation } from "../shared/explanation";
   import type { SchemaModel } from "../shared/schema";
   import type { Counts, Explanation, RunReport, Sync, SyncMode } from "../shared/types";
